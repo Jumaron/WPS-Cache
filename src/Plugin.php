@@ -147,6 +147,10 @@ final class Plugin {
         if ($settings['css_minify'] ?? false) {
             $this->cache_manager->addDriver(new MinifyCSS());
         }
+
+        if ($settings['js_minify'] ?? false) {
+            $this->cache_manager->addDriver(new MinifyJS());
+        }
     }
 
     private function setupHooks(): void {
