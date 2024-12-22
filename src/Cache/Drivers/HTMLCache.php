@@ -118,11 +118,31 @@ final class HTMLCache implements CacheDriverInterface {
         if (empty($content)) {
             return $content;
         }
-
+    
+        // Add cache signature as HTML comment
+        $timestamp = date('Y-m-d H:i:s');
+        $cache_signature = sprintf(
+            "\n<!-- Page cached by WPS-Cache on %s -->\n",
+            $timestamp
+        );
+    
+        // Add signature before closing </body> tag if it exists
+        // Otherwise append it to the end of content
+        if (stripos($content, '</body>') !== false) {
+            $content = preg_replace(
+                '/<\/body>/i',
+                $cache_signature . '</body>',
+                $content,
+                1
+            );
+        } else {
+            $content .= $cache_signature;
+        }
+    
         // Generate cache key from URL
         $key = md5($_SERVER['REQUEST_URI']);
         $this->set($key, $content);
-
+    
         return $content;
     }
 
