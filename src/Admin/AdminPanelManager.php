@@ -81,7 +81,7 @@ final class AdminPanelManager {
         if ('toplevel_page_wps-cache' !== $hook) {
             return;
         }
-
+    
         // Styles
         wp_enqueue_style(
             'wpsc-admin-styles',
@@ -89,7 +89,7 @@ final class AdminPanelManager {
             [],
             WPSC_VERSION
         );
-
+    
         // Scripts
         wp_enqueue_script(
             'chartjs',
@@ -98,7 +98,15 @@ final class AdminPanelManager {
             '3.7.0',
             true
         );
-
+    
+        wp_enqueue_script(
+            'wpsc-admin-scripts',
+            WPSC_PLUGIN_URL . 'assets/js/admin.js',
+            [],
+            WPSC_VERSION,
+            true
+        );
+    
         wp_localize_script('wpsc-admin-scripts', 'wpsc_admin', $this->getJsConfig());
     }
 
