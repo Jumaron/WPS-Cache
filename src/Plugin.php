@@ -1,0 +1,191 @@
+<?php
+declare(strict_types=1);
+
+namespace WPSCache;
+
+use WPSCache\Cache\CacheManager;
+use WPSCache\Admin\AdminPanelManager;
+use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS};
+
+final class Plugin {
+    private static ?self $instance = null;
+    private CacheManager $cache_manager;
+    private ?AdminPanelManager $admin_panel_manager = null;
+
+    public static function getInstance(): self {
+        return self::$instance ??= new self();
+    }
+
+    private function __construct() {
+        // Private constructor for singleton
+    }
+
+    public function initialize(): void {
+        $this->setupConstants();
+        $this->initializeCacheManager();
+        $this->setupHooks();
+
+        if (is_admin()) {
+            $this->initializeAdmin();
+        }
+
+        // Initialize cache early
+        add_action('plugins_loaded', [$this->cache_manager, 'initializeCache'], 5);
+    }
+
+    private function setupConstants(): void {
+        $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
+
+        if (!defined('WPSC_VERSION')) {
+            define('WPSC_VERSION', '0.0.1');
+        }
+        if (!defined('WPSC_PLUGIN_FILE')) {
+            define('WPSC_PLUGIN_FILE', $plugin_file);
+        }
+        if (!defined('WPSC_PLUGIN_DIR')) {
+            define('WPSC_PLUGIN_DIR', plugin_dir_path($plugin_file));
+        }
+        if (!defined('WPSC_PLUGIN_URL')) {
+            define('WPSC_PLUGIN_URL', plugin_dir_url($plugin_file));
+        }
+        if (!defined('WPSC_CACHE_DIR')) {
+            define('WPSC_CACHE_DIR', WP_CONTENT_DIR . '/cache/wps-cache/');
+        }
+    }
+
+    private function initializeCacheManager(): void {
+        $this->cache_manager = new CacheManager();
+
+        // Initialize cache drivers based on settings
+        $settings = get_option('wpsc_settings', []);
+
+        if ($settings['html_cache'] ?? false) {
+            $this->cache_manager->addDriver(new HTMLCache());
+        }
+
+        if ($settings['redis_cache'] ?? false) {
+            $this->cache_manager->addDriver(new RedisCache(
+                $settings['redis_host'] ?? '127.0.0.1',
+                (int)($settings['redis_port'] ?? 6379),
+                (int)($settings['redis_db'] ?? 0),
+                1.0,
+                1.0,
+                $settings['redis_password'] ?? null,
+                $settings['redis_prefix'] ?? 'wpsc:'
+            ));
+        }
+
+        if ($settings['varnish_cache'] ?? false) {
+            $this->cache_manager->addDriver(new VarnishCache(
+                $settings['varnish_host'] ?? '127.0.0.1',
+                (int)($settings['varnish_port'] ?? 6081)
+            ));
+        }
+
+        if ($settings['css_minify'] ?? false) {
+            $this->cache_manager->addDriver(new MinifyCSS());
+        }
+    }
+
+    private function setupHooks(): void {
+        // Core cache management hooks
+        add_action('wpsc_clear_cache', [$this->cache_manager, 'clearAllCaches']);
+        
+        // Advanced cache clearing hooks
+        add_action('switch_theme', [$this->cache_manager, 'clearAllCaches']);
+        add_action('customize_save', [$this->cache_manager, 'clearAllCaches']);
+        add_action('activated_plugin', [$this->cache_manager, 'clearAllCaches']);
+        add_action('deactivated_plugin', [$this->cache_manager, 'clearAllCaches']);
+        add_action('upgrader_process_complete', [$this->cache_manager, 'clearAllCaches']);
+
+        // Plugin lifecycle hooks
+        register_activation_hook(WPSC_PLUGIN_FILE, [$this, 'activate']);
+        register_deactivation_hook(WPSC_PLUGIN_FILE, [$this, 'deactivate']);
+    }
+
+    private function initializeAdmin(): void {
+        $this->admin_panel_manager = new AdminPanelManager($this->cache_manager);
+    }
+
+    public function activate(): void {
+        // Create necessary directories
+        $directories = [
+            WPSC_CACHE_DIR,
+            WPSC_CACHE_DIR . 'html',
+            WPSC_PLUGIN_DIR . 'includes'
+        ];
+            
+        foreach ($directories as $dir) {
+            if (!file_exists($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+        }
+
+        // Create .htaccess file for security
+        $htaccess_file = WPSC_CACHE_DIR . '.htaccess';
+        if (!file_exists($htaccess_file)) {
+            $htaccess_content = "Order Deny,Allow\nDeny from all";
+            @file_put_contents($htaccess_file, $htaccess_content);
+        }
+
+        // Set default settings if they don't exist
+        if (!get_option('wpsc_settings')) {
+            update_option('wpsc_settings', [
+                'html_cache' => true,
+                'redis_cache' => false,
+                'varnish_cache' => false,
+                'css_minify' => false,
+                'cache_lifetime' => 3600,
+                'excluded_urls' => [],
+                'excluded_css' => [],
+                'redis_host' => '127.0.0.1',
+                'redis_port' => 6379,
+                'redis_db' => 0,
+                'redis_password' => '',
+                'redis_prefix' => 'wpsc:',
+                'varnish_host' => '127.0.0.1',
+                'varnish_port' => 6081,
+            ]);
+        }
+
+        // Schedule cache cleanup events
+        if (!wp_next_scheduled('wpsc_cache_cleanup')) {
+            wp_schedule_event(time(), 'daily', 'wpsc_cache_cleanup');
+        }
+
+        // Flush rewrite rules
+        flush_rewrite_rules();
+    }
+
+    public function deactivate(): void {
+        // Clear all caches
+        $this->cache_manager->clearAllCaches();
+
+        // Remove the object cache drop-in if it exists and matches ours
+        $object_cache_file = WP_CONTENT_DIR . '/object-cache.php';
+        if (file_exists($object_cache_file)) {
+            $our_signature = 'WPS Cache - Redis Object Cache Drop-in';
+            $file_contents = file_get_contents($object_cache_file);
+            if (strpos($file_contents, $our_signature) !== false) {
+                @unlink($object_cache_file);
+            }
+        }
+
+        // Clear scheduled events
+        wp_clear_scheduled_hook('wpsc_cache_cleanup');
+
+        // Remove advanced-cache.php if it exists and matches ours
+        $advanced_cache_file = WP_CONTENT_DIR . '/advanced-cache.php';
+        if (file_exists($advanced_cache_file)) {
+            $our_signature = 'WPS Cache - Advanced Cache Drop-in';
+            $file_contents = file_get_contents($advanced_cache_file);
+            if (strpos($file_contents, $our_signature) !== false) {
+                @unlink($advanced_cache_file);
+            }
+        }
+    }
+
+    public function getCacheManager(): CacheManager {
+        return $this->cache_manager;
+    }
+}

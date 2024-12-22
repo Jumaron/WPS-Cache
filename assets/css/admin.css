@@ -1,0 +1,1030 @@
+/*
+    WPS Cache Admin Styles
+    Description: Styles for the WPS Cache admin interface
+    Version: 1.0.0
+    Author: Jumaron
+*/
+
+/* General & Reset */
+.wrap {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  line-height: 1.5;
+  color: #23282d;
+  background-color: #f8f9fa;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+h2 {
+  font-size: 2rem;
+}
+h3 {
+  font-size: 1.5rem;
+}
+h4 {
+  font-size: 1.25rem;
+}
+
+p {
+  margin-bottom: 1em;
+}
+
+a {
+  color: #0073aa;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #005a87;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.button-primary {
+  background-color: #0073aa;
+  color: #fff;
+}
+
+.button-primary:hover {
+  background-color: #005a87;
+}
+
+.button-secondary {
+  background-color: #f0f0f1;
+  color: #555;
+}
+
+.button-secondary:hover {
+  background-color: #ddd;
+}
+
+.button-small {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.widefat {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.widefat th,
+.widefat td {
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.widefat th {
+  font-weight: 600;
+}
+
+.widefat thead th {
+  background-color: #f1f1f1;
+}
+
+.widefat tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
+
+.widefat tfoot th {
+  background-color: #f1f1f1;
+}
+
+.striped > tbody > :nth-child(odd) {
+  background-color: #f9f9f9;
+}
+
+.description {
+  font-size: 0.9rem;
+  color: #72777c;
+  margin-top: 0.25rem;
+}
+
+.code {
+  font-family: monospace;
+  background-color: #f1f1f1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+}
+
+/* Admin Page Container */
+.wpsc-admin-container {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  margin-top: 20px;
+}
+
+/* Tabs Navigation */
+.wpsc-tabs {
+  margin-bottom: 20px;
+}
+
+.wpsc-tabs .nav-tab-wrapper {
+  border-bottom: 1px solid #ddd;
+}
+
+.wpsc-tabs .nav-tab {
+  padding: 10px 15px;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  background-color: transparent;
+  color: #555;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.wpsc-tabs .nav-tab:hover {
+  background-color: #f1f1f1;
+  color: #23282d;
+}
+
+.wpsc-tabs .nav-tab-active {
+  background-color: #fff;
+  border-color: #ddd;
+  border-bottom-color: transparent;
+  color: #23282d;
+}
+
+.wpsc-tabs .nav-tab .dashicons {
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Tab Content */
+.wpsc-tab-content {
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+/* Notices */
+.notice {
+  position: relative;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  border-left: 4px solid #0073aa;
+}
+
+.notice-info {
+  background-color: #e5f5fa;
+  border-left-color: #00a0d2;
+}
+
+.notice-success {
+  background-color: #e5f5e0;
+  border-left-color: #46b450;
+}
+
+.notice-warning {
+  background-color: #fff8e5;
+  border-left-color: #ffb900;
+}
+
+.notice-error {
+  background-color: #fde0e0;
+  border-left-color: #dc3232;
+}
+
+.notice.is-dismissible {
+  padding-right: 38px;
+}
+
+.notice-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #72777c;
+  transition: color 0.2s ease-in-out;
+}
+
+.notice-dismiss:hover {
+  color: #000;
+}
+
+.notice-dismiss:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0073aa;
+}
+
+.notice-dismiss:before {
+  content: "\f153";
+  font-family: dashicons;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Settings Page */
+.wpsc-settings-form .form-table {
+  margin-top: 20px;
+}
+
+.wpsc-settings-form .form-table th {
+  padding: 20px 10px 20px 0;
+  width: 200px;
+  vertical-align: top;
+}
+
+.wpsc-settings-form .form-table td {
+  padding: 15px 10px;
+}
+
+.wpsc-settings-form .form-table input[type="text"],
+.wpsc-settings-form .form-table input[type="number"],
+.wpsc-settings-form .form-table input[type="password"],
+.wpsc-settings-form .form-table select,
+.wpsc-settings-form .form-table textarea {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.07);
+  transition: border-color 0.2s ease-in-out;
+}
+
+.wpsc-settings-form .form-table input[type="text"]:focus,
+.wpsc-settings-form .form-table input[type="number"]:focus,
+.wpsc-settings-form .form-table input[type="password"]:focus,
+.wpsc-settings-form .form-table select:focus,
+.wpsc-settings-form .form-table textarea:focus {
+  border-color: #0073aa;
+  outline: none;
+  box-shadow: 0 0 0 2px #0073aa;
+}
+
+.wpsc-settings-form .form-table input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.wpsc-settings-form .form-table .description {
+  margin-top: 5px;
+}
+
+.wpsc-settings-form .submit {
+  margin-top: 20px;
+}
+
+.wpsc-section {
+  margin-bottom: 30px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+}
+
+.wpsc-section h2 {
+  margin-top: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+  font-size: 1.7rem;
+}
+
+.wpsc-cache-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.wpsc-cache-type-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.wpsc-cache-type-card:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-cache-type-card label {
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.wpsc-cache-type-card input[type="checkbox"] {
+  margin-right: 10px;
+}
+
+.wpsc-cache-type-card .description {
+  margin-top: 0;
+  color: #555;
+}
+
+/* Analytics Page */
+.wpsc-analytics-container {
+  margin-top: 20px;
+}
+
+.wpsc-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.wpsc-stat-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.wpsc-stat-card h3 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+.wpsc-stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #0073aa;
+}
+
+.wpsc-stat-trend {
+  font-size: 0.9rem;
+  color: #72777c;
+  margin-top: 5px;
+}
+
+.wpsc-charts-container {
+  margin-top: 30px;
+}
+
+.wpsc-chart-box {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.wpsc-chart-box h3 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+
+.wpsc-chart-container {
+  height: 300px;
+}
+
+.wpsc-metrics-container {
+  margin-top: 30px;
+}
+
+.wpsc-metrics-container h3 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+
+.wpsc-metrics-container .widefat {
+  margin-bottom: 20px;
+}
+
+.wpsc-metrics-container .widefat th {
+  background-color: #f1f1f1;
+  font-weight: 600;
+}
+
+.wpsc-metrics-container .widefat td.wpsc-trend {
+  font-weight: 500;
+}
+
+.wpsc-metrics-container .widefat td.wpsc-trend.positive {
+  color: #46b450;
+}
+
+.wpsc-metrics-container .widefat td.wpsc-trend.negative {
+  color: #dc3232;
+}
+
+/* Tools Page */
+.wpsc-tools-container {
+  margin-top: 20px;
+}
+
+.wpsc-tools-container h2 {
+  margin-top: 0;
+  font-size: 1.8rem;
+}
+
+.wpsc-tool-section {
+  margin-bottom: 30px;
+}
+
+.wpsc-tool-section h3 {
+  margin: 0 0 10px;
+  font-size: 1.4rem;
+}
+
+.wpsc-tool-box {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.wpsc-tool-box h4 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+.wpsc-tool-box .description {
+  margin-bottom: 15px;
+  color: #555;
+}
+
+.wpsc-tool-box .button {
+  margin-top: 10px;
+}
+
+.wpsc-status-ok {
+  color: #46b450;
+  font-weight: 500;
+}
+
+.wpsc-status-inactive {
+  color: #dc3232;
+  font-weight: 500;
+}
+
+.wpsc-status-warning {
+  color: #ffb900;
+  font-weight: 500;
+}
+
+.wpsc-preload-tools .description {
+  margin-bottom: 15px;
+  color: #555;
+}
+
+.wpsc-preload-tools .button {
+  margin-top: 10px;
+}
+
+.wpsc-preload-urls {
+  margin-bottom: 20px;
+}
+
+.wpsc-preload-urls h4 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.wpsc-preload-urls textarea {
+  width: 100%;
+  max-width: 600px;
+  min-height: 150px;
+  resize: vertical;
+  font-family: monospace;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #23282d;
+}
+
+.wpsc-preload-progress {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.wpsc-preload-progress progress {
+  width: 100%;
+  max-width: 300px;
+  height: 20px;
+  border: none;
+  border-radius: 10px;
+  background-color: #f1f1f1;
+  margin-right: 10px;
+}
+
+.wpsc-preload-progress progress::-webkit-progress-bar {
+  background-color: #f1f1f1;
+  border-radius: 10px;
+}
+
+.wpsc-preload-progress progress::-webkit-progress-value {
+  background-color: #0073aa;
+  border-radius: 10px;
+}
+
+.wpsc-preload-progress progress::-moz-progress-bar {
+  background-color: #0073aa;
+  border-radius: 10px;
+}
+
+.wpsc-preload-progress .progress-text {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.wpsc-import-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.wpsc-import-export .wpsc-tool-box {
+  flex: 1;
+  min-width: 300px;
+}
+
+.wpsc-import-export .button {
+  margin-top: 10px;
+}
+
+.wpsc-import-form .wpsc-file-input {
+  margin-bottom: 10px;
+  display: block;
+}
+
+.wpsc-import-export .widefat {
+  margin-top: 20px;
+}
+
+.wpsc-import-export .widefat th,
+.wpsc-import-export .widefat td {
+  vertical-align: middle;
+}
+
+.wpsc-import-export .button-small {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.wpsc-diagnostics-container {
+  margin-top: 20px;
+}
+
+.wpsc-diagnostics-container .description {
+  margin-bottom: 15px;
+  color: #555;
+}
+
+.wpsc-diagnostic-section {
+  margin-bottom: 30px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.wpsc-diagnostic-section h4 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+.wpsc-diagnostic-section textarea {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  font-family: monospace;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #23282d;
+}
+
+.wpsc-cache-tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.wpsc-cache-tests .button {
+  flex: 1;
+  min-width: 150px;
+}
+
+.wpsc-test-results {
+  margin-top: 20px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #f8f9fa;
+}
+
+.wpsc-test-results h5 {
+  margin: 0 0 5px;
+  font-size: 1rem;
+}
+
+.wpsc-test-results .wpsc-test-output {
+  white-space: pre-wrap;
+  font-family: monospace;
+  color: #23282d;
+}
+
+.wpsc-error-log {
+  margin-bottom: 20px;
+}
+
+.wpsc-error-log textarea {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  font-family: monospace;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #23282d;
+}
+
+.wpsc-error-log .button {
+  margin-right: 10px;
+}
+
+.wpsc-debug-controls label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wpsc-debug-controls input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.wpsc-debug-controls .description {
+  margin-bottom: 15px;
+  color: #555;
+}
+
+/* Redis Settings */
+
+.wpsc-redis-installation {
+  margin-top: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+}
+
+.wpsc-redis-installation h3 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+
+/* Media Queries */
+
+@media (max-width: 782px) {
+  .wpsc-settings-form .form-table th {
+    padding: 15px 10px 15px 0;
+    width: 150px;
+  }
+
+  .wpsc-settings-form .form-table td {
+    padding: 10px;
+  }
+
+  .wpsc-settings-form .form-table input[type="text"],
+  .wpsc-settings-form .form-table input[type="number"],
+  .wpsc-settings-form .form-table input[type="password"],
+  .wpsc-settings-form .form-table select,
+  .wpsc-settings-form .form-table textarea {
+    max-width: 300px;
+  }
+
+  .wpsc-stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .wpsc-import-export {
+    flex-direction: column;
+  }
+
+  .wpsc-import-export .wpsc-tool-box {
+    min-width: auto;
+  }
+
+  .wpsc-cache-tests {
+    flex-direction: column;
+  }
+
+  .wpsc-cache-tests .button {
+    min-width: auto;
+  }
+}
+
+/* Modern UI Enhancements */
+.wpsc-admin-container {
+  background-color: #f8f9fa;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-admin-container:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.wpsc-tabs .nav-tab-wrapper {
+  background-color: #e5e7eb;
+  border-bottom: none;
+  padding: 10px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.wpsc-tabs .nav-tab {
+  border: none;
+  background-color: #f1f3f5;
+  color: #4b5563;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+  margin-right: 5px;
+  font-weight: 500;
+}
+
+.wpsc-tabs .nav-tab:hover {
+  background-color: #d1d5db;
+  color: #23282d;
+}
+
+.wpsc-tabs .nav-tab-active {
+  background-color: #fff;
+  color: #0073aa;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-tab-content {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-tab-content:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.button-primary {
+  background-color: #3b82f6;
+  color: #fff;
+  border: none;
+  transition: background-color 0.3s ease-in-out, transform 0.2s ease-in-out,
+    box-shadow 0.2s ease-in-out;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.button-primary:hover {
+  background-color: #569e;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.button-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.button-secondary {
+  background-color: #e5e7eb;
+  color: #374151;
+  border: none;
+  transition: background-color 0.3s ease-in-out, box-shadow 0.2s ease-in-out;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.button-secondary:hover {
+  background-color: #d1d5db;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-section {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-section:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-section h2 {
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 15px;
+}
+
+.wpsc-cache-type-card {
+  background-color: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-cache-type-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-cache-type-card label {
+  color: #374151;
+}
+
+.wpsc-cache-type-card input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+.wpsc-stat-card {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-stat-card h3 {
+  color: #374151;
+}
+
+.wpsc-stat-value {
+  color: #3b82f6;
+}
+
+.wpsc-chart-box {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-chart-box:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-chart-box h3 {
+  color: #374151;
+}
+
+.wpsc-tool-box {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-tool-box:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-tool-box h4 {
+  color: #374151;
+}
+
+.wpsc-status-ok {
+  color: #22c55e;
+}
+
+.wpsc-status-inactive {
+  color: #ef4444;
+}
+
+.wpsc-status-warning {
+  color: #f59e0b;
+}
+
+.wpsc-preload-progress progress {
+  accent-color: #3b82f6;
+}
+
+.wpsc-import-export .wpsc-tool-box {
+  background-color: #f8f9fa;
+  border: 1px solid #e5e7eb;
+}
+
+.wpsc-diagnostic-section {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.wpsc-diagnostic-section:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-diagnostic-section h4 {
+  color: #374151;
+}
+
+.wpsc-cache-tests .button {
+  background-color: #e5e7eb;
+  color: #374151;
+  border: none;
+  transition: background-color 0.3s ease-in-out, box-shadow 0.2s ease-in-out;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.wpsc-cache-tests .button:hover {
+  background-color: #d1d5db;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.wpsc-test-results {
+  background-color: #f8f9fa;
+  border: 1px solid #e5e7eb;
+}
+
+.wpsc-test-results h5 {
+  color: #374151;
+}
+
+.wpsc-error-log textarea {
+  background-color: #f8f9fa;
+  border: 1px solid #e5e7eb;
+}
+
+.wpsc-debug-controls label {
+  color: #374151;
+}
+
+.wpsc-debug-controls input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+.wpsc-redis-installation {
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease-in-out;
+}
+.wpsc-redis-installation:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+/* Animation Keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Apply Animation to Elements */
+.wpsc-admin-container,
+.wpsc-section,
+.wpsc-stat-card,
+.wpsc-chart-box,
+.wpsc-tool-box,
+.wpsc-import-export .wpsc-tool-box,
+.wpsc-diagnostic-section {
+  animation: fadeInUp 0.5s ease-out;
+}
