@@ -42,15 +42,13 @@
 
 ### File Structure
 
-wps-cache/
-├── includes/ # Core functionality and helper functions.
-├── src/ # Main plugin classes and logic.
-│ ├── Admin/ # Admin panel management and settings.
-│ ├── Cache/ # Cache drivers and cache management.
-│ └── Analytics/ # Metrics collection and analytics.
-├── Tools/ # Tools and operations
-├── assets/ # CSS and JavaScript assets.
-└── wps-cache.php # Main plugin file.
+- **wps-cache/**
+  - **includes/**: The Object Cache.
+  - **src/**: Main plugin classes and logic.
+    - **Admin/**: Admin panel management and settings.
+    - **Cache/**: Cache drivers and cache management.
+  - **assets/**: CSS and JavaScript assets.
+  - **wps-cache.php**: Main plugin file.
 
 ### Key Classes
 
