@@ -3,31 +3,16 @@ declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
 
-/**
- * JavaScript minification implementation
- */
 final class MinifyJS implements CacheDriverInterface {
     private string $cache_dir;
     private array $settings;
-
+    
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
         if (!file_exists($this->cache_dir)) {
             mkdir($this->cache_dir, 0755, true);
         }
-
         $this->settings = get_option('wpsc_settings', []);
-    }
-
-    public function isConnected(): bool {
-        return is_writable($this->cache_dir);
-    }
-    
-    public function delete(string $key): void {
-        $file = $this->getCacheFile($key);
-        if (file_exists($file)) {
-            unlink($file);
-        }
     }
 
     public function initialize(): void {
@@ -38,23 +23,22 @@ final class MinifyJS implements CacheDriverInterface {
 
     public function processScripts(): void {
         global $wp_scripts;
-
+    
         if (empty($wp_scripts->queue)) {
             return;
         }
 
-        // Get excluded JS handles/URLs from settings
         $excluded_js = $this->settings['excluded_js'] ?? [];
-
+    
         foreach ($wp_scripts->queue as $handle) {
             if (!isset($wp_scripts->registered[$handle])) {
                 continue;
             }
-
+    
             $script = $wp_scripts->registered[$handle];
-
-            // Skip if no source, already minified, external, or in excluded list
-            if (empty($script->src) ||
+            
+            // Skip if any exclusion conditions are met
+            if (empty($script->src) || 
                 strpos($script->src, '.min.js') !== false ||
                 strpos($script->src, '//') === 0 ||
                 strpos($script->src, site_url()) === false ||
@@ -63,57 +47,116 @@ final class MinifyJS implements CacheDriverInterface {
                 continue;
             }
 
-            // Get absolute URL if it's a relative path
-            if (strpos($script->src, 'http') !== 0) {
-                $script->src = site_url($script->src);
-            }
-
             // Convert URL to file path
             $source = str_replace(
                 [site_url(), 'wp-content'],
                 [ABSPATH, 'wp-content'],
                 $script->src
             );
-
-            // Skip if file doesn't exist
-            if (!file_exists($source)) {
+    
+            // Skip if file issues
+            if (!file_exists($source) || 
+                !is_readable($source) || 
+                filesize($source) > 50000) { // 50KB limit
                 continue;
             }
 
-            $content = file_get_contents($source);
-            if (!$content) {
+            $content = @file_get_contents($source);
+            if ($content === false || empty(trim($content))) {
                 continue;
             }
 
-            // Create cache key from the file content and last modified time
-            $cache_key = md5($handle . $content . filemtime($source));
-            $cache_file = $this->getCacheFile($cache_key);
+            try {
+                $cache_key = md5($handle . $content . filemtime($source));
+                $cache_file = $this->getCacheFile($cache_key);
 
-            // Check if cached version exists and is valid
-            if (!file_exists($cache_file)) {
-                $minified_content = $this->minifyJS($content);
+                if (!file_exists($cache_file)) {
+                    $minified = $this->minifyJS($content);
+                    if ($minified === false) {
+                        continue;
+                    }
 
-                // Add source file info as comment
-                $minified_content = sprintf(
-                    "/* Minified by WPS Cache - Original: %s */\n%s",
-                    basename($source),
-                    $minified_content
+                    if (@file_put_contents($cache_file, $minified) === false) {
+                        continue;
+                    }
+                }
+
+                // Update script source
+                $wp_scripts->registered[$handle]->src = str_replace(
+                    ABSPATH,
+                    site_url('/'),
+                    $cache_file
                 );
+                $wp_scripts->registered[$handle]->ver = filemtime($cache_file);
 
-                file_put_contents($cache_file, $minified_content);
+            } catch (\Exception $e) {
+                error_log("WPS Cache JS Error: " . $e->getMessage() . " in file: {$source}");
+                continue;
+            }
+        }
+    }
+
+    private function minifyJS(string $js): string|false {
+        if (empty($js)) {
+            return false;
+        }
+
+        try {
+            // Skip tiny or already minified files
+            if (strlen($js) < 500 || str_contains($js, '.min.js')) {
+                return $js;
             }
 
-            // Update source to use minified version
-            $minified_url = str_replace(
-                ABSPATH,
-                site_url('/'),
-                $cache_file
-            );
+            // Step 1: Add newlines after specific tokens to prevent regex issues
+            $js = str_replace(['){', ']{', '}else{'], [")\n{", "]\n{", "}\nelse\n{"], $js);
 
-            $wp_scripts->registered[$handle]->src = $minified_url;
+            // Step 2: Preserve important comment blocks
+            $preserveComments = [];
+            $js = preg_replace_callback('/\/\*![\s\S]*?\*\//', function($match) use (&$preserveComments) {
+                $placeholder = '/*PC' . count($preserveComments) . '*/';
+                $preserveComments[$placeholder] = $match[0];
+                return $placeholder;
+            }, $js);
 
-            // Add version to break cache
-            $wp_scripts->registered[$handle]->ver = filemtime($cache_file);
+            // Step 3: Remove comments safely
+            $js = preg_replace([
+                '#^\s*//[^\n]*$#m',     // Single line comments
+                '#^\s*/\*[^*]*\*+([^/*][^*]*\*+)*/\s*#m' // Multi-line comments
+            ], '', $js);
+            
+            if ($js === null) {
+                return $js; // Return original if comment removal fails
+            }
+
+            // Step 4: Safely remove whitespace
+            $js = preg_replace([
+                '#^\s+#m',               // Leading whitespace
+                '#\s+$#m',               // Trailing whitespace
+                '#[\r\n]+#',             // Multiple newlines to single
+                '#[\t ]+#'               // Multiple spaces/tabs to single space
+            ], ['', '', "\n", ' '], $js);
+
+            if ($js === null) {
+                return $js; // Return original if whitespace removal fails
+            }
+
+            // Step 5: Restore preserved comments
+            foreach ($preserveComments as $placeholder => $original) {
+                $js = str_replace($placeholder, $original, $js);
+            }
+
+            // Final cleanup
+            $js = trim($js);
+
+            if (empty($js)) {
+                return false;
+            }
+
+            return $js;
+
+        } catch (\Exception $e) {
+            error_log('WPS Cache JS Minification Error: ' . $e->getMessage());
+            return false;
         }
     }
 
@@ -126,46 +169,8 @@ final class MinifyJS implements CacheDriverInterface {
         return false;
     }
 
-    private function minifyJS(string $js): string {
-        // Preserve strings
-        $strings = [];
-        $js = preg_replace_callback(
-            '/(\'[^\']*\'|"[^"]*")/',
-            function ($matches) use (&$strings) {
-                $key = "WPSC_STRING_" . count($strings);
-                $strings[$key] = $matches[0];
-                return $key;
-            },
-            $js
-        );
-
-        // Remove single-line comments
-        $js = preg_replace('/\/\/[^\n]*/', '', $js);
-
-        // Remove multi-line comments
-        $js = preg_replace('/\/\*[\s\S]*?\*\//', '', $js);
-
-        // Remove whitespace
-        $js = preg_replace('/\s+/', ' ', $js);
-        
-        // Remove spaces around operators
-        $js = preg_replace('/\s*([\(\){}\[\]=<>:?!,;&|+\-*\/])\s*/', '$1', $js);
-        
-        // Special handling for minus operator
-        $js = preg_replace('/-\s+/', '-', $js);
-        $js = preg_replace('/\s+-/', '-', $js);
-
-        // Restore preserved strings
-        foreach ($strings as $key => $string) {
-            $js = str_replace($key, $string, $js);
-        }
-
-        // Additional safety replacements
-        $js = str_replace([';}'], '}', $js); // Remove unnecessary semicolons
-        $js = preg_replace('/([{;}])\s+/', '$1', $js); // Remove spaces after specific characters
-        $js = preg_replace('/\s+({)/', '$1', $js); // Remove spaces before curly braces
-        
-        return trim($js);
+    public function isConnected(): bool {
+        return is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed {
@@ -175,6 +180,13 @@ final class MinifyJS implements CacheDriverInterface {
 
     public function set(string $key, mixed $value, int $ttl = 3600): void {
         file_put_contents($this->getCacheFile($key), $value);
+    }
+
+    public function delete(string $key): void {
+        $file = $this->getCacheFile($key);
+        if (file_exists($file)) {
+            unlink($file);
+        }
     }
 
     public function clear(): void {
