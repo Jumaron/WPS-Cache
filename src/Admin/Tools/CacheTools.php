@@ -381,26 +381,38 @@ class CacheTools {
     public function preloadCache(): array {
         $urls = $this->getPreloadUrls();
         $total = count($urls);
-        $processed = 0;
         $results = [];
-
-        foreach ($urls as $url) {
+        
+        foreach ($urls as $index => $url) {
             try {
-                $response = wp_remote_get($url, ['timeout' => 30]);
+                $response = wp_remote_get($url, [
+                    'timeout' => 30,
+                    'sslverify' => false,
+                    'user-agent' => 'WPSCache Preloader'
+                ]);
                 
                 if (is_wp_error($response)) {
                     throw new \Exception($response->get_error_message());
                 }
-
+    
                 $status = wp_remote_retrieve_response_code($response);
                 $results[] = [
                     'url' => $url,
                     'status' => $status,
                     'success' => $status >= 200 && $status < 300
                 ];
-
-                $processed++;
-
+    
+                // Calculate progress
+                $processed = $index + 1;
+                $progress = ($processed / $total) * 100;
+    
+                // Update progress transient
+                set_transient('wpsc_preload_progress', [
+                    'total' => $total,
+                    'processed' => $processed,
+                    'progress' => $progress
+                ], HOUR_IN_SECONDS);
+    
             } catch (\Exception $e) {
                 $results[] = [
                     'url' => $url,
@@ -409,14 +421,23 @@ class CacheTools {
                     'error' => $e->getMessage()
                 ];
             }
+            
+            // Small delay between URLs
+            usleep(250000); // 0.25 second delay
         }
-
-        return [
+    
+        $final_progress = [
             'total' => $total,
-            'processed' => $processed,
-            'progress' => ($processed / $total) * 100,
-            'results' => $results
+            'processed' => $total,
+            'progress' => 100,
+            'results' => $results,
+            'is_complete' => true
         ];
+    
+        // Clear progress transient
+        delete_transient('wpsc_preload_progress');
+    
+        return $final_progress;
     }
 
     /**
