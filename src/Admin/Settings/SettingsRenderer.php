@@ -67,6 +67,10 @@ class SettingsRenderer {
             'css_minify' => [
                 'label' => __('CSS Minification', 'wps-cache'),
                 'description' => __('Minify and combine CSS files', 'wps-cache')
+            ],
+            'js_minify' => [
+                'label' => __('JavaScript Minification', 'wps-cache'),
+                'description' => __('Minify and combine JavaScript files', 'wps-cache')
             ]
         ];
 

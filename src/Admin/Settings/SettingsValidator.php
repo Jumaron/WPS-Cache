@@ -28,11 +28,13 @@ class SettingsValidator {
             'redis_cache' => (bool)($settings['redis_cache'] ?? false),
             'varnish_cache' => (bool)($settings['varnish_cache'] ?? false),
             'css_minify' => (bool)($settings['css_minify'] ?? false),
+            'js_minify' => (bool)($settings['js_minify'] ?? false),
             'cache_lifetime' => $this->sanitizeCacheLifetime($settings['cache_lifetime'] ?? 3600),
             
             // URL and CSS settings
             'excluded_urls' => $this->sanitizeUrls($settings['excluded_urls'] ?? []),
             'excluded_css' => $this->sanitizeCssSelectors($settings['excluded_css'] ?? []),
+            'excluded_js' => $this->sanitizeJsSelectors($settings['excluded_js'] ?? []),
             
             // Redis settings
             'redis_host' => $this->sanitizeHost($settings['redis_host'] ?? '127.0.0.1'),
@@ -86,6 +88,19 @@ class SettingsValidator {
      * Sanitizes CSS selectors
      */
     private function sanitizeCssSelectors(array|string $selectors): array {
+        if (is_string($selectors)) {
+            $selectors = explode("\n", $selectors);
+        }
+        
+        return array_filter(array_map(function($selector) {
+            return sanitize_text_field(trim($selector));
+        }, $selectors));
+    }
+
+    /**
+     *  Sanitizes JS selectors
+     */
+    private function sanitizeJsSelectors(array|string $selectors): array {
         if (is_string($selectors)) {
             $selectors = explode("\n", $selectors);
         }

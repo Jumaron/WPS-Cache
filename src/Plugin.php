@@ -5,7 +5,7 @@ namespace WPSCache;
 
 use WPSCache\Cache\CacheManager;
 use WPSCache\Admin\AdminPanelManager;
-use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS};
+use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, MinifyJS};
 
 final class Plugin {
     private static ?self $instance = null;
@@ -18,6 +18,68 @@ final class Plugin {
 
     private function __construct() {
         // Private constructor for singleton
+    }
+
+    private function setWPCache(bool $enabled): bool {
+        $config_file = ABSPATH . 'wp-config.php';
+        if (!file_exists($config_file)) {
+            error_log('WPS Cache Error: wp-config.php not found');
+            return false;
+        }
+
+        $config_content = file_get_contents($config_file);
+        if ($config_content === false) {
+            error_log('WPS Cache Error: Unable to read wp-config.php');
+            return false;
+        }
+
+        // Check if WP_CACHE is already defined
+        $wp_cache_defined = preg_match("/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;/i", $config_content);
+
+        if ($enabled) {
+            // Add or update WP_CACHE definition
+            if ($wp_cache_defined) {
+                $config_content = preg_replace(
+                    "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;/i",
+                    "define('WP_CACHE', true);",
+                    $config_content
+                );
+            } else {
+                // Add after first <?php tag
+                $config_content = preg_replace(
+                    '/<\?php/',
+                    "<?php\ndefine('WP_CACHE', true);",
+                    $config_content,
+                    1
+                );
+            }
+        } else {
+            // Remove WP_CACHE definition if it exists
+            if ($wp_cache_defined) {
+                $config_content = preg_replace(
+                    "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;\n?/i",
+                    "",
+                    $config_content
+                );
+            }
+        }
+
+        // Create backup
+        $backup_file = $config_file . '.backup-' . time();
+        if (!@copy($config_file, $backup_file)) {
+            error_log('WPS Cache Error: Unable to create wp-config.php backup');
+            return false;
+        }
+
+        // Write updated content
+        if (@file_put_contents($config_file, $config_content) === false) {
+            // Restore backup if write fails
+            @copy($backup_file, $config_file);
+            error_log('WPS Cache Error: Unable to update wp-config.php');
+            return false;
+        }
+
+        return true;
     }
 
     public function initialize(): void {
@@ -128,6 +190,11 @@ final class Plugin {
             @file_put_contents($htaccess_file, $htaccess_content);
         }
 
+        // Enable WP_CACHE in wp-config.php
+        if (!$this->setWPCache(true)) {
+            error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
+        }
+
         // Set default settings if they don't exist
         if (!get_option('wpsc_settings')) {
             update_option('wpsc_settings', [
@@ -135,9 +202,11 @@ final class Plugin {
                 'redis_cache' => false,
                 'varnish_cache' => false,
                 'css_minify' => false,
+                'js_minify' => false,
                 'cache_lifetime' => 3600,
                 'excluded_urls' => [],
                 'excluded_css' => [],
+                'excluded_js' => [],
                 'redis_host' => '127.0.0.1',
                 'redis_port' => 6379,
                 'redis_db' => 0,
@@ -158,6 +227,11 @@ final class Plugin {
     }
 
     public function deactivate(): void {
+        // Disable WP_CACHE in wp-config.php
+        if (!$this->setWPCache(false)) {
+            error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
+        }
+
         // Clear all caches
         $this->cache_manager->clearAllCaches();
 

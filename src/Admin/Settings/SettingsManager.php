@@ -135,6 +135,18 @@ class SettingsManager {
                 'description' => __('Minify CSS (Experimental)', 'wps-cache')
             ]
         );
+        add_settings_field(
+            'wpsc_js_minify',
+            __('JS Minification', 'wps-cache'),
+            [$this->renderer, 'renderCheckboxField'],
+            'wps-cache',
+            'wpsc_cache_settings',
+            [
+                'label_for' => 'wpsc_js_minify',
+                'option_name' => 'js_minify',
+                'description' => __('Minify JS (Experimental)', 'wps-cache')
+            ]
+        );
 
         // Redis Fields
         add_settings_field(
@@ -331,9 +343,11 @@ class SettingsManager {
             'redis_cache' => false,
             'varnish_cache' => false,
             'css_minify' => false,
+            'js_minify' => false,
             'cache_lifetime' => 3600,
             'excluded_urls' => [],
             'excluded_css' => [],
+            'excluded_js' => [],
             'redis_host' => '127.0.0.1',
             'redis_port' => 6379,
             'redis_db' => 0,
