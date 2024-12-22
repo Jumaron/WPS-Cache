@@ -7,13 +7,21 @@ namespace WPSCache\Admin\Settings;
  * Validates and sanitizes settings for WPS Cache
  */
 class SettingsValidator {
-    /**
+     /**
      * Sanitizes the entire settings array
      *
-     * @param array $settings Raw settings array
+     * @param array $input Raw settings array
      * @return array Sanitized settings
      */
-    public function sanitizeSettings(array $settings): array {
+    public function sanitizeSettings($input): array {
+        // If input is not an array, initialize it
+        if (!is_array($input)) {
+            $input = [];
+        }
+
+        // Extract settings from the wpsc_settings wrapper if present
+        $settings = isset($input['wpsc_settings']) ? $input['wpsc_settings'] : $input;
+
         return [
             // Basic settings
             'html_cache' => (bool)($settings['html_cache'] ?? false),
