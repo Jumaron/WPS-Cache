@@ -90,15 +90,7 @@ final class AdminPanelManager {
             WPSC_VERSION
         );
     
-        // Scripts
-        wp_enqueue_script(
-            'chartjs',
-            'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js',
-            [],
-            '3.7.0',
-            true
-        );
-    
+
         wp_enqueue_script(
             'wpsc-admin-scripts',
             WPSC_PLUGIN_URL . 'assets/js/admin.js',
@@ -119,12 +111,6 @@ final class AdminPanelManager {
             'nonce' => wp_create_nonce('wpsc_ajax_nonce'),
             'strings' => $this->getJsStrings(),
             'refresh_interval' => 30000,
-            'chart_colors' => [
-                'hits' => '#28a745',
-                'misses' => '#dc3545',
-                'writes' => '#17a2b8',
-                'deletes' => '#ffc107'
-            ]
         ];
     }
 

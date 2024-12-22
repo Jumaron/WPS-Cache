@@ -12,12 +12,10 @@ use WPSCache\Cache\Drivers\RedisCache;
 class AnalyticsManager {
     private CacheManager $cache_manager;
     private MetricsCollector $metrics_collector;
-    private ChartRenderer $chart_renderer;
 
     public function __construct(CacheManager $cache_manager) {
         $this->cache_manager = $cache_manager;
         $this->metrics_collector = new MetricsCollector($cache_manager);
-        $this->chart_renderer = new ChartRenderer();
         $this->initializeHooks();
     }
 
@@ -46,11 +44,6 @@ class AnalyticsManager {
             <!-- Cache Performance Overview -->
             <div class="wpsc-stats-grid">
                 <?php $this->renderStatCards($redis_stats); ?>
-            </div>
-
-            <!-- Performance Charts -->
-            <div class="wpsc-charts-container">
-                <?php $this->renderCharts(); ?>
             </div>
 
             <!-- Detailed Metrics -->
@@ -160,23 +153,6 @@ class AnalyticsManager {
             <?php if (isset($stat['metric'])): ?>
                 <div class="wpsc-stat-trend" data-metric="<?php echo esc_attr($stat['metric']); ?>"></div>
             <?php endif; ?>
-        </div>
-        <?php
-    }
-
-    /**
-     * Renders performance charts
-     */
-    private function renderCharts(): void {
-        ?>
-        <div class="wpsc-chart-box">
-            <h3><?php _e('Cache Performance', 'wps-cache'); ?></h3>
-            <?php $this->chart_renderer->renderCachePerformanceChart(); ?>
-        </div>
-
-        <div class="wpsc-chart-box">
-            <h3><?php _e('Memory Utilization', 'wps-cache'); ?></h3>
-            <?php $this->chart_renderer->renderMemoryUsageChart(); ?>
         </div>
         <?php
     }

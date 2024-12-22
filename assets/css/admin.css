@@ -386,28 +386,6 @@ a:hover {
   margin-top: 5px;
 }
 
-.wpsc-charts-container {
-  margin-top: 30px;
-}
-
-.wpsc-chart-box {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-}
-
-.wpsc-chart-box h3 {
-  margin: 0 0 10px;
-  font-size: 1.3rem;
-}
-
-.wpsc-chart-container {
-  height: 300px;
-}
-
 .wpsc-metrics-container {
   margin-top: 30px;
 }
