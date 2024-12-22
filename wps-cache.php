@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: WPS-Cache
- * Plugin URI: https://your-website.com/wps-cache
- * Description: High-performance caching solution with Redis, Varnish, and HTML cache support
+ * Plugin URI: https://github.com/Jumaron/WPS-Cache
+ * Description: Free and Open-Source High-performance caching solution with Redis, Varnish, and HTML cache support
  * Version: 0.0.1
  * Requires PHP: 8.3
  * Author: Jumaron

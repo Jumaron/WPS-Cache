@@ -336,28 +336,28 @@ class CacheTools {
     public function getPreloadUrls(): array {
         $settings = get_option('wpsc_settings');
         $urls = $settings['preload_urls'] ?? [];
-    
+
         // Add important URLs if not specified
         if (empty($urls)) {
-            $urls[] = home_url();
-            
-            // Add home and blog pages
-            if (get_option('show_on_front') === 'page') {
-                $urls[] = get_permalink(get_option('page_on_front'));
-                $urls[] = get_permalink(get_option('page_for_posts'));
+            $url_set = [];
+
+            // Add all pages
+            $pages = get_pages(); 
+            foreach ($pages as $page) {
+                $url_set[get_permalink($page)] = true;
             }
-    
+
             // Add popular posts
             $popular_posts = get_posts([
                 'posts_per_page' => 10,
                 'orderby' => 'comment_count',
                 'order' => 'DESC'
             ]);
-    
+
             foreach ($popular_posts as $post) {
-                $urls[] = get_permalink($post);
+                $url_set[get_permalink($post)] = true;
             }
-    
+
             // Add category archives
             $categories = get_categories([
                 'orderby' => 'count',
@@ -366,11 +366,13 @@ class CacheTools {
             ]);
 
             foreach ($categories as $category) {
-                $urls[] = get_category_link($category->term_id);
+                $url_set[get_category_link($category->term_id)] = true;
             }
+            
+            $urls = array_keys($url_set);
         }
-    
-        return array_unique($urls);
+
+        return $urls; 
     }
 
     /**
