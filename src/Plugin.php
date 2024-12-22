@@ -186,23 +186,26 @@ final class Plugin {
                 @mkdir($dir, 0755, true);
             }
         }
-
+    
         // Create .htaccess file for security
         $htaccess_file = WPSC_CACHE_DIR . '.htaccess';
         if (!file_exists($htaccess_file)) {
             $htaccess_content = "Order Deny,Allow\nDeny from all";
             @file_put_contents($htaccess_file, $htaccess_content);
         }
-
+    
         // Enable WP_CACHE in wp-config.php
         if (!$this->setWPCache(true)) {
             error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
         }
-
-         // Create advanced-cache.php
-        if (!$this->createAdvancedCache()) {
+    
+        // Copy advanced-cache.php template
+        $template_file = WPSC_PLUGIN_DIR . 'includes/advanced-cache-template.php';
+        $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
+        if (!@copy($template_file, $target_file)) {
             error_log('WPS Cache Warning: Failed to create advanced-cache.php');
         }
+    
 
         // Set default settings if they don't exist
         if (!get_option('wpsc_settings')) {
@@ -266,60 +269,6 @@ final class Plugin {
                 @unlink($advanced_cache_file);
             }
         }
-    }
-
-    private function createAdvancedCache(): bool {
-        $advanced_cache_content = <<<PHP
-    <?php
-    // WPS Cache - Advanced Cache Drop-in
-    if (!defined('ABSPATH')) {
-        die;
-    }
-    
-    // Skip cache for specific conditions
-    if (
-        defined('WP_CLI') || 
-        defined('DOING_CRON') ||
-        defined('DOING_AJAX') ||
-        isset(\$_GET['preview']) ||
-        isset(\$_POST) && !empty(\$_POST) ||
-        isset(\$_GET) && !empty(\$_GET) ||
-        is_admin() ||
-        (isset(\$_SERVER['REQUEST_METHOD']) && \$_SERVER['REQUEST_METHOD'] !== 'GET')
-    ) {
-        return;
-    }
-    
-    // Get cache file path
-    \$cache_key = md5(\$_SERVER['REQUEST_URI']);
-    \$cache_file = WP_CONTENT_DIR . '/cache/wps-cache/html/' . \$cache_key . '.html';
-    
-    // Check if cache file exists and is valid
-    if (file_exists(\$cache_file)) {
-        \$cache_time = filemtime(\$cache_file);
-        \$cache_lifetime = 3600; // Default 1 hour
-    
-        // Get settings from options table
-        if (function_exists('get_option')) {
-            \$settings = get_option('wpsc_settings', []);
-            \$cache_lifetime = \$settings['cache_lifetime'] ?? 3600;
-        }
-    
-        if ((time() - \$cache_time) < \$cache_lifetime) {
-            \$content = file_get_contents(\$cache_file);
-            if (\$content !== false) {
-                header('X-WPS-Cache: HIT');
-                echo \$content;
-                exit;
-            }
-        }
-    }
-    
-    header('X-WPS-Cache: MISS');
-    PHP;
-    
-        $file = WP_CONTENT_DIR . '/advanced-cache.php';
-        return @file_put_contents($file, $advanced_cache_content) !== false;
     }
 
     public function getCacheManager(): CacheManager {
