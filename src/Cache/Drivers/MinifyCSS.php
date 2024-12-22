@@ -93,13 +93,6 @@ final class MinifyCSS implements CacheDriverInterface {
             if (!file_exists($cache_file)) {
                 $minified_content = $this->minifyCSS($content);
 
-                // Add source file info as comment
-                $minified_content = sprintf(
-                    "/* Minified by WPS Cache - Original: %s */\n%s",
-                    basename($source),
-                    $minified_content
-                );
-
                 file_put_contents($cache_file, $minified_content);
             }
 
