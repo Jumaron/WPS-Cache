@@ -18,7 +18,7 @@ final class HTMLCache implements CacheDriverInterface {
     }
 
     public function initialize(): void {
-        if (!is_admin()) {
+        if (!is_admin() && !$this->isPageCached()) {
             add_action('template_redirect', [$this, 'startOutputBuffering']);
             add_action('shutdown', [$this, 'closeOutputBuffering']);
         }
@@ -148,5 +148,10 @@ final class HTMLCache implements CacheDriverInterface {
 
     private function getCacheFile(string $key): string {
         return $this->cache_dir . $key . '.html';
+    }
+
+    private function isPageCached(): bool {
+        // Check if page is already served from cache
+        return isset($_SERVER['HTTP_X_WPS_CACHE']) && $_SERVER['HTTP_X_WPS_CACHE'] === 'HIT';
     }
 }

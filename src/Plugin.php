@@ -186,18 +186,26 @@ final class Plugin {
                 @mkdir($dir, 0755, true);
             }
         }
-
+    
         // Create .htaccess file for security
         $htaccess_file = WPSC_CACHE_DIR . '.htaccess';
         if (!file_exists($htaccess_file)) {
             $htaccess_content = "Order Deny,Allow\nDeny from all";
             @file_put_contents($htaccess_file, $htaccess_content);
         }
-
+    
         // Enable WP_CACHE in wp-config.php
         if (!$this->setWPCache(true)) {
             error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
         }
+    
+        // Copy advanced-cache.php template
+        $template_file = WPSC_PLUGIN_DIR . 'includes/advanced-cache-template.php';
+        $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
+        if (!@copy($template_file, $target_file)) {
+            error_log('WPS Cache Warning: Failed to create advanced-cache.php');
+        }
+    
 
         // Set default settings if they don't exist
         if (!get_option('wpsc_settings')) {
