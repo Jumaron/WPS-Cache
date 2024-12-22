@@ -57,7 +57,7 @@ final class MinifyJS implements CacheDriverInterface {
             // Skip if file issues
             if (!file_exists($source) || 
                 !is_readable($source) || 
-                filesize($source) > 50000) { // 50KB limit
+                filesize($source) > 500000) { // 500KB limit
                 continue;
             }
 
