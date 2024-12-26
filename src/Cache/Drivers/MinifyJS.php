@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-namespace WPSCache\Cache\Drivers;
+namespace WPSCache\Cache\Interfaces;
+
 
 final class MinifyJS implements CacheDriverInterface {
     private string $cache_dir;

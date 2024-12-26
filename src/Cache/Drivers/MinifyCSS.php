@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace WPSCache\Cache\Drivers;
+namespace WPSCache\Cache\Interfaces;
 
 /**
  * Improved CSS minification implementation

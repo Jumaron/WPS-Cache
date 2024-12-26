@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace WPSCache\Cache\Drivers;
+namespace WPSCache\Cache\Interfaces;
 
 /**
  * Varnish cache implementation for HTTP-level caching
