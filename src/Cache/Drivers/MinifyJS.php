@@ -115,6 +115,7 @@ final class MinifyJS extends AbstractCacheDriver {
             return;
         }
 
+        /** @var \WP_Dependencies|\WP_Dependency $script */
         $script = $wp_scripts->registered[$handle];
         
         // Skip if script should not be processed
@@ -150,16 +151,25 @@ final class MinifyJS extends AbstractCacheDriver {
         $this->updateScriptRegistration($script, $cache_file);
     }
 
-    private function shouldProcessScript(\stdClass $script, string $handle, array $excluded_js): bool {
-        return !empty($script->src) 
-            && strpos($script->src, '.min.js') === false
-            && strpos($script->src, '//') !== 0
-            && strpos($script->src, site_url()) !== false
+    private function shouldProcessScript($script, string $handle, array $excluded_js): bool {
+        // First check if we have a src property
+        if (!isset($script->src) || empty($script->src)) {
+            return false;
+        }
+
+        $src = $script->src;
+        return strpos($src, '.min.js') === false
+            && strpos($src, '//') !== 0
+            && strpos($src, site_url()) !== false
             && !in_array($handle, $excluded_js)
-            && !$this->isExcluded($script->src, $excluded_js);
+            && !$this->isExcluded($src, $excluded_js);
     }
 
-    private function getSourcePath(\stdClass $script): ?string {
+    private function getSourcePath($script): ?string {
+        if (!isset($script->src)) {
+            return null;
+        }
+
         $src = $script->src;
         
         // Convert relative URL to absolute
@@ -175,19 +185,23 @@ final class MinifyJS extends AbstractCacheDriver {
         );
     }
 
-    private function isValidSource(?string $source): bool {
-        return $source 
-            && is_readable($source) 
-            && filesize($source) <= self::MAX_FILE_SIZE;
-    }
+    private function updateScriptRegistration($script, string $cache_file): void {
+        if (!isset($script->src)) {
+            return;
+        }
 
-    private function updateScriptRegistration(\stdClass $script, string $cache_file): void {
         $script->src = str_replace(
             ABSPATH,
             site_url('/'),
             $cache_file
         );
         $script->ver = filemtime($cache_file);
+    }
+    
+    private function isValidSource(?string $source): bool {
+        return $source 
+            && is_readable($source) 
+            && filesize($source) <= self::MAX_FILE_SIZE;
     }
 
     private function minifyJS(string $js): string|false {

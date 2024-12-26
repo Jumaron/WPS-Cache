@@ -107,9 +107,10 @@ final class MinifyCSS extends AbstractCacheDriver {
             return;
         }
 
+        /** @var \WP_Dependencies|\WP_Dependency $style */
         $style = $wp_styles->registered[$handle];
         
-        // Skip if style should not be processed
+        // Skip if script should not be processed
         if (!$this->shouldProcessStyle($style, $handle, $excluded_css)) {
             return;
         }
@@ -140,16 +141,25 @@ final class MinifyCSS extends AbstractCacheDriver {
         $this->updateStyleRegistration($style, $cache_file);
     }
 
-    private function shouldProcessStyle(\stdClass $style, string $handle, array $excluded_css): bool {
-        return !empty($style->src) 
-            && strpos($style->src, '.min.css') === false
-            && strpos($style->src, '//') !== 0
-            && strpos($style->src, site_url()) !== false
+    private function shouldProcessStyle($style, string $handle, array $excluded_css): bool {
+        // First check if we have a src property
+        if (!isset($style->src) || empty($style->src)) {
+            return false;
+        }
+
+        $src = $style->src;
+        return strpos($src, '.min.css') === false
+            && strpos($src, '//') !== 0
+            && strpos($src, site_url()) !== false
             && !in_array($handle, $excluded_css)
-            && !$this->isExcluded($style->src, $excluded_css);
+            && !$this->isExcluded($src, $excluded_css);
     }
 
-    private function getSourcePath(\stdClass $style): ?string {
+    private function getSourcePath($style): ?string {
+        if (!isset($style->src)) {
+            return null;
+        }
+
         $src = $style->src;
         
         // Convert relative URL to absolute
@@ -165,7 +175,11 @@ final class MinifyCSS extends AbstractCacheDriver {
         );
     }
 
-    private function updateStyleRegistration(\stdClass $style, string $cache_file): void {
+    private function updateStyleRegistration($style, string $cache_file): void {
+        if (!isset($style->src)) {
+            return;
+        }
+
         $style->src = str_replace(
             ABSPATH,
             site_url('/'),

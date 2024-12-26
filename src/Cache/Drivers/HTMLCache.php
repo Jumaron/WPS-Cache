@@ -4,19 +4,16 @@ declare(strict_types=1);
 namespace WPSCache\Cache\Drivers;
 
 /**
- * Optimized HTML cache implementation with minification
+ * Optimized HTML cache implementation
  */
 final class HTMLCache extends AbstractCacheDriver {
-    private const PRESERVED_PATTERNS = [
-        'comments' => '/<!--\[if[^\]]*]>.*?<!\[endif]-->/is',
-        'scripts' => '/<script[^>]*>.*?<\/script>/is',
-        'styles' => '/<style[^>]*>.*?<\/style>/is'
-    ];
-    
+    private const COMPRESSION_PATTERN = '/<(?<script>script).*?<\/script\s*>|<(?<style>style).*?<\/style\s*>|<!(?<comment>--).*?-->|<(?<tag>[\/\w.:-]*)(?:".*?"|\'.*?\'|[^\'">]+)*>|(?<text>((<[^!\/\w.:-])?[^<]*)+)|/si';
     private string $cache_dir;
     private array $settings;
-    private array $preserved = [];
-
+    private bool $compress_css = true;
+    private bool $compress_js = true;
+    private bool $remove_comments = true;
+    
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'html/';
         $this->settings = get_option('wpsc_settings', []);
@@ -98,153 +95,106 @@ final class HTMLCache extends AbstractCacheDriver {
             return $content;
         }
 
-        $original_size = strlen($content);
-        
         try {
-            $content = $this->preserveContent($content);
-            $content = $this->minifyHTML($content);
-            $content = $this->restoreContent($content);
+            $minified = $this->minifyHTML($content);
             
+            if ($minified === false) {
+                return $content;
+            }
+
             // Add cache metadata
-            $content = $this->addCacheMetadata($content, $original_size);
+            $minified .= $this->getCacheComment($content, $minified);
             
             // Cache the processed content
             $key = $this->generateCacheKey($_SERVER['REQUEST_URI']);
-            $this->set($key, $content);
+            $this->set($key, $minified);
             
-            return $content;
+            return $minified;
         } catch (\Throwable $e) {
             $this->logError('HTML processing failed', $e);
-            return $content; // Return original content on error
+            return $content;
         }
     }
 
-    private function preserveContent(string $content): string {
-        $this->preserved = [];
-        
-        foreach (self::PRESERVED_PATTERNS as $type => $pattern) {
-            $content = preg_replace_callback($pattern, function($match) use ($type) {
-                // Skip if doesn't match additional conditions
-                if ($type === 'scripts' && !preg_match('/type=["\'](text\/template|text\/x-template)["\']/', $match[0])) {
-                    return $match[0];
-                }
-                if ($type === 'styles' && strpos($match[0], 'data-nominify') === false) {
-                    return $match[0];
-                }
-                
-                $key = sprintf('___%s_%d___', strtoupper($type), count($this->preserved));
-                $this->preserved[$key] = $match[0];
-                return $key;
-            }, $content);
+    private function minifyHTML(string $html): string|false {
+        if (empty($html)) {
+            return false;
         }
 
-        return $content;
-    }
+        $matches = [];
+        if (!preg_match_all(self::COMPRESSION_PATTERN, $html, $matches, PREG_SET_ORDER)) {
+            return false;
+        }
 
-    private function restoreContent(string $content): string {
-        return strtr($content, $this->preserved);
-    }
+        $overriding = false;  // For no compression blocks
+        $raw_tag = false;     // For pre/textarea tags
+        $compressed = '';
 
-    private function minifyHTML(string $html): string {
-        // Process embedded content first
-        $html = preg_replace_callback('/<(script|style)[^>]*>(.*?)<\/\1>/is', function($matches) {
-            $content = $matches[2];
-            if ($matches[1] === 'script' && !preg_match('/type=["\'](text\/template|text\/x-template)["\']/', $matches[0])) {
-                $content = $this->minifyJS($content);
-            } elseif ($matches[1] === 'style' && strpos($matches[0], 'data-nominify') === false) {
-                $content = $this->minifyCSS($content);
+        foreach ($matches as $token) {
+            $tag = (isset($token['tag'])) ? strtolower($token['tag']) : null;
+            $content = $token[0];
+
+            if (is_null($tag)) {
+                if (!empty($token['script'])) {
+                    $strip = $this->compress_js;
+                } elseif (!empty($token['style'])) {
+                    $strip = $this->compress_css;
+                } elseif ($content == '<!--wp-html-compression no compression-->') {
+                    $overriding = !$overriding;
+                    continue;
+                } elseif ($this->remove_comments) {
+                    if (!$overriding && $raw_tag != 'textarea') {
+                        // Remove HTML comments except MSIE conditional comments
+                        $content = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $content);
+                    }
+                }
+            } else {
+                if ($tag == 'pre' || $tag == 'textarea') {
+                    $raw_tag = $tag;
+                } elseif ($tag == '/pre' || $tag == '/textarea') {
+                    $raw_tag = false;
+                } else {
+                    if (!$raw_tag && !$overriding) {
+                        // Remove empty attributes, except: action, alt, content, src
+                        $content = preg_replace('/(\s+)(\w++(?<!\baction|\balt|\bcontent|\bsrc)="")/', '$1', $content);
+                        // Remove space before self-closing XHTML tags
+                        $content = str_replace(' />', '/>', $content);
+                    }
+                }
             }
-            return "<{$matches[1]}{$matches[0]}>{$content}</{$matches[1]}>";
-        }, $html);
 
-        // Remove comments and whitespace
-        return preg_replace(
-            [
-                '/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', // Comments
-                '/\s+/',                                                // Multiple whitespace
-                '/>\s+</',                                             // Between tags
-                '/\s+(>|<)/',                                          // Before/after tags
-                '/\s+(<\/?(?:img|input|br|hr|meta|link|source|area)(?:\s+[^>]*)?>)\s+/' // Self-closing tags
-            ],
-            [
-                '',
-                ' ',
-                '><',
-                '$1',
-                '$1'
-            ],
-            trim($html)
-        );
+            if (!$raw_tag && !$overriding) {
+                $content = $this->removeWhitespace($content);
+            }
+
+            $compressed .= $content;
+        }
+
+        return $compressed;
     }
 
-    private function minifyJS(string $js): string {
-        static $patterns = [
-            '/\/\*.*?\*\/|\/\/[^\n]*/' => '',           // Comments
-            '/\s+/' => ' ',                             // Multiple whitespace
-            '/\s*([:;{},=\(\)\[\]])\s*/' => '$1',      // Around operators
-        ];
-
-        // Preserve strings
-        $strings = [];
-        $js = preg_replace_callback('/([\'"`])(?:(?!\1)[^\\\\]|\\\\.)*\1/', 
-            function($match) use (&$strings) {
-                $key = '___JS_STR_' . count($strings) . '___';
-                $strings[$key] = $match[0];
-                return $key;
-            }, 
-            $js
-        );
-
-        // Apply minification patterns
-        $js = preg_replace(array_keys($patterns), array_values($patterns), $js);
-
-        // Restore strings
-        return strtr($js, $strings);
+    private function removeWhitespace(string $str): string {
+        $str = str_replace("\t", ' ', $str);
+        $str = str_replace("\n", '', $str);
+        $str = str_replace("\r", '', $str);
+        while (strpos($str, '  ') !== false) {
+            $str = str_replace('  ', ' ', $str);
+        }
+        return trim($str);
     }
 
-    private function minifyCSS(string $css): string {
-        static $patterns = [
-            '/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//' => '',  // Comments except important ones
-            '/\s+/' => ' ',                                  // Multiple whitespace
-            '/\s*([:;{},])\s*/' => '$1',                    // Around operators
-            '/;}/' => '}',                                  // Extra semicolons
-            '/(\d+)\.0+(?:px|em|rem|%)/i' => '$1$2',      // Leading zeros
-            '/(:| )0(?:px|em|rem|%)/i' => '${1}0'         // Zero units
-        ];
-
-        // Preserve strings and important comments
-        $preserved = [];
-        $css = preg_replace_callback(
-            '/("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\/\*![\s\S]*?\*\/)/',
-            function($match) use (&$preserved) {
-                $key = '___CSS_PRESERVED_' . count($preserved) . '___';
-                $preserved[$key] = $match[0];
-                return $key;
-            },
-            $css
-        );
-
-        // Apply minification patterns
-        $css = preg_replace(array_keys($patterns), array_values($patterns), $css);
-
-        // Restore preserved content
-        return strtr(trim($css), $preserved);
-    }
-
-    private function addCacheMetadata(string $content, int $original_size): string {
-        $minified_size = strlen($content);
-        $savings = round(($original_size - $minified_size) / $original_size * 100, 2);
+    private function getCacheComment(string $raw, string $compressed): string {
+        $raw_size = strlen($raw);
+        $compressed_size = strlen($compressed);
+        $savings = ($raw_size - $compressed_size) / $raw_size * 100;
         
-        $signature = sprintf(
-            "\n<!-- Page cached by WPS-Cache on %s. Savings: %.2f%% -->",
+        return sprintf(
+            "\n<!-- Page cached by WPS-Cache on %s. Size saved %.2f%%. From %d bytes to %d bytes -->",
             date('Y-m-d H:i:s'),
-            $savings
+            round($savings, 2),
+            $raw_size,
+            $compressed_size
         );
-
-        // Add before closing body or at the end
-        return (stripos($content, '</body>') !== false)
-            ? preg_replace('/<\/body>/i', $signature . '</body>', $content, 1)
-            : $content . $signature;
     }
 
     private function shouldCache(): bool {
