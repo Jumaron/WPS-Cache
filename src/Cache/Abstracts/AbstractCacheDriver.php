@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace WPSCache\Cache;
+namespace WPSCache\Cache\Abstracts;
 
 use WPSCache\Cache\Interfaces\CacheDriverInterface;
 /**
