@@ -1,29 +1,20 @@
 <?php
-
+// src/Cache/Drivers/HTMLCache.php
 declare(strict_types=1);
 
-namespace WPSCache\Cache\Interfaces;
+namespace WPSCache\Cache\Drivers;
 
-/**
- * HTML cache implementation
- */
-final class HTMLCache implements CacheDriverInterface {
-    private string $cache_dir;
-    private array $settings;
-    private array $preserved_comments = [];
-    private array $preserved_scripts = [];
-    private array $preserved_styles = [];
+use WPSCache\Cache\Abstracts\AbstractCacheDriver;
 
-    public function __construct() {
-        $this->cache_dir = WPSC_CACHE_DIR . 'html/';
-        if (!file_exists($this->cache_dir)) {
-            mkdir($this->cache_dir, 0755, true);
-        }
-        
-        $this->settings = get_option('wpsc_settings', []);
+final class HTMLCache extends AbstractCacheDriver {
+    /** @var array<string, string> */
+    private array $preserved_content = [];
+
+    protected function getFileExtension(): string {
+        return '.html';
     }
 
-    public function initialize(): void {
+    protected function doInitialize(): void {
         if ($this->shouldCache()) {
             add_action('template_redirect', [$this, 'startOutputBuffering']);
             add_action('shutdown', [$this, 'closeOutputBuffering']);
@@ -31,77 +22,12 @@ final class HTMLCache implements CacheDriverInterface {
     }
 
     private function shouldCache(): bool {
-        return !is_admin() && 
-               !$this->isPageCached() && 
-               !is_user_logged_in() && 
-               $_SERVER['REQUEST_METHOD'] === 'GET' && 
-               empty($_GET) &&
-               !$this->isExcludedUrl();
-    }
-
-    private function isExcludedUrl(): bool {
-        $current_url = $_SERVER['REQUEST_URI'];
-        $excluded_urls = $this->settings['excluded_urls'] ?? [];
-        
-        foreach ($excluded_urls as $pattern) {
-            if (fnmatch($pattern, $current_url)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    public function isConnected(): bool {
-        return is_writable($this->cache_dir);
-    }
-
-    public function get(string $key): mixed {
-        $file = $this->getCacheFile($key);
-        if (!file_exists($file)) {
-            return null;
-        }
-
-        $content = file_get_contents($file);
-        if ($content === false) {
-            return null;
-        }
-
-        // Check if cache is expired
-        $lifetime = $this->settings['cache_lifetime'] ?? 3600;
-        if ((time() - filemtime($file)) > $lifetime) {
-            unlink($file);
-            return null;
-        }
-
-        return $content;
-    }
-
-    public function set(string $key, mixed $value, int $ttl = 3600): void {
-        if (!is_string($value)) {
-            return;
-        }
-
-        $file = $this->getCacheFile($key);
-        file_put_contents($file, $value);
-    }
-
-    public function delete(string $key): void {
-        $file = $this->getCacheFile($key);
-        if (file_exists($file)) {
-            unlink($file);
-        }
-    }
-
-    public function clear(): void {
-        $files = glob($this->cache_dir . '*');
-        if (is_array($files)) {
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
-            }
-        }
+        return !is_admin() &&
+            !$this->isPageCached() &&
+            !is_user_logged_in() &&
+            $_SERVER['REQUEST_METHOD'] === 'GET' &&
+            empty($_GET) &&
+            !$this->isExcludedUrl($_SERVER['REQUEST_URI'] ?? '');
     }
 
     public function startOutputBuffering(): void {
@@ -121,122 +47,69 @@ final class HTMLCache implements CacheDriverInterface {
 
         $original_size = strlen($content);
         
-        // Preserve specific content before minification
         $content = $this->preserveContent($content);
-        
-        // Minify HTML
         $content = $this->minifyHTML($content);
-        
-        // Restore preserved content
         $content = $this->restoreContent($content);
+        $content = $this->addCacheSignature($content, $original_size);
 
-        // Add cache signature and stats
-        $minified_size = strlen($content);
-        $savings = round(($original_size - $minified_size) / $original_size * 100, 2);
-        
-        $timestamp = date('Y-m-d H:i:s');
-        $cache_signature = sprintf(
-            "\n<!-- Page cached by WPS-Cache on %s. Savings: %.2f%% -->",
-            $timestamp,
-            $savings
-        );
-
-        // Add signature before closing body tag
-        if (stripos($content, '</body>') !== false) {
-            $content = preg_replace(
-                '/<\/body>/i',
-                $cache_signature . '</body>',
-                $content,
-                1
-            );
-        } else {
-            $content .= $cache_signature;
-        }
-
-        // Cache the content
-        $key = md5($_SERVER['REQUEST_URI']);
+        $key = md5($_SERVER['REQUEST_URI'] ?? uniqid());
         $this->set($key, $content);
 
         return $content;
     }
 
     private function preserveContent(string $content): string {
-        // Preserve conditional comments
-        $content = preg_replace_callback('/<!--\[if[^\]]*]>.*?<!\[endif]-->/is', function($match) {
-            $key = '___PRESERVED_COMMENT_' . count($this->preserved_comments) . '___';
-            $this->preserved_comments[$key] = $match[0];
-            return $key;
-        }, $content);
+        $preservation_patterns = [
+            'conditional_comments' => '/<!--\[if[^\]]*]>.*?<!\[endif]-->/is',
+            'special_scripts' => '/<script[^>]*(?:type=["\'](?:text\/template|text\/x-template)["\'])[^>]*>.*?<\/script>/is',
+            'special_styles' => '/<style[^>]*data-nominify[^>]*>.*?<\/style>/is'
+        ];
 
-        // Preserve scripts with special attributes
-        $content = preg_replace_callback('/<script[^>]*>.*?<\/script>/is', function($match) {
-            if (preg_match('/type=["\'](text\/template|text\/x-template)["\']/', $match[0])) {
-                $key = '___PRESERVED_SCRIPT_' . count($this->preserved_scripts) . '___';
-                $this->preserved_scripts[$key] = $match[0];
+        foreach ($preservation_patterns as $type => $pattern) {
+            $content = preg_replace_callback($pattern, function($match) use ($type) {
+                $key = sprintf('___PRESERVED_%s_%d___', strtoupper($type), count($this->preserved_content));
+                $this->preserved_content[$key] = $match[0];
                 return $key;
-            }
-            return $match[0];
-        }, $content);
-
-        // Preserve styles with special attributes
-        $content = preg_replace_callback('/<style[^>]*>.*?<\/style>/is', function($match) {
-            if (strpos($match[0], 'data-nominify') !== false) {
-                $key = '___PRESERVED_STYLE_' . count($this->preserved_styles) . '___';
-                $this->preserved_styles[$key] = $match[0];
-                return $key;
-            }
-            return $match[0];
-        }, $content);
+            }, $content);
+        }
 
         return $content;
     }
 
     private function restoreContent(string $content): string {
-        // Restore all preserved content
-        foreach ($this->preserved_comments as $key => $value) {
-            $content = str_replace($key, $value, $content);
-        }
-        foreach ($this->preserved_scripts as $key => $value) {
-            $content = str_replace($key, $value, $content);
-        }
-        foreach ($this->preserved_styles as $key => $value) {
-            $content = str_replace($key, $value, $content);
-        }
-
-        return $content;
+        return strtr($content, $this->preserved_content);
     }
 
-    private function minifyHTML(string $html): string {
+    private function minifyHTML(string $content): string {
         // Process scripts
-        $html = preg_replace_callback('/<script[^>]*>(.*?)<\/script>/is', function($matches) {
-            if (!preg_match('/type=["\'](text\/template|text\/x-template)["\']/', $matches[0])) {
+        $content = preg_replace_callback('/<script[^>]*>(.*?)<\/script>/is', function($matches) {
+            if (!preg_match('/type=["\'](?:text\/template|text\/x-template)["\']/', $matches[0])) {
                 return $this->minifyJS($matches[0]);
             }
             return $matches[0];
-        }, $html);
+        }, $content);
 
         // Process styles
-        $html = preg_replace_callback('/<style[^>]*>(.*?)<\/style>/is', function($matches) {
+        $content = preg_replace_callback('/<style[^>]*>(.*?)<\/style>/is', function($matches) {
             if (strpos($matches[0], 'data-nominify') === false) {
                 return $this->minifyCSS($matches[0]);
             }
             return $matches[0];
-        }, $html);
+        }, $content);
 
-        // Remove comments (except IE conditionals)
-        $html = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $html);
-   
+        // Remove comments except IE conditionals
+        $content = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->)[\s\S])*-->/s', '', $content);
 
-        // Remove whitespace
-        $html = preg_replace('/\s+/', ' ', $html);
-        $html = preg_replace('/>\s+</', '><', $html);
-        $html = preg_replace('/\s+>/', '>', $html);
-        $html = preg_replace('/>\s+/', '>', $html);
+        // Minify HTML
+        $replacements = [
+            '/\s+/' => ' ',
+            '/>\s+</' => '><',
+            '/\s+>/' => '>',
+            '/>\s+/' => '>',
+            '/\s+(<\/?(?:img|input|br|hr|meta|link|source|area)(?:\s+[^>]*)?>)\s+/' => '$1'
+        ];
 
-        // Remove whitespace around specific tags
-        $html = preg_replace('/\s+(<\/?(?:img|input|br|hr|meta|link|source|area)(?:\s+[^>]*)?>)\s+/', '$1', $html);
-
-        return trim($html);
+        return trim(preg_replace(array_keys($replacements), array_values($replacements), $content));
     }
 
     private function minifyJS(string $js): string {
@@ -248,55 +121,101 @@ final class HTMLCache implements CacheDriverInterface {
             return $key;
         }, $js);
 
-        // Remove comments
+        // Remove comments and minimize
         $js = preg_replace('/\/\*.*?\*\/|\/\/[^\n]*/', '', $js);
-        
-        // Basic minification
-        $js = preg_replace('/\s+/', ' ', $js);
-        $js = preg_replace('/\s*([:;{},=\(\)\[\]])\s*/', '$1', $js);
-        
-        // Restore strings
-        foreach ($strings as $key => $value) {
-            $js = str_replace($key, $value, $js);
-        }
+        $js = preg_replace(['/\s+/', '/\s*([:;{},=\(\)\[\]])\s*/'], [' ', '$1'], $js);
 
-        return $js;
+        // Restore strings
+        return strtr($js, $strings);
     }
 
     private function minifyCSS(string $css): string {
         // Preserve strings and important comments
-        $preservations = [];
-        $css = preg_replace_callback('/("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\/\*![\s\S]*?\*\/)/', function($match) use (&$preservations) {
-            $key = '___PRESERVATION_' . count($preservations) . '___';
-            $preservations[$key] = $match[0];
-            return $key;
-        }, $css);
+        $preserved = [];
+        $css = preg_replace_callback('/("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\/\*![\s\S]*?\*\/)/', 
+            function($match) use (&$preserved) {
+                $key = '___PRESERVATION_' . count($preserved) . '___';
+                $preserved[$key] = $match[0];
+                return $key;
+            }, 
+            $css
+        );
 
-        // Remove comments
+        // Remove comments and minimize
         $css = preg_replace('/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//', '', $css);
-
-        // Remove whitespace
-        $css = preg_replace('/\s+/', ' ', $css);
-        $css = preg_replace('/\s*([:;{},])\s*/', '$1', $css);
-        $css = preg_replace('/;}/', '}', $css);
-
-        // Optimize numbers
-        $css = preg_replace('/(\d+)\.0+(?:px|em|rem|%)/i', '$1$2', $css);
-        $css = preg_replace('/(:| )0(?:px|em|rem|%)/i', '${1}0', $css);
+        $css = preg_replace([
+            '/\s+/',
+            '/\s*([:;{},])\s*/',
+            '/;}/',
+            '/(\d+)\.0+(?:px|em|rem|%)/i',
+            '/(:| )0(?:px|em|rem|%)/i'
+        ], [
+            ' ',
+            '$1',
+            '}',
+            '$1$2',
+            '${1}0'
+        ], $css);
 
         // Restore preserved content
-        foreach ($preservations as $key => $value) {
-            $css = str_replace($key, $value, $css);
-        }
-
-        return trim($css);
+        return strtr(trim($css), $preserved);
     }
 
-    private function getCacheFile(string $key): string {
-        return $this->cache_dir . $key . '.html';
+    private function addCacheSignature(string $content, int $original_size): string {
+        $minified_size = strlen($content);
+        $savings = round(($original_size - $minified_size) / $original_size * 100, 2);
+        
+        $signature = sprintf(
+            "\n<!-- Page cached by WPS-Cache on %s. Savings: %.2f%% -->",
+            date('Y-m-d H:i:s'),
+            $savings
+        );
+
+        return str_contains($content, '</body>')
+            ? preg_replace('/<\/body>/i', $signature . '</body>', $content, 1)
+            : $content . $signature;
     }
 
     private function isPageCached(): bool {
         return isset($_SERVER['HTTP_X_WPS_CACHE']) && $_SERVER['HTTP_X_WPS_CACHE'] === 'HIT';
+    }
+
+    public function get(string $key): mixed {
+        $file = $this->getCacheFile($key);
+        if (!file_exists($file)) {
+            return null;
+        }
+
+        $content = file_get_contents($file);
+        if ($content === false) {
+            return null;
+        }
+
+        $lifetime = $this->settings['cache_lifetime'] ?? 3600;
+        if ((time() - filemtime($file)) > $lifetime) {
+            unlink($file);
+            return null;
+        }
+
+        return $content;
+    }
+
+    public function set(string $key, mixed $value, int $ttl = 3600): void {
+        if (!is_string($value)) {
+            return;
+        }
+
+        file_put_contents($this->getCacheFile($key), $value);
+    }
+
+    public function delete(string $key): void {
+        $file = $this->getCacheFile($key);
+        if (file_exists($file)) {
+            unlink($file);
+        }
+    }
+
+    public function clear(): void {
+        array_map('unlink', glob($this->cache_dir . '*' . $this->getFileExtension()) ?: []);
     }
 }

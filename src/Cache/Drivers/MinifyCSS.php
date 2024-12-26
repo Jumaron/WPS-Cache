@@ -1,36 +1,16 @@
 <?php
 declare(strict_types=1);
 
-namespace WPSCache\Cache\Interfaces;
+namespace WPSCache\Cache\Drivers;
 
-/**
- * Improved CSS minification implementation
- */
-final class MinifyCSS implements CacheDriverInterface {
-    private string $cache_dir;
-    private array $settings;
+use WPSCache\Cache\Abstracts\AbstractCacheDriver;
 
-    public function __construct() {
-        $this->cache_dir = WPSC_CACHE_DIR . 'css/';
-        if (!file_exists($this->cache_dir)) {
-            mkdir($this->cache_dir, 0755, true);
-        }
-
-        $this->settings = get_option('wpsc_settings', []);
+final class MinifyCSS extends AbstractCacheDriver {
+    protected function getFileExtension(): string {
+        return '.css';
     }
 
-    public function isConnected(): bool {
-        return is_writable($this->cache_dir);
-    }
-    
-    public function delete(string $key): void {
-        $file = $this->getCacheFile($key);
-        if (file_exists($file)) {
-            unlink($file);
-        }
-    }
-
-    public function initialize(): void {
+    protected function doInitialize(): void {
         if (!is_admin() && ($this->settings['css_minify'] ?? false)) {
             add_action('wp_enqueue_scripts', [$this, 'processStyles'], 100);
         }
@@ -43,7 +23,6 @@ final class MinifyCSS implements CacheDriverInterface {
             return;
         }
 
-        // Get excluded CSS handles/URLs from settings
         $excluded_css = $this->settings['excluded_css'] ?? [];
 
         foreach ($wp_styles->queue as $handle) {
@@ -52,71 +31,65 @@ final class MinifyCSS implements CacheDriverInterface {
             }
 
             $style = $wp_styles->registered[$handle];
-
-            // Skip if no source, already minified, external, or in excluded list
-            if (empty($style->src) ||
-                strpos($style->src, '.min.css') !== false ||
-                strpos($style->src, '//') === 0 ||
-                strpos($style->src, site_url()) === false ||
-                in_array($handle, $excluded_css) ||
-                $this->isExcluded($style->src, $excluded_css)) {
+            
+            if ($this->shouldSkipStyle($style, $excluded_css)) {
                 continue;
             }
 
-            // Get absolute URL if it's a relative path
-            if (strpos($style->src, 'http') !== 0) {
-                $style->src = site_url($style->src);
-            }
-
-            // Convert URL to file path
-            $source = str_replace(
-                [site_url(), 'wp-content'],
-                [ABSPATH, 'wp-content'],
-                $style->src
-            );
-
-            // Skip if file doesn't exist
-            if (!file_exists($source)) {
+            $source_path = $this->getSourcePath($style->src);
+            if (!$source_path || !is_readable($source_path)) {
                 continue;
             }
 
-            $content = file_get_contents($source);
+            $content = file_get_contents($source_path);
             if (!$content) {
                 continue;
             }
 
-            // Create cache key from the file content and last modified time
-            $cache_key = md5($handle . $content . filemtime($source));
+            $cache_key = $this->generateCacheKey($handle, $content, $source_path);
             $cache_file = $this->getCacheFile($cache_key);
 
-            // Check if cached version exists and is valid
             if (!file_exists($cache_file)) {
-                $minified_content = $this->minifyCSS($content);
-
-                file_put_contents($cache_file, $minified_content);
+                $minified = $this->minifyCSS($content);
+                file_put_contents($cache_file, $minified);
             }
 
-            // Update source to use minified version
-            $minified_url = str_replace(
-                ABSPATH,
-                site_url('/'),
-                $cache_file
-            );
-
-            $wp_styles->registered[$handle]->src = $minified_url;
-
-            // Add version to break cache
-            $wp_styles->registered[$handle]->ver = filemtime($cache_file);
+            $this->updateStyleSource($style, $cache_file);
         }
     }
 
-    private function isExcluded(string $url, array $excluded_patterns): bool {
-        foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url)) {
-                return true;
-            }
+    private function shouldSkipStyle($style, array $excluded_css): bool {
+        return empty($style->src) ||
+               strpos($style->src, '.min.css') !== false ||
+               strpos($style->src, '//') === 0 ||
+               strpos($style->src, site_url()) === false ||
+               in_array($style->handle, $excluded_css) ||
+               $this->isExcludedUrl($style->src);
+    }
+
+    private function getSourcePath(string $src): ?string {
+        if (strpos($src, 'http') !== 0) {
+            $src = site_url($src);
         }
-        return false;
+
+        return str_replace(
+            [site_url(), 'wp-content'],
+            [ABSPATH, 'wp-content'],
+            $src
+        );
+    }
+
+    private function generateCacheKey(string $handle, string $content, string $source_path): string {
+        return md5($handle . $content . filemtime($source_path));
+    }
+
+    private function updateStyleSource($style, string $cache_file): void {
+        $wp_styles->registered[$style->handle]->src = str_replace(
+            ABSPATH,
+            site_url('/'),
+            $cache_file
+        );
+        $wp_styles->registered[$style->handle]->ver = filemtime($cache_file);
     }
 
     private function minifyCSS(string $css): string {
@@ -131,17 +104,11 @@ final class MinifyCSS implements CacheDriverInterface {
             },
             $css
         );
-    
-        // Remove comments, but preserve important ones (/*! ... */)
-        $css = preg_replace('/\/\*[\s\S]*?\*\//', '', $css);
-    
-        // Trim whitespace
-        $css = trim($css);
-    
-        // Normalize whitespace (collapse multiple spaces to one)
-        $css = preg_replace('/\s+/', ' ', $css);
-    
-        // Remove spaces around specific characters, but keep spaces around operators in calc()
+
+        // Remove comments except important ones
+        $css = preg_replace('/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//', '', $css);
+        
+        // Process calc expressions
         $css = preg_replace_callback(
             '/calc\(([^)]+)\)/',
             function ($matches) {
@@ -149,20 +116,27 @@ final class MinifyCSS implements CacheDriverInterface {
             },
             $css
         );
-        $css = preg_replace('/\s*([:;{},>~])\s*/', '$1', $css);
-    
-        // Remove unnecessary semicolons (last one in a block)
-        $css = preg_replace('/;(?=\s*})/', '', $css);
-    
-        // Remove unnecessary zeros (e.g., 0.5 -> .5, 0px -> 0)
-        $css = preg_replace('/(^| )0\.([0-9]+)(%|em|ex|px|in|cm|mm|pt|pc)/i', '${1}.${2}${3}', $css);
-        $css = preg_replace('/(^| ):0(%|em|ex|px|in|cm|mm|pt|pc)/i', '${1}:0', $css);
-    
+
+        // Minify
+        $css = preg_replace([
+            '/\s+/',
+            '/\s*([:;{},])\s*/',
+            '/;}/',
+            '/(\d+)\.0+(%|em|ex|px|in|cm|mm|pt|pc)/i',
+            '/(^|[^0-9])0(%|em|ex|px|in|cm|mm|pt|pc)/i'
+        ], [
+            ' ',
+            '$1',
+            '}',
+            '$1$2',
+            '${1}0'
+        ], trim($css));
+
         // Restore data URIs
         foreach ($data_uris as $key => $uri) {
             $css = str_replace($key, $uri, $css);
         }
-    
+
         return $css;
     }
 
@@ -175,19 +149,14 @@ final class MinifyCSS implements CacheDriverInterface {
         file_put_contents($this->getCacheFile($key), $value);
     }
 
-    public function clear(): void {
-        $files = glob($this->cache_dir . '*');
-        if (is_array($files)) {
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
-            }
+    public function delete(string $key): void {
+        $file = $this->getCacheFile($key);
+        if (file_exists($file)) {
+            unlink($file);
         }
     }
 
-    private function getCacheFile(?string $key = null): string {
-        $key ??= md5(uniqid());
-        return $this->cache_dir . $key . '.css';
+    public function clear(): void {
+        array_map('unlink', glob($this->cache_dir . '*' . $this->getFileExtension()) ?: []);
     }
 }
