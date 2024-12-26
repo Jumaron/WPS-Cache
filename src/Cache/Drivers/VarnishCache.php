@@ -12,14 +12,19 @@ final class VarnishCache extends AbstractCacheDriver {
     private const DEFAULT_CACHE_LIFETIME = 604800; // 1 week
     private const DEFAULT_TIMEOUT = 5;
 
+    private string $host;
+    private int $port;
+    private int $cache_lifetime;
     private string $cache_tag_prefix;
     
     public function __construct(
-        private readonly string $host = self::DEFAULT_HOST,
-        private readonly int $port = self::DEFAULT_PORT,
-        private readonly int $cache_lifetime = self::DEFAULT_CACHE_LIFETIME
+        string $host = self::DEFAULT_HOST,
+        int $port = self::DEFAULT_PORT,
+        int $cache_lifetime = self::DEFAULT_CACHE_LIFETIME
     ) {
-        parent::__construct();
+        $this->host = $host;
+        $this->port = $port;
+        $this->cache_lifetime = $cache_lifetime;
         $this->cache_tag_prefix = 'c714'; // Get from settings if needed
     }
 
@@ -76,10 +81,7 @@ final class VarnishCache extends AbstractCacheDriver {
         }
     }
 
-    /**
-     * Purges the entire Varnish cache using both host and tag-based purging
-     */
-    public function purgeAll(): void {
+    private function purgeAll(): void {
         try {
             // Purge by host
             $site_url = get_site_url();
@@ -95,14 +97,11 @@ final class VarnishCache extends AbstractCacheDriver {
             }
         } catch (\Throwable $e) {
             $this->logError('Failed to purge all cache', $e);
-            throw $e; // Re-throw for higher-level handling
+            throw $e;
         }
     }
 
-    /**
-     * Purges cache for a specific host
-     */
-    public function purgeByHost(string $host): void {
+    private function purgeByHost(string $host): void {
         $this->sendPurgeRequest([
             'Host' => $host,
             'X-Purge-Method' => 'regex',
@@ -110,10 +109,7 @@ final class VarnishCache extends AbstractCacheDriver {
         ]);
     }
 
-    /**
-     * Purges cache by tag
-     */
-    public function purgeByTag(string $tag): void {
+    private function purgeByTag(string $tag): void {
         $this->sendPurgeRequest([
             'X-Cache-Tags' => $tag,
             'X-Purge-Method' => 'regex',
@@ -121,9 +117,6 @@ final class VarnishCache extends AbstractCacheDriver {
         ]);
     }
 
-    /**
-     * Purges cache for a specific URL
-     */
     public function purgeUrl(string $url): void {
         $parsed_url = parse_url($url);
         if (!isset($parsed_url['host'])) {
@@ -139,9 +132,6 @@ final class VarnishCache extends AbstractCacheDriver {
         ], $request_url);
     }
 
-    /**
-     * Builds the purge request URL
-     */
     private function buildPurgeUrl(array $parsed_url): string {
         $request_url = sprintf('http://%s:%d', $this->host, $this->port);
 
@@ -157,9 +147,6 @@ final class VarnishCache extends AbstractCacheDriver {
         return $request_url;
     }
 
-    /**
-     * Sends a PURGE request to Varnish
-     */
     private function sendPurgeRequest(array $headers, ?string $custom_url = null): void {
         $request_url = $custom_url ?? sprintf('http://%s:%d', $this->host, $this->port);
         

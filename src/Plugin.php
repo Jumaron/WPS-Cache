@@ -137,10 +137,12 @@ final class Plugin {
         }
 
         if ($settings['varnish_cache'] ?? false) {
-            $this->cache_manager->addDriver(new VarnishCache(
+            $varnish = new VarnishCache(
                 $settings['varnish_host'] ?? '127.0.0.1',
-                (int) ($settings['varnish_port'] ?? 6081)
-            ));
+                (int) ($settings['varnish_port'] ?? 6081),
+                604800 // 1 week cache lifetime
+            );
+            $this->cache_manager->addDriver($varnish);
         }
 
         if ($settings['css_minify'] ?? false) {
