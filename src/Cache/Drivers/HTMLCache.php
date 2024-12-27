@@ -1,26 +1,30 @@
 <?php
-
 declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
 
 /**
- * HTML cache implementation for static file caching
+ * Optimized HTML cache implementation
  */
-final class HTMLCache implements CacheDriverInterface {
+final class HTMLCache extends AbstractCacheDriver {
+    private const COMPRESSION_PATTERN = '/<(?<script>script).*?<\/script\s*>|<(?<style>style).*?<\/style\s*>|<!(?<comment>--).*?-->|<(?<tag>[\/\w.:-]*)(?:".*?"|\'.*?\'|[^\'">]+)*>|(?<text>((<[^!\/\w.:-])?[^<]*)+)|/si';
     private string $cache_dir;
-
+    private array $settings;
+    private bool $compress_css = true;
+    private bool $compress_js = true;
+    private bool $remove_comments = true;
+    
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'html/';
-        if (!file_exists($this->cache_dir)) {
-            mkdir($this->cache_dir, 0755, true);
-        }
+        $this->settings = get_option('wpsc_settings', []);
+        $this->ensureCacheDirectory($this->cache_dir);
     }
 
     public function initialize(): void {
-        if (!is_admin() && !$this->isPageCached()) {
+        if (!$this->initialized && $this->shouldCache()) {
             add_action('template_redirect', [$this, 'startOutputBuffering']);
             add_action('shutdown', [$this, 'closeOutputBuffering']);
+            $this->initialized = true;
         }
     }
 
@@ -30,81 +34,53 @@ final class HTMLCache implements CacheDriverInterface {
 
     public function get(string $key): mixed {
         $file = $this->getCacheFile($key);
-        if (!file_exists($file)) {
+        if (!is_readable($file)) {
+            return null;
+        }
+
+        // Check expiration before reading file
+        $lifetime = $this->settings['cache_lifetime'] ?? 3600;
+        if ((time() - filemtime($file)) > $lifetime) {
+            @unlink($file);
             return null;
         }
 
         $content = file_get_contents($file);
-        if ($content === false) {
-            return null;
-        }
-
-        // Check if cache is expired
-        $settings = get_option('wpsc_settings', []);
-        $lifetime = $settings['cache_lifetime'] ?? 3600;
-        
-        if ((time() - filemtime($file)) > $lifetime) {
-            unlink($file);
-            return null;
-        }
-
-        return $content;
+        return ($content !== false) ? $content : null;
     }
 
     public function set(string $key, mixed $value, int $ttl = 3600): void {
-        if (!is_string($value)) {
+        if (!is_string($value) || empty(trim($value))) {
             return;
         }
 
         $file = $this->getCacheFile($key);
-        file_put_contents($file, $value);
+        if (@file_put_contents($file, $value) === false) {
+            $this->logError("Failed to write cache file: $file");
+        }
     }
 
     public function delete(string $key): void {
         $file = $this->getCacheFile($key);
-        if (file_exists($file)) {
-            unlink($file);
+        if (file_exists($file) && !@unlink($file)) {
+            $this->logError("Failed to delete cache file: $file");
         }
     }
 
     public function clear(): void {
-        $files = glob($this->cache_dir . '*');
-        if (is_array($files)) {
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
+        $files = glob($this->cache_dir . '*.html');
+        if (!is_array($files)) {
+            return;
+        }
+        
+        foreach ($files as $file) {
+            if (is_file($file) && !@unlink($file)) {
+                $this->logError("Failed to delete cache file during clear: $file");
             }
         }
     }
 
     public function startOutputBuffering(): void {
-        // Don't cache for logged in users or admin pages
-        if (is_user_logged_in() || is_admin()) {
-            return;
-        }
-
-        // Don't cache POST requests
-        if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-            return;
-        }
-
-        // Don't cache if there are GET parameters
-        if (!empty($_GET)) {
-            return;
-        }
-
-        // Check excluded URLs
-        $settings = get_option('wpsc_settings', []);
-        $excluded_urls = $settings['excluded_urls'] ?? [];
-        
-        $current_url = $_SERVER['REQUEST_URI'];
-        foreach ($excluded_urls as $pattern) {
-            if (fnmatch($pattern, $current_url)) {
-                return;
-            }
-        }
-
         ob_start([$this, 'processOutput']);
     }
 
@@ -114,44 +90,140 @@ final class HTMLCache implements CacheDriverInterface {
         }
     }
 
-    private function processOutput(string $content): string {
+    public function processOutput(string $content): string {
         if (empty($content)) {
             return $content;
         }
-    
-        // Add cache signature as HTML comment
-        $timestamp = date('Y-m-d H:i:s');
-        $cache_signature = sprintf(
-            "\n<!-- Page cached by WPS-Cache on %s -->\n",
-            $timestamp
-        );
-    
-        // Add signature before closing </body> tag if it exists
-        // Otherwise append it to the end of content
-        if (stripos($content, '</body>') !== false) {
-            $content = preg_replace(
-                '/<\/body>/i',
-                $cache_signature . '</body>',
-                $content,
-                1
-            );
-        } else {
-            $content .= $cache_signature;
+
+        try {
+            $minified = $this->minifyHTML($content);
+            
+            if ($minified === false) {
+                return $content;
+            }
+
+            // Add cache metadata
+            $minified .= $this->getCacheComment($content, $minified);
+            
+            // Cache the processed content
+            $key = $this->generateCacheKey($_SERVER['REQUEST_URI']);
+            $this->set($key, $minified);
+            
+            return $minified;
+        } catch (\Throwable $e) {
+            $this->logError('HTML processing failed', $e);
+            return $content;
         }
-    
-        // Generate cache key from URL
-        $key = md5($_SERVER['REQUEST_URI']);
-        $this->set($key, $content);
-    
-        return $content;
+    }
+
+    private function minifyHTML(string $html): string|false {
+        if (empty($html)) {
+            return false;
+        }
+
+        $matches = [];
+        if (!preg_match_all(self::COMPRESSION_PATTERN, $html, $matches, PREG_SET_ORDER)) {
+            return false;
+        }
+
+        $overriding = false;  // For no compression blocks
+        $raw_tag = false;     // For pre/textarea tags
+        $compressed = '';
+
+        foreach ($matches as $token) {
+            $tag = (isset($token['tag'])) ? strtolower($token['tag']) : null;
+            $content = $token[0];
+
+            if (is_null($tag)) {
+                if (!empty($token['script'])) {
+                    $strip = $this->compress_js;
+                } elseif (!empty($token['style'])) {
+                    $strip = $this->compress_css;
+                } elseif ($content == '<!--wp-html-compression no compression-->') {
+                    $overriding = !$overriding;
+                    continue;
+                } elseif ($this->remove_comments) {
+                    if (!$overriding && $raw_tag != 'textarea') {
+                        // Remove HTML comments except MSIE conditional comments
+                        $content = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $content);
+                    }
+                }
+            } else {
+                if ($tag == 'pre' || $tag == 'textarea') {
+                    $raw_tag = $tag;
+                } elseif ($tag == '/pre' || $tag == '/textarea') {
+                    $raw_tag = false;
+                } else {
+                    if (!$raw_tag && !$overriding) {
+                        // Remove empty attributes, except: action, alt, content, src
+                        $content = preg_replace('/(\s+)(\w++(?<!\baction|\balt|\bcontent|\bsrc)="")/', '$1', $content);
+                        // Remove space before self-closing XHTML tags
+                        $content = str_replace(' />', '/>', $content);
+                    }
+                }
+            }
+
+            if (!$raw_tag && !$overriding) {
+                $content = $this->removeWhitespace($content);
+            }
+
+            $compressed .= $content;
+        }
+
+        return $compressed;
+    }
+
+    private function removeWhitespace(string $str): string {
+        $str = str_replace("\t", ' ', $str);
+        $str = str_replace("\n", '', $str);
+        $str = str_replace("\r", '', $str);
+        while (strpos($str, '  ') !== false) {
+            $str = str_replace('  ', ' ', $str);
+        }
+        return trim($str);
+    }
+
+    private function getCacheComment(string $raw, string $compressed): string {
+        $raw_size = strlen($raw);
+        $compressed_size = strlen($compressed);
+        $savings = ($raw_size - $compressed_size) / $raw_size * 100;
+        
+        return sprintf(
+            "\n<!-- Page cached by WPS-Cache on %s. Size saved %.2f%%. From %d bytes to %d bytes -->",
+            date('Y-m-d H:i:s'),
+            round($savings, 2),
+            $raw_size,
+            $compressed_size
+        );
+    }
+
+    private function shouldCache(): bool {
+        return !is_admin() && 
+               !$this->isPageCached() && 
+               !is_user_logged_in() && 
+               $_SERVER['REQUEST_METHOD'] === 'GET' && 
+               empty($_GET) &&
+               !$this->isExcludedUrl();
+    }
+
+    private function isExcludedUrl(): bool {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $excluded_urls = $this->settings['excluded_urls'] ?? [];
+        
+        foreach ($excluded_urls as $pattern) {
+            if (fnmatch($pattern, $current_url)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     private function getCacheFile(string $key): string {
-        return $this->cache_dir . $key . '.html';
+        return $this->cache_dir . $this->generateCacheKey($key) . '.html';
     }
 
     private function isPageCached(): bool {
-        // Check if page is already served from cache
         return isset($_SERVER['HTTP_X_WPS_CACHE']) && $_SERVER['HTTP_X_WPS_CACHE'] === 'HIT';
     }
 }

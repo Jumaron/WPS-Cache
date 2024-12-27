@@ -1,103 +1,191 @@
 <?php
 /**
  * WPS Cache - Advanced Cache Drop-in
- * This file is automatically copied to wp-content/advanced-cache.php
+ * 
+ * This file is automatically deployed to wp-content/advanced-cache.php
+ * It handles serving cached files and manages cache bypassing logic
  */
 
 if (!defined('ABSPATH')) {
-    die;
+    exit('Direct access not allowed.');
 }
 
-// Skip cache for specific conditions
-if (
-    defined('WP_CLI') || 
-    defined('DOING_CRON') ||
-    defined('DOING_AJAX') ||
-    isset($_GET['preview']) ||
-    isset($_POST) && !empty($_POST) ||
-    is_admin() ||
-    (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] !== 'GET')
-) {
-    return;
-}
+class WPSAdvancedCache {
+    private const CACHE_BYPASS_CONDITIONS = [
+        'WP_CLI',
+        'DOING_CRON',
+        'DOING_AJAX',
+        'REST_REQUEST',
+        'XMLRPC_REQUEST',
+        'WP_ADMIN',
+    ];
 
-// Function to send cached file with proper headers
-function wpsc_serve_cached_file($file, $type) {
-    if ($content = file_get_contents($file)) {
+    private const CONTENT_TYPES = [
+        'css' => 'text/css; charset=UTF-8',
+        'js'  => 'application/javascript; charset=UTF-8',
+        'html' => 'text/html; charset=UTF-8'
+    ];
+
+    private const DEFAULT_CACHE_LIFETIME = 3600;
+    private const YEAR_IN_SECONDS = 31536000;
+
+    private string $request_uri;
+    private array $settings;
+    private int $cache_lifetime;
+
+    public function __construct() {
+        $this->request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $this->settings = $this->getSettings();
+        $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
+    }
+
+    /**
+     * Main execution method
+     */
+    public function execute(): void {
+        if ($this->shouldBypassCache()) {
+            $this->setHeader('BYPASS');
+            return;
+        }
+
+        // Check for static asset caching (CSS/JS)
+        if ($this->handleStaticAsset()) {
+            return;
+        }
+
+        // Handle HTML caching
+        $this->handleHtmlCache();
+    }
+
+    /**
+     * Checks if cache should be bypassed
+     */
+    private function shouldBypassCache(): bool {
+        // Check PHP constants
+        foreach (self::CACHE_BYPASS_CONDITIONS as $condition) {
+            if (defined($condition) && constant($condition)) {
+                return true;
+            }
+        }
+
+        // Check request conditions
+        return (
+            isset($_GET['preview']) ||
+            !empty($_POST) ||
+            is_admin() ||
+            ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' ||
+            !empty($_GET) || // Query parameters bypass cache
+            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
+        );
+    }
+
+    /**
+     * Handles static asset caching (CSS/JS)
+     */
+    private function handleStaticAsset(): bool {
+        if (!preg_match('/\.(?:css|js)\?.*ver=(\d+)$/', $this->request_uri, $matches)) {
+            return false;
+        }
+
+        $file_path = parse_url($this->request_uri, PHP_URL_PATH);
+        if (!$file_path) {
+            return false;
+        }
+
+        $extension = pathinfo($file_path, PATHINFO_EXTENSION);
+        $file_key = md5($file_path);
+        $cache_file = WP_CONTENT_DIR . "/cache/wps-cache/$extension/" . $file_key . ".$extension";
+
+        if (file_exists($cache_file) && $this->isCacheValid($cache_file)) {
+            return $this->serveCachedFile($cache_file, self::CONTENT_TYPES[$extension]);
+        }
+
+        return false;
+    }
+
+    /**
+     * Handles HTML page caching
+     */
+    private function handleHtmlCache(): void {
+        $cache_key = md5($this->request_uri);
+        $cache_file = WP_CONTENT_DIR . '/cache/wps-cache/html/' . $cache_key . '.html';
+
+        if (file_exists($cache_file) && $this->isCacheValid($cache_file)) {
+            $this->serveCachedFile($cache_file, self::CONTENT_TYPES['html']);
+            return;
+        }
+
+        $this->setHeader('MISS');
+    }
+
+    /**
+     * Serves a cached file with appropriate headers
+     */
+    private function serveCachedFile(string $file, string $content_type): bool {
+        $content = @file_get_contents($file);
+        if ($content === false) {
+            return false;
+        }
+
         $cache_time = filemtime($file);
-        $etag = md5($content);
+        $etag = '"' . md5($content) . '"';
         
-        // Check if-none-match
+        // Check if-none-match for browser caching
         if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
             header('HTTP/1.1 304 Not Modified');
             exit;
         }
 
-        // Set headers
-        header('Content-Type: ' . $type);
-        header('Cache-Control: public, max-age=31536000'); // 1 year
+        // Set cache headers
+        header('Content-Type: ' . $content_type);
+        header('Cache-Control: public, max-age=' . self::YEAR_IN_SECONDS);
         header('ETag: ' . $etag);
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $cache_time) . ' GMT');
-        header('X-WPS-Cache: HIT');
+        
+        $this->setHeader('HIT');
         
         echo $content;
         exit;
     }
-    return false;
-}
 
-// Check if this is a CSS or JS request
-$request_uri = $_SERVER['REQUEST_URI'];
-if (preg_match('/\.(?:css|js)\?.*ver=(\d+)$/', $request_uri, $matches)) {
-    $cache_file = null;
-    $content_type = null;
-    
-    // Extract the file path from the URI
-    $file_path = parse_url($request_uri, PHP_URL_PATH);
-    $file_key = md5($file_path);
-    
-    if (strpos($request_uri, '.css') !== false) {
-        $cache_file = WP_CONTENT_DIR . '/cache/wps-cache/css/' . $file_key . '.css';
-        $content_type = 'text/css; charset=UTF-8';
-    } elseif (strpos($request_uri, '.js') !== false) {
-        $cache_file = WP_CONTENT_DIR . '/cache/wps-cache/js/' . $file_key . '.js';
-        $content_type = 'application/javascript; charset=UTF-8';
+    /**
+     * Checks if cache file is still valid
+     */
+    private function isCacheValid(string $file): bool {
+        return (time() - filemtime($file)) < $this->cache_lifetime;
     }
-    
-    if ($cache_file && file_exists($cache_file)) {
-        $cache_time = filemtime($cache_file);
-        $settings = get_option('wpsc_settings', []);
-        $cache_lifetime = $settings['cache_lifetime'] ?? 3600;
-        
-        if ((time() - $cache_time) < $cache_lifetime) {
-            wpsc_serve_cached_file($cache_file, $content_type);
+
+    /**
+     * Sets WPS Cache header
+     */
+    private function setHeader(string $status): void {
+        header('X-WPS-Cache: ' . $status);
+    }
+
+    /**
+     * Gets cache settings from WordPress options
+     */
+    private function getSettings(): array {
+        if (!function_exists('get_option')) {
+            return [];
         }
+
+        $settings = get_option('wpsc_settings');
+        return is_array($settings) ? $settings : [];
     }
 }
 
-// Handle HTML cache
-if (!empty($_GET)) {
-    header('X-WPS-Cache: BYPASS');
-    return;
-}
-
-$cache_key = md5($_SERVER['REQUEST_URI']);
-$cache_file = WP_CONTENT_DIR . '/cache/wps-cache/html/' . $cache_key . '.html';
-
-// Check if cache file exists and is valid
-if (file_exists($cache_file)) {
-    $cache_time = filemtime($cache_file);
-    $cache_lifetime = 3600; // Default 1 hour
-
-    // Get settings from options table
-    if (function_exists('get_option')) {
-        $settings = get_option('wpsc_settings', []);
-        $cache_lifetime = $settings['cache_lifetime'] ?? 3600;
+// Execute caching logic
+try {
+    $cache = new WPSAdvancedCache();
+    $cache->execute();
+} catch (Throwable $e) {
+    // Log error if debugging is enabled
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('WPS Cache Error: ' . $e->getMessage());
     }
-
-    if ((time() - $cache_time) < $cache_lifetime) {
-        wpsc_serve_cached_file($cache_file, 'text/html; charset=UTF-8');
-    }
+    
+    // Continue normal WordPress execution
+    header('X-WPS-Cache: ERROR');
 }
-
-header('X-WPS-Cache: MISS');

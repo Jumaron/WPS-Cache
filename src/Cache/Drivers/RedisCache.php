@@ -7,9 +7,14 @@ use Redis;
 use RedisException;
 
 /**
- * Enhanced Redis cache driver for WPS Cache
+ * Enhanced Redis cache driver with metrics and connection management
  */
-final class RedisCache implements CacheDriverInterface {
+final class RedisCache extends AbstractCacheDriver {
+    private const DEFAULT_HOST = '127.0.0.1';
+    private const DEFAULT_PORT = 6379;
+    private const DEFAULT_TIMEOUT = 1.0;
+    private const DEFAULT_PREFIX = 'wpsc:';
+    
     private ?Redis $redis = null;
     private bool $is_connected = false;
     private array $metrics = [
@@ -19,69 +24,97 @@ final class RedisCache implements CacheDriverInterface {
         'deletes' => 0,
     ];
 
+    private string $host;
+    private int $port;
+    private int $db;
+    private float $timeout;
+    private float $read_timeout;
+    private ?string $password;
+    private string $prefix;
+    private bool $persistent;
+
     public function __construct(
-        private readonly string $host = '127.0.0.1',
-        private readonly int $port = 6379,
-        private readonly int $db = 0,
-        private readonly float $timeout = 1.0,
-        private readonly float $read_timeout = 1.0,
-        private readonly ?string $password = null,
-        private readonly string $prefix = 'wpsc:',
-        private readonly bool $persistent = false
-    ) {}
+        string $host = self::DEFAULT_HOST, 
+        int $port = self::DEFAULT_PORT, 
+        int $db = 0, 
+        float $timeout = self::DEFAULT_TIMEOUT,
+        float $read_timeout = self::DEFAULT_TIMEOUT,
+        ?string $password = null,
+        string $prefix = self::DEFAULT_PREFIX,
+        bool $persistent = false
+    ) {
+        $this->host = $host;
+        $this->port = $port;
+        $this->db = $db;
+        $this->timeout = $timeout;
+        $this->read_timeout = $read_timeout;
+        $this->password = $password;
+        $this->prefix = $prefix;
+        $this->persistent = $persistent;
+    }
 
     public function initialize(): void {
-        if ($this->is_connected) {
+        if ($this->initialized || $this->is_connected) {
             return;
         }
 
         try {
-            $this->redis = new Redis();
-            
-            // Use persistent connections when possible
-            $connect_method = $this->persistent ? 'pconnect' : 'connect';
-            $connected = @$this->redis->$connect_method($this->host, $this->port, $this->timeout);
-
-            if (!$connected) {
-                throw new RedisException("Failed to connect to Redis server at {$this->host}:{$this->port}");
-            }
-
-            if ($this->password) {
-                if (!$this->redis->auth($this->password)) {
-                    throw new RedisException("Failed to authenticate with Redis server");
-                }
-            }
-
-            if (!$this->redis->select($this->db)) {
-                throw new RedisException("Failed to select Redis database {$this->db}");
-            }
-
-            // Optimize Redis settings
-            $this->redis->setOption(Redis::OPT_PREFIX, $this->prefix);
-            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
-            $this->redis->setOption(Redis::OPT_READ_TIMEOUT, $this->read_timeout);
-            
-            // Enable compression if available
-            if (defined('Redis::COMPRESSION_LZ4') && extension_loaded('lz4')) {
-                $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_LZ4);
-            } elseif (defined('Redis::COMPRESSION_ZSTD') && extension_loaded('zstd')) {
-                $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_ZSTD);
-            }
-
+            $this->setupRedisConnection();
+            $this->optimizeRedisSettings();
             $this->is_connected = true;
+            $this->initialized = true;
         } catch (RedisException $e) {
+            $this->logError("Redis initialization failed", $e);
             $this->handleConnectionError($e);
         }
     }
 
+    private function setupRedisConnection(): void {
+        $this->redis = new Redis();
+        
+        // Use persistent connections when possible
+        $connect_method = $this->persistent ? 'pconnect' : 'connect';
+        $connected = @$this->redis->$connect_method($this->host, $this->port, $this->timeout);
+
+        if (!$connected) {
+            throw new RedisException("Failed to connect to Redis server at {$this->host}:{$this->port}");
+        }
+
+        if ($this->password && !$this->redis->auth($this->password)) {
+            throw new RedisException("Failed to authenticate with Redis server");
+        }
+
+        if (!$this->redis->select($this->db)) {
+            throw new RedisException("Failed to select Redis database {$this->db}");
+        }
+    }
+
+    private function optimizeRedisSettings(): void {
+        if (!$this->redis) {
+            return;
+        }
+
+        // Basic settings
+        $this->redis->setOption(Redis::OPT_PREFIX, $this->prefix);
+        $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
+        $this->redis->setOption(Redis::OPT_READ_TIMEOUT, $this->read_timeout);
+        
+        // Enable compression if available
+        if (defined('Redis::COMPRESSION_LZ4') && extension_loaded('lz4')) {
+            $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_LZ4);
+        } elseif (defined('Redis::COMPRESSION_ZSTD') && extension_loaded('zstd')) {
+            $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_ZSTD);
+        }
+    }
+
     public function isConnected(): bool {
-        return $this->is_connected;
+        return $this->is_connected && $this->redis !== null;
     }
 
     public function get(string $key): mixed {
         if (!$this->ensureConnection()) {
             $this->metrics['misses']++;
-            return false;
+            return null;
         }
 
         try {
@@ -93,14 +126,14 @@ final class RedisCache implements CacheDriverInterface {
             $this->metrics['hits']++;
             return $result;
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
-            return false;
+            $this->logError("Redis get failed", $e);
+            return null;
         }
     }
 
     public function getMultiple(array $keys): array {
         if (!$this->ensureConnection()) {
-            return array_fill_keys($keys, false);
+            return array_fill_keys($keys, null);
         }
 
         try {
@@ -122,8 +155,8 @@ final class RedisCache implements CacheDriverInterface {
             }
             return $output;
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
-            return array_fill_keys($keys, false);
+            $this->logError("Redis multi-get failed", $e);
+            return array_fill_keys($keys, null);
         }
     }
 
@@ -140,7 +173,7 @@ final class RedisCache implements CacheDriverInterface {
             }
             $this->metrics['writes']++;
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis set failed", $e);
         }
     }
 
@@ -161,7 +194,7 @@ final class RedisCache implements CacheDriverInterface {
             $pipe->exec();
             $this->metrics['writes'] += count($values);
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis multi-set failed", $e);
         }
     }
 
@@ -174,20 +207,7 @@ final class RedisCache implements CacheDriverInterface {
             $this->redis->del($key);
             $this->metrics['deletes']++;
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
-        }
-    }
-
-    public function deleteMultiple(array $keys): void {
-        if (!$this->ensureConnection()) {
-            return;
-        }
-
-        try {
-            $this->redis->del(...$keys);
-            $this->metrics['deletes'] += count($keys);
-        } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis delete failed", $e);
         }
     }
 
@@ -207,7 +227,7 @@ final class RedisCache implements CacheDriverInterface {
                 }
             }
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis clear failed", $e);
         }
     }
 
@@ -221,34 +241,9 @@ final class RedisCache implements CacheDriverInterface {
 
         try {
             $info = $this->redis->info();
-            $metrics = $this->metrics;
-
-            // Calculate hit ratio including Redis stats
-            $total_hits = $metrics['hits'] + ($info['keyspace_hits'] ?? 0);
-            $total_misses = $metrics['misses'] + ($info['keyspace_misses'] ?? 0);
-            $total_ops = $total_hits + $total_misses;
-            $hit_ratio = $total_ops > 0 ? ($total_hits / $total_ops) * 100 : 0;
-
-            return [
-                'connected' => true,
-                'version' => $info['redis_version'] ?? 'unknown',
-                'uptime' => $info['uptime_in_seconds'] ?? 0,
-                'memory_used' => $info['used_memory'] ?? 0,
-                'memory_peak' => $info['used_memory_peak'] ?? 0,
-                'hit_ratio' => round($hit_ratio, 2),
-                'hits' => $total_hits,
-                'misses' => $total_misses,
-                'writes' => $metrics['writes'],
-                'deletes' => $metrics['deletes'],
-                'total_connections' => $info['total_connections_received'] ?? 0,
-                'connected_clients' => $info['connected_clients'] ?? 0,
-                'evicted_keys' => $info['evicted_keys'] ?? 0,
-                'expired_keys' => $info['expired_keys'] ?? 0,
-                'last_save_time' => $info['last_save_time'] ?? 0,
-                'total_commands_processed' => $info['total_commands_processed'] ?? 0
-            ];
+            return $this->buildStatsArray($info);
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis stats failed", $e);
             return [
                 'connected' => false,
                 'error' => $e->getMessage()
@@ -256,6 +251,28 @@ final class RedisCache implements CacheDriverInterface {
         }
     }
 
+    public function optimizeRedisCache(): bool {
+        if (!$this->ensureConnection()) {
+            return false;
+        }
+
+        try {
+            // Run garbage collection
+            $this->redis->bgrewriteaof();
+            
+            // Delete expired keys
+            $this->deleteExpired();
+
+            return true;
+        } catch (RedisException $e) {
+            $this->logError("Redis optimization failed", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Deletes expired keys from Redis
+     */
     public function deleteExpired(): void {
         if (!$this->ensureConnection()) {
             return;
@@ -278,12 +295,39 @@ final class RedisCache implements CacheDriverInterface {
                 }
             }
         } catch (RedisException $e) {
-            $this->handleConnectionError($e);
+            $this->logError("Redis expired keys deletion failed", $e);
         }
     }
 
+    private function buildStatsArray(array $info): array {
+        // Calculate hit ratio including Redis stats
+        $total_hits = $this->metrics['hits'] + ($info['keyspace_hits'] ?? 0);
+        $total_misses = $this->metrics['misses'] + ($info['keyspace_misses'] ?? 0);
+        $total_ops = $total_hits + $total_misses;
+        $hit_ratio = $total_ops > 0 ? ($total_hits / $total_ops) * 100 : 0;
+
+        return [
+            'connected' => true,
+            'version' => $info['redis_version'] ?? 'unknown',
+            'uptime' => $info['uptime_in_seconds'] ?? 0,
+            'memory_used' => $info['used_memory'] ?? 0,
+            'memory_peak' => $info['used_memory_peak'] ?? 0,
+            'hit_ratio' => round($hit_ratio, 2),
+            'hits' => $total_hits,
+            'misses' => $total_misses,
+            'writes' => $this->metrics['writes'],
+            'deletes' => $this->metrics['deletes'],
+            'total_connections' => $info['total_connections_received'] ?? 0,
+            'connected_clients' => $info['connected_clients'] ?? 0,
+            'evicted_keys' => $info['evicted_keys'] ?? 0,
+            'expired_keys' => $info['expired_keys'] ?? 0,
+            'last_save_time' => $info['last_save_time'] ?? 0,
+            'total_commands_processed' => $info['total_commands_processed'] ?? 0
+        ];
+    }
+
     private function ensureConnection(): bool {
-        if (!$this->is_connected) {
+        if (!$this->is_connected || !$this->redis) {
             $this->initialize();
         }
         
@@ -303,20 +347,7 @@ final class RedisCache implements CacheDriverInterface {
     private function handleConnectionError(RedisException $e): void {
         $this->is_connected = false;
         $this->redis = null;
-
-        $error_message = sprintf(
-            'WPS Cache Redis Error: %s (Host: %s, Port: %d, DB: %d)',
-            $e->getMessage(),
-            $this->host,
-            $this->port,
-            $this->db
-        );
-
-        error_log($error_message);
-
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            trigger_error($error_message, E_USER_WARNING);
-        }
+        $this->initialized = false;
     }
 
     public function __destruct() {
@@ -324,7 +355,7 @@ final class RedisCache implements CacheDriverInterface {
             try {
                 $this->redis->close();
             } catch (RedisException $e) {
-                error_log('WPS Cache Redis Error on close: ' . $e->getMessage());
+                $this->logError("Redis close failed", $e);
             }
         }
     }
