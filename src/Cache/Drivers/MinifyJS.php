@@ -8,18 +8,21 @@ namespace WPSCache\Cache\Drivers;
  */
 final class MinifyJS extends AbstractCacheDriver {
     private const MAX_FILE_SIZE = 500000; // 500KB
-    private const MIN_FILE_SIZE = 500;    // 500B
 
-    private const PRESERVE_PATTERNS = [
-        'template_literals' => '/`(?:\\\\.|[^\\\\`])*`/',  // Template literals with expressions
-        'regex_patterns' => '/\/(?:\\\\.|[^\\/])*\/[gimuy]*(?=\s*(?:[)\].,;:\s]|$))/', // Regex patterns
-        'strings' => '/([\'"])((?:\\\\.|(?!\1)[^\\\\])*)\1/', // String literals
-        'comments' => '/\/\*![\s\S]*?\*\//',  // Important comments
+    private const REGEX_PATTERNS = [
+        'template_literals' => '/`(?:\\\\.|[^\\\\`])*`/',  // Template literals
+        'regex_patterns' => '/\\/(?!\*)(?:[^\\[\\/\\\\\n\r]++|(?:\\\\.)++|(?:\\[(?:[^\\]\\\\\n\r]++|(?:\\\\.)++)++\\])++)++\\/[gimuy]*/',
+        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/',  // String literals
+        'comments' => [
+            'preserve' => '/\/\*![\s\S]*?\*\//',  // Important comments
+            'single' => '/\/\/.*$/m',  // Single line comments
+            'multi' => '/\/\*[^*]*\*+([^/*][^*]*\*+)*\//'  // Multi-line comments
+        ]
     ];
 
     private string $cache_dir;
     private array $settings;
-    private array $preserved = [];
+    private array $extracted = [];
 
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
@@ -80,128 +83,129 @@ final class MinifyJS extends AbstractCacheDriver {
         }
 
         try {
-            // Reset preserved content
-            $this->preserved = [];
+            $this->extracted = [];
 
-            // Preserve special content
-            $js = $this->preserveContent($js);
+            // Extract & preserve content
+            $js = $this->extractStrings($js);
+            $js = $this->extractRegex($js);
+            $js = $this->stripComments($js);
 
-            // Remove comments (except preserved ones)
-            $js = preg_replace([
-                '#^\s*//[^\n]*$#m',     // Single line comments
-                '#^\s*/\*[^!][^*]*\*+([^/*][^*]*\*+)*/\s*#m' // Multi-line comments (non-important)
-            ], '', $js);
-
-            // Safe whitespace removal
-            $js = preg_replace(
-                [
-                    '/\s+/',                            // Multiple whitespace to single
-                    '/\s*([\[\]{}(:,=+\-*\/])\s*/',    // Space around specific operators
-                    '/\s*;+\s*([\]}])\s*/',            // Remove unnecessary semicolons
-                    '/;\s*;/',                         // Multiple semicolons to single
-                    '/\)\s*{/',                        // Space between ) and {
-                    '/}\s*(\w+)/',                     // Add newline after } followed by word
-                    '/}\s*(else|catch|finally)/',      // No space before else/catch/finally
-                    '/[\r\n\t]+/',                     // Remove newlines/tabs
-                ],
-                [
-                    ' ',       // Single space
-                    '$1',      // Just the operator
-                    '$1',      // Just the bracket
-                    ';',       // Single semicolon
-                    '){',      // No space
-                    "}\n$1",   // Newline between
-                    "}$1",     // No space
-                    '',        // Remove completely
-                ],
-                $js
-            );
-
-            // Add missing semicolons only where needed
-            $js = preg_replace(
-                '/(\}|\++|\-+|\*+|\/+|%+|=+|\w+|\)+|\'+|\"+|`+)\s*\n\s*(?=[\w({\'"[`])/i',
-                '$1;',
-                $js
-            );
+            // Perform minification
+            $js = $this->shortenBools($js);
+            $js = $this->stripWhitespace($js);
+            $js = $this->propertyNotation($js);
 
             // Restore preserved content
-            $js = strtr($js, $this->preserved);
+            $js = strtr($js, $this->extracted);
 
             // Final cleanup
             $js = trim($js);
 
             return empty($js) ? false : $js;
-
         } catch (\Throwable $e) {
             $this->logError("JS minification failed", $e);
             return false;
         }
     }
 
-    private function preserveContent(string $js): string {
-        if (empty($js)) {
-            return '';
-        }
-        
-        foreach (self::PRESERVE_PATTERNS as $type => $pattern) {
-            $js = (string)preg_replace_callback($pattern,
-                function($matches) use ($type) {
-                    if (!isset($matches[0])) {
-                        return '';
-                    }
-                    $key = '___' . strtoupper($type) . '_' . count($this->preserved) . '___';
-                    $this->preserved[$key] = $matches[0];
-                    return $key;
-                },
-                $js
-            ) ?? $js;
-        }
-
-        return $js;
+    private function extractStrings(string $js): string {
+        return preg_replace_callback(
+            self::REGEX_PATTERNS['strings'],
+            fn($matches) => $this->preserve('STRING', $matches[0]),
+            $js
+        );
     }
 
-    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void {
-        if (!isset($wp_scripts->registered[$handle])) {
-            return;
-        }
+    private function extractRegex(string $js): string {
+        $operatorsAndKeywords = implode('|', [
+            'return', 'typeof', 'in', 'instanceof', 'void', 'delete',
+            'new', '=', '\+', '\!', '~', '\?', ':', '\*'
+        ]);
 
-        $script = $wp_scripts->registered[$handle];
-        
-        // Skip if script should not be processed
-        if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
-            return;
-        }
+        // Match regex when preceded by operator or keyword
+        $pattern = "/(?<=^|[=:,;\+\-\*\/\{\(\[&\|!]|\b(?:$operatorsAndKeywords)\b)\s*" . 
+                  substr(self::REGEX_PATTERNS['regex_patterns'], 1, -1) . '/';
 
-        // Get the source file path
-        $source = $this->getSourcePath($script);
-        if (!$this->isValidSource($source)) {
-            return;
-        }
-
-        // Read and process content
-        $content = @file_get_contents($source);
-        if ($content === false || empty(trim($content))) {
-            return;
-        }
-
-        // Generate cache key and path
-        $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
-        $cache_file = $this->getCacheFile($cache_key);
-
-        // Process and cache if needed
-        if (!file_exists($cache_file)) {
-            $minified = $this->minifyJS($content);
-            if ($minified !== false) {
-                $this->set($cache_key, $minified);
-            }
-        }
-
-        // Update WordPress script registration
-        if (file_exists($cache_file)) {
-            $this->updateScriptRegistration($script, $cache_file);
-        }
+        return preg_replace_callback(
+            $pattern,
+            fn($matches) => $this->preserve('REGEX', $matches[0]),
+            $js
+        );
     }
 
+    private function stripComments(string $js): string {
+        // Preserve important comments
+        $js = preg_replace_callback(
+            self::REGEX_PATTERNS['comments']['preserve'],
+            fn($matches) => $this->preserve('COMMENT', $matches[0]),
+            $js
+        );
+
+        // Remove all other comments
+        $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js);
+        return preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js);
+    }
+
+    private function stripWhitespace(string $js): string {
+        // Convert line endings
+        $js = str_replace(["\r\n", "\r"], "\n", $js);
+    
+        // Minify whitespace
+        $patterns = [
+            '/\s+/',                            // Multiple whitespace to single
+            '/\s*([:,;{}()])\s*/',            // Clean whitespace around punctuation
+            '/\s*\+\s*/',                      // Clean whitespace around +
+            '/\s*\-\s*/',                      // Clean whitespace around -
+            '/\s*([=&|])\s*/',                // Clean whitespace around operators
+            '/\s*(\b(case|return|typeof)\b)\s*/',  // Ensure space after certain keywords
+            '/\s*(\/\/[^\n]*\n)/',            // Preserve line comments
+            '/\n+/',                          // Multiple newlines to single
+        ];
+        
+        $replacements = [
+            ' ',
+            '$1',
+            '+',
+            '-',
+            '$1',
+            '$1 ',
+            '$1',
+            "\n"
+        ];
+    
+        $js = preg_replace($patterns, $replacements, $js);
+    
+        // Special cases for ASI (Automatic Semicolon Insertion)
+        $js = preg_replace('/;\s*;/', ';', $js);      // Multiple semicolons
+        $js = preg_replace('/\}(\s*else\b)/', "}\n$1", $js); // Newline for else
+        $js = preg_replace('/\}\s*[\n;]+/', "}\n", $js);    // Clean after blocks
+        
+        return trim($js);
+    }
+
+    private function shortenBools(string $js): string {
+        return str_replace(
+            ['true', 'false', 'undefined', 'null'],
+            ['!0', '!1', 'void 0', '""'],
+            $js
+        );
+    }
+
+    private function propertyNotation(string $js): string {
+        return preg_replace(
+            '/([\'"])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\1\s*(:)/',
+            '$2$3',
+            $js
+        );
+    }
+
+    private function preserve(string $type, string $content): string {
+        $key = sprintf('__%s_%d__', $type, count($this->extracted));
+        $this->extracted[$key] = $content;
+        return $key;
+    }
+
+    // WordPress integration methods remain largely unchanged...
     public function processScripts(): void {
         global $wp_scripts;
         
@@ -217,6 +221,42 @@ final class MinifyJS extends AbstractCacheDriver {
             } catch (\Throwable $e) {
                 $this->logError("Failed to process script $handle", $e);
             }
+        }
+    }
+
+    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void {
+        if (!isset($wp_scripts->registered[$handle])) {
+            return;
+        }
+
+        $script = $wp_scripts->registered[$handle];
+        
+        if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
+            return;
+        }
+
+        $source = $this->getSourcePath($script);
+        if (!$this->isValidSource($source)) {
+            return;
+        }
+
+        $content = @file_get_contents($source);
+        if ($content === false || empty(trim($content))) {
+            return;
+        }
+
+        $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
+        $cache_file = $this->getCacheFile($cache_key);
+
+        if (!file_exists($cache_file)) {
+            $minified = $this->minifyJS($content);
+            if ($minified !== false) {
+                $this->set($cache_key, $minified);
+            }
+        }
+
+        if (file_exists($cache_file)) {
+            $this->updateScriptRegistration($script, $cache_file);
         }
     }
 
