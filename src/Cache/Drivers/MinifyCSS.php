@@ -7,29 +7,19 @@ namespace WPSCache\Cache\Drivers;
  * Enhanced CSS minification implementation
  */
 final class MinifyCSS extends AbstractCacheDriver {
-    private const PRESERVE_PATTERNS = [
-        'data_uris' => '/(url\(\s*[\'"]?)(data:[^;]+;base64,[^\'"]+)([\'"]?\s*\))/i',
-        'calc' => '/calc\(([^)]+)\)/',
-        'comments' => '/\/\*![\s\S]*?\*\//',  // Important comments
-        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/'
-    ];
-
-    private const MINIFY_PATTERNS = [
-        'comments' => '/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//',  // Remove non-important comments
-        'whitespace' => [
-            '/\s+/' => ' ',                    // Collapse multiple whitespace
-            '/\s*([:;{},>~+])\s*/' => '$1',    // Remove space around operators
-            '/;}/' => '}',                     // Remove last semicolon
+    private const REGEX_PATTERNS = [
+        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/',
+        'comments' => [
+            'preserve' => '/\/\*![\s\S]*?\*\//',  // Important comments
+            'remove' => '/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//' // Remove non-important
         ],
-        'numbers' => [
-            '/(^|[^0-9])0\.([0-9]+)/' => '$1.$2',  // Leading zero in decimal
-            '/([^0-9])0(%|em|ex|px|in|cm|mm|pt|pc|rem|vw|vh)/' => '${1}0',  // Zero units
-        ]
+        'math_funcs' => '/\b(calc|clamp|min|max)(\(.+?)(?=$|;|})/m',
+        'custom_props' => '/(?<=^|[;}{])\s*(--[^:;{}"\'\s]+)\s*:([^;{}]+)/m'
     ];
 
     private string $cache_dir;
     private array $settings;
-    private array $preserved = [];
+    private array $extracted = [];
 
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'css/';
@@ -110,39 +100,152 @@ final class MinifyCSS extends AbstractCacheDriver {
         /** @var \WP_Dependencies|\WP_Dependency $style */
         $style = $wp_styles->registered[$handle];
         
-        // Skip if script should not be processed
         if (!$this->shouldProcessStyle($style, $handle, $excluded_css)) {
             return;
         }
 
-        // Get the source file path
         $source = $this->getSourcePath($style);
         if (!$source || !is_readable($source)) {
             return;
         }
 
-        // Read and process content
         $content = file_get_contents($source);
         if ($content === false || empty(trim($content))) {
             return;
         }
 
-        // Generate cache key and path
         $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
         $cache_file = $this->getCacheFile($cache_key);
 
-        // Process and cache if needed
         if (!file_exists($cache_file)) {
             $minified = $this->minifyCSS($content);
             $this->set($cache_key, $minified);
         }
 
-        // Update WordPress style registration
         $this->updateStyleRegistration($style, $cache_file);
     }
 
+    private function minifyCSS(string $css): string {
+        try {
+            $this->extracted = [];
+
+            // Extract & preserve content
+            $css = $this->extractStrings($css);
+            $css = $this->extractComments($css);
+            $css = $this->extractMathFunctions($css);
+            $css = $this->extractCustomProperties($css);
+
+            // Perform minification
+            $css = $this->stripWhitespace($css);
+            $css = $this->shortenHexColors($css);
+            $css = $this->shortenNumbers($css);
+            $css = $this->shortenFontWeights($css);
+
+            // Restore preserved content
+            $css = strtr($css, $this->extracted);
+
+            return trim($css);
+        } catch (\Throwable $e) {
+            $this->logError("CSS minification failed", $e);
+            return $css;
+        }
+    }
+
+    private function extractStrings(string $css): string {
+        return preg_replace_callback(
+            self::REGEX_PATTERNS['strings'],
+            fn($matches) => $this->preserve('STRING', $matches[0]),
+            $css
+        );
+    }
+
+    private function extractComments(string $css): string {
+        // Preserve important comments
+        $css = preg_replace_callback(
+            self::REGEX_PATTERNS['comments']['preserve'],
+            fn($matches) => $this->preserve('COMMENT', $matches[0]),
+            $css
+        );
+
+        // Remove other comments
+        return preg_replace(self::REGEX_PATTERNS['comments']['remove'], '', $css);
+    }
+
+    private function extractMathFunctions(string $css): string {
+        return preg_replace_callback(
+            self::REGEX_PATTERNS['math_funcs'],
+            function($matches) {
+                $function = $matches[1];
+                $expr = $this->extractBalancedExpression($matches[2]);
+                return $this->preserve('MATH', $function . '(' . trim(substr($expr, 1, -1)) . ')');
+            },
+            $css
+        );
+    }
+
+    private function extractCustomProperties(string $css): string {
+        return preg_replace_callback(
+            self::REGEX_PATTERNS['custom_props'],
+            fn($matches) => $this->preserve('CUSTOM', $matches[1] . ':' . trim($matches[2])),
+            $css
+        );
+    }
+
+    private function stripWhitespace(string $css): string {
+        $css = preg_replace('/\s+/', ' ', $css);
+        $css = preg_replace('/\s*([\*$~^|]?+=|[{};,>~]|!important\b)\s*/', '$1', $css);
+        $css = preg_replace('/([\[(:>\+])\s+/', '$1', $css);
+        $css = preg_replace('/\s+([\]\)>\+])/', '$1', $css);
+        $css = preg_replace('/\s+(:)(?![^\}]*\{)/', '$1', $css);
+        return str_replace(';}', '}', trim($css));
+    }
+
+    private function shortenHexColors(string $css): string {
+        $css = preg_replace('/(?<=[: ])#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3(?:([0-9a-f])\4)?(?=[; }])/i', '#$1$2$3$4', $css);
+        $css = preg_replace('/(?<=[: ])#([0-9a-f]{6})ff(?=[; }])/i', '#$1', $css);
+        return preg_replace('/(?<=[: ])#([0-9a-f]{3})f(?=[; }])/i', '#$1', $css);
+    }
+
+    private function shortenNumbers(string $css): string {
+        $css = preg_replace('/(^|[^0-9])0\.([0-9]+)/', '$1.$2', $css);
+        $css = preg_replace('/([^0-9])0(%|em|ex|px|in|cm|mm|pt|pc|rem|vw|vh)/', '${1}0', $css);
+        return preg_replace('/\s*(0 0|0 0 0|0 0 0 0)\s*/', '0', $css);
+    }
+
+    private function shortenFontWeights(string $css): string {
+        return str_replace(
+            ['font-weight:normal', 'font-weight:bold'],
+            ['font-weight:400', 'font-weight:700'],
+            $css
+        );
+    }
+
+    private function preserve(string $type, string $content): string {
+        $key = sprintf('__%s_%d__', $type, count($this->extracted));
+        $this->extracted[$key] = $content;
+        return $key;
+    }
+
+    private function extractBalancedExpression(string $expr): string {
+        $length = strlen($expr);
+        $result = '';
+        $opened = 0;
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expr[$i];
+            $result .= $char;
+            
+            if ($char === '(') {
+                $opened++;
+            } elseif ($char === ')' && --$opened === 0) {
+                break;
+            }
+        }
+
+        return $result;
+    }
+
     private function shouldProcessStyle($style, string $handle, array $excluded_css): bool {
-        // First check if we have a src property
         if (!isset($style->src) || empty($style->src)) {
             return false;
         }
@@ -162,12 +265,10 @@ final class MinifyCSS extends AbstractCacheDriver {
 
         $src = $style->src;
         
-        // Convert relative URL to absolute
         if (strpos($src, 'http') !== 0) {
             $src = site_url($src);
         }
 
-        // Convert URL to file path
         return str_replace(
             [site_url(), 'wp-content'],
             [ABSPATH, 'wp-content'],
@@ -188,83 +289,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         $style->ver = filemtime($cache_file);
     }
 
-    private function minifyCSS(string $css): string {
-        try {
-            // Reset preserved content
-            $this->preserved = [];
-
-            // Preserve special content
-            $css = $this->preserveContent($css);
-
-            // Apply minification
-            $css = $this->applyMinification($css);
-
-            // Restore preserved content
-            $css = $this->restoreContent($css);
-
-            return trim($css);
-        } catch (\Throwable $e) {
-            $this->logError("CSS minification failed", $e);
-            return $css; // Return original on error
-        }
-    }
-
-    private function preserveContent(string $css): string {
-        // Preserve data URIs
-        $css = preg_replace_callback(self::PRESERVE_PATTERNS['data_uris'], 
-            function($matches) {
-                $key = '___URI_' . count($this->preserved) . '___';
-                $this->preserved[$key] = $matches[0];
-                return $key;
-            }, 
-            $css
-        );
-
-        // Preserve calc() operations
-        $css = preg_replace_callback(self::PRESERVE_PATTERNS['calc'],
-            function($matches) {
-                $key = '___CALC_' . count($this->preserved) . '___';
-                $calc = 'calc(' . preg_replace('/\s*([+\-*\/])\s*/', ' $1 ', $matches[1]) . ')';
-                $this->preserved[$key] = $calc;
-                return $key;
-            },
-            $css
-        );
-
-        // Preserve important comments and strings
-        foreach (['comments', 'strings'] as $type) {
-            $css = preg_replace_callback(self::PRESERVE_PATTERNS[$type],
-                function($matches) use ($type) {
-                    $key = '___' . strtoupper($type) . '_' . count($this->preserved) . '___';
-                    $this->preserved[$key] = $matches[0];
-                    return $key;
-                },
-                $css
-            );
-        }
-
-        return $css;
-    }
-
-    private function applyMinification(string $css): string {
-        // Remove comments
-        $css = preg_replace(self::MINIFY_PATTERNS['comments'], '', $css);
-
-        // Apply whitespace patterns
-        foreach (self::MINIFY_PATTERNS['whitespace'] as $pattern => $replacement) {
-            $css = preg_replace($pattern, $replacement, $css);
-        }
-
-        // Apply number optimization patterns
-        foreach (self::MINIFY_PATTERNS['numbers'] as $pattern => $replacement) {
-            $css = preg_replace($pattern, $replacement, $css);
-        }
-
-        return $css;
-    }
-
-    private function restoreContent(string $css): string {
-        return strtr($css, $this->preserved);
+    private function getCacheFile(string $key): string {
+        return $this->cache_dir . $key . '.css';
     }
 
     private function isExcluded(string $url, array $excluded_patterns): bool {
@@ -274,9 +300,5 @@ final class MinifyCSS extends AbstractCacheDriver {
             }
         }
         return false;
-    }
-
-    private function getCacheFile(string $key): string {
-        return $this->cache_dir . $key . '.css';
     }
 }
