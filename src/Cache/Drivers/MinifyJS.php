@@ -10,13 +10,12 @@ final class MinifyJS extends AbstractCacheDriver {
     private const MAX_FILE_SIZE = 500000; // 500KB
 
     private const REGEX_PATTERNS = [
-        'template_literals' => '/`(?:\\\\.|[^\\\\`])*`/',  // Template literals
-        'regex_patterns' => '/\\/(?!\*)(?:[^\\[\\/\\\\\n\r]++|(?:\\\\.)++|(?:\\[(?:[^\\]\\\\\n\r]++|(?:\\\\.)++)++\\])++)++\\/[gimuy]*/',
-        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/',  // String literals
+        'template_literals' => '/`(?:\\\\.|[^`\\\\])*`/s',  // Template literals
+        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/s',  // String literals
         'comments' => [
-            'preserve' => '/\/\*![\s\S]*?\*\//',  // Important comments
-            'single' => '/\/\/.*$/m',  // Single line comments
-            'multi' => '/\/\*[^*]*\*+([^/*][^*]*\*+)*\//'  // Multi-line comments
+            'preserve' => '/\/\*![\s\S]*?\*\//s',  // Important comments
+            'single' => '/\/\/[^\n]*$/m',  // Single line comments
+            'multi' => '/\/\*[^*]*\*+(?:[^\/][^*]*\*+)*\//'  // Multi-line comments
         ]
     ];
 
@@ -81,27 +80,34 @@ final class MinifyJS extends AbstractCacheDriver {
         if (empty($js)) {
             return false;
         }
-
+    
         try {
             $this->extracted = [];
-
-            // Extract & preserve content
+            $preservedCount = 0;
+    
+            // Preserve content in specific order
             $js = $this->extractStrings($js);
-            $js = $this->extractRegex($js);
             $js = $this->stripComments($js);
-
-            // Perform minification
-            $js = $this->shortenBools($js);
-            $js = $this->stripWhitespace($js);
-            $js = $this->propertyNotation($js);
-
+            $js = $this->extractRegexPatterns($js);
+    
+            // Basic minification
+            $js = preg_replace('/\s+/', ' ', $js);
+            $js = preg_replace('/\s*([\{\};\,=\(\)])\s*/', '$1', $js);
+            
+            // Shorten boolean values
+            $js = preg_replace('/\btrue\b/', '!0', $js);
+            $js = preg_replace('/\bfalse\b/', '!1', $js);
+            
+            // Clean up semicolons and brackets
+            $js = preg_replace('/;+/', ';', $js);
+            $js = preg_replace('/}\s*else\b/', '}else', $js);
+            
             // Restore preserved content
-            $js = strtr($js, $this->extracted);
-
-            // Final cleanup
-            $js = trim($js);
-
-            return empty($js) ? false : $js;
+            foreach ($this->extracted as $key => $value) {
+                $js = str_replace($key, $value, $js);
+            }
+    
+            return trim($js);
         } catch (\Throwable $e) {
             $this->logError("JS minification failed", $e);
             return false;
@@ -109,100 +115,73 @@ final class MinifyJS extends AbstractCacheDriver {
     }
 
     private function extractStrings(string $js): string {
-        return preg_replace_callback(
-            self::REGEX_PATTERNS['strings'],
-            fn($matches) => $this->preserve('STRING', $matches[0]),
-            $js
-        );
+        try {
+            // First handle template literals
+            $js = preg_replace_callback(
+                self::REGEX_PATTERNS['template_literals'],
+                function($matches) {
+                    $placeholder = sprintf('__STRING_%d__', count($this->extracted));
+                    $this->extracted[$placeholder] = $matches[0];
+                    return $placeholder;
+                },
+                $js
+            ) ?? $js;
+    
+            // Then handle regular strings
+            return preg_replace_callback(
+                self::REGEX_PATTERNS['strings'],
+                function($matches) {
+                    $placeholder = sprintf('__STRING_%d__', count($this->extracted));
+                    $this->extracted[$placeholder] = $matches[0];
+                    return $placeholder;
+                },
+                $js
+            ) ?? $js;
+        } catch (\Throwable $e) {
+            $this->logError("Failed to extract strings", $e);
+            return $js;
+        }
     }
 
-    private function extractRegex(string $js): string {
-        $operatorsAndKeywords = implode('|', [
-            'return', 'typeof', 'in', 'instanceof', 'void', 'delete',
-            'new', '=', '\+', '\!', '~', '\?', ':', '\*'
-        ]);
-
-        // Match regex when preceded by operator or keyword
-        $pattern = "/(?<=^|[=:,;\+\-\*\/\{\(\[&\|!]|\b(?:$operatorsAndKeywords)\b)\s*" . 
-                  substr(self::REGEX_PATTERNS['regex_patterns'], 1, -1) . '/';
-
-        return preg_replace_callback(
-            $pattern,
-            fn($matches) => $this->preserve('REGEX', $matches[0]),
-            $js
-        );
+    private function extractRegexPatterns(string $js): string {
+        try {
+            $pattern = '~(?<=^|[=!:&|,?+\-*\/\(\{\[]\s*)/(?:[^/*](?:\\\\.|[^/\\\\\n])*?)/[gimuy]*~';
+            
+            return preg_replace_callback(
+                $pattern,
+                function($matches) {
+                    $placeholder = sprintf('__REGEX_%d__', count($this->extracted));
+                    $this->extracted[$placeholder] = $matches[0];
+                    return $placeholder;
+                },
+                $js
+            ) ?? $js;
+        } catch (\Throwable $e) {
+            $this->logError("Failed to extract regex patterns", $e);
+            return $js;
+        }
     }
 
     private function stripComments(string $js): string {
-        // Preserve important comments
-        $js = preg_replace_callback(
-            self::REGEX_PATTERNS['comments']['preserve'],
-            fn($matches) => $this->preserve('COMMENT', $matches[0]),
-            $js
-        );
-
-        // Remove all other comments
-        $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js);
-        return preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js);
-    }
-
-    private function stripWhitespace(string $js): string {
-        // Convert line endings
-        $js = str_replace(["\r\n", "\r"], "\n", $js);
+        try {
+            // Preserve important comments
+            $js = preg_replace_callback(
+                self::REGEX_PATTERNS['comments']['preserve'],
+                function($matches) {
+                    $placeholder = sprintf('__COMMENT_%d__', count($this->extracted));
+                    $this->extracted[$placeholder] = $matches[0];
+                    return $placeholder;
+                },
+                $js
+            ) ?? $js;
     
-        // Minify whitespace
-        $patterns = [
-            '/\s+/',                            // Multiple whitespace to single
-            '/\s*([:,;{}()])\s*/',            // Clean whitespace around punctuation
-            '/\s*\+\s*/',                      // Clean whitespace around +
-            '/\s*\-\s*/',                      // Clean whitespace around -
-            '/\s*([=&|])\s*/',                // Clean whitespace around operators
-            '/\s*(\b(case|return|typeof)\b)\s*/',  // Ensure space after certain keywords
-            '/\s*(\/\/[^\n]*\n)/',            // Preserve line comments
-            '/\n+/',                          // Multiple newlines to single
-        ];
-        
-        $replacements = [
-            ' ',
-            '$1',
-            '+',
-            '-',
-            '$1',
-            '$1 ',
-            '$1',
-            "\n"
-        ];
-    
-        $js = preg_replace($patterns, $replacements, $js);
-    
-        // Special cases for ASI (Automatic Semicolon Insertion)
-        $js = preg_replace('/;\s*;/', ';', $js);      // Multiple semicolons
-        $js = preg_replace('/\}(\s*else\b)/', "}\n$1", $js); // Newline for else
-        $js = preg_replace('/\}\s*[\n;]+/', "}\n", $js);    // Clean after blocks
-        
-        return trim($js);
-    }
-
-    private function shortenBools(string $js): string {
-        return str_replace(
-            ['true', 'false', 'undefined', 'null'],
-            ['!0', '!1', 'void 0', '""'],
-            $js
-        );
-    }
-
-    private function propertyNotation(string $js): string {
-        return preg_replace(
-            '/([\'"])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\1\s*(:)/',
-            '$2$3',
-            $js
-        );
-    }
-
-    private function preserve(string $type, string $content): string {
-        $key = sprintf('__%s_%d__', $type, count($this->extracted));
-        $this->extracted[$key] = $content;
-        return $key;
+            // Remove other comments
+            $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js) ?? $js;
+            return preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js) ?? $js;
+        } catch (\Throwable $e) {
+            $this->logError("Failed to strip comments", $e);
+            return $js;
+        }
     }
 
     // WordPress integration methods remain largely unchanged...
