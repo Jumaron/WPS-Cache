@@ -10,11 +10,11 @@ final class MinifyJS extends AbstractCacheDriver {
     private const MAX_FILE_SIZE = 500000; // 500KB
 
     private const REGEX_PATTERNS = [
-        'strings' => '/(["\'])(?:\\.|(?!\1).)*+\1/s', // Fixed string handling
+        'strings' => '#(["\'])(?:\\.|(?!\1).)*+\1#s', // Changed delimiter to #
         'comments' => [
-            'preserve' => '/\/\*![\s\S]*?\*\//s',
-            'single' => '/\/\/[^\n]*/',
-            'multi' => '/\/\*[\s\S]*?\*\//'
+            'preserve' => '#/\*![\s\S]*?\*/#s',       // Changed delimiter to #
+            'single' => '#//[^\n]*#',                 // Changed delimiter to #
+            'multi' => '#/\*[\s\S]*?\*/#'             // Changed delimiter to #
         ],
         'regex' => '~
             (?:^|[[({,;=?:+|&!~-]|\b(?:return|yield|delete|throw|typeof|void|case))\s*
@@ -130,46 +130,47 @@ final class MinifyJS extends AbstractCacheDriver {
     }
 
     private function stripWhitespace(string $js): string {
-        // Improved operator spacing
-        $js = preg_replace('/
+        // Improved operator spacing (changed delimiter to #)
+        $js = preg_replace('#
             (?<=[\s;}]|^)\s*([-+])\s*(?=\w)  # Unary operators
-        /x', '$1', $js);
+        #x', '$1', $js);
 
-        // General operator spacing
-        $js = preg_replace('/
+        // General operator spacing (changed delimiter to #, fixed backreference)
+        $js = preg_replace('#
             \s*([!=<>+*\/%&|^~,;:?{}()[\]])\s*
             (?=
-                [^"\'/]*                # Lookahead to ensure not in string/regex
+                [^"\'#]*                # Lookahead to ensure not in string/regex
                 (?:
-                    (?:["\']).*?\2      # Skip strings
+                    (?:["\']).*?\1      # Skip strings (corrected to \1)
                     |
                     \/[^/].*?\/         # Skip regex
                 )*$
             )
-        /x', '$1', $js);
+        #x', '$1', $js);
 
-        // Keyword spacing
+        // Keyword spacing (changed delimiter to #)
         $keywords = array_merge(
             array_map('preg_quote', self::KEYWORDS_BEFORE),
             array_map('preg_quote', self::KEYWORDS_AFTER)
         );
-        $js = preg_replace('/
+        $js = preg_replace('#
             \b(' . implode('|', $keywords) . ')\s+
-        /x', '$1 ', $js);
+        #x', '$1 ', $js);
 
-        // Semicolon handling
+        // Semicolon handling (changed delimiters to #)
         $js = preg_replace([
-            '/;+\s*(?=\W)/',            # Remove redundant semicolons
-            '/\s*;\s*(?=})/',           # Remove before closing braces
-            '/(\})\s*(?=[\w\$\(])/'     # Add semicolon after blocks
+            '#;+\s*(?=\W)#',            # Remove redundant semicolons
+            '#\s*;\s*(?=})#',           # Remove before closing braces
+            '#(\})\s*(?=[\w\$\(])#'     # Add semicolon after blocks
         ], ['', '', '$1;'], $js);
 
         return $js;
     }
 
     private function optimizePropertyNotation(string $js): string {
+        // Changed delimiter to #
         return preg_replace_callback(
-            '/(?<!\w)([a-zA-Z_$][\w$]*)\["([a-zA-Z_$][\w$]*)"\]/',
+            '#(?<!\w)([a-zA-Z_$][\w$]*)\["([a-zA-Z_$][\w$]*)"\]#',
             function ($matches) {
                 return in_array($matches[2], self::KEYWORDS_RESERVED) 
                     ? $matches[0] 
