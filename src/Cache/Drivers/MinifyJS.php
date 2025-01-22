@@ -4,24 +4,51 @@ declare(strict_types=1);
 namespace WPSCache\Cache\Drivers;
 
 /**
- * Enhanced JavaScript minification implementation
+ * Enhanced JavaScript minification implementation (mimicking MatthiasMullie\Minify\JS)
  */
 final class MinifyJS extends AbstractCacheDriver {
     private const MAX_FILE_SIZE = 500000; // 500KB
 
     private const REGEX_PATTERNS = [
-        'template_literals' => '/`(?:\\\\.|[^`\\\\])*`/s',  // Template literals
-        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/s',  // String literals
+        'strings' => '/([\'"])(.*?)(?<!\\\\)(\\\\\\\\)*+\\1/s', // Improved string matching
         'comments' => [
             'preserve' => '/\/\*![\s\S]*?\*\//s',  // Important comments
             'single' => '/\/\/[^\n]*$/m',  // Single line comments
             'multi' => '/\/\*[^*]*\*+(?:[^\/][^*]*\*+)*\//'  // Multi-line comments
-        ]
+        ],
+        'regex' => '~
+        (?<=^|[=!:&|,?+\\-*\/\(\{\[]) # Lookbehind for common operators or start of line/block
+        \s*                         # Optional whitespace before the slash
+        /                           # Opening /
+        (?![\/*])                   # Not followed by / or * (not a comment)
+        (?:                         # Non-capturing group for the regex body
+            [^/\\\\\[\n\r]          # Any character except /, \, [, newline, or carriage return
+            |\\\\.                 # Or an escaped character
+            |\[                     # Or a character set [
+            (?:                     # Non-capturing group for the character set body
+                [^\]\\\\\n\r]       # Any character except ], \, newline, or carriage return
+                |\\\\.             # Or an escaped character
+            )*
+            \]
+        )+
+        /                           # Closing /
+        [gimyus]*                   # Optional flags
+        (?=\s*($|[\)\}\],;:\?\+\-\*\/\&\|\!])) # Lookahead for common operators or end of line/block
+    ~x',
     ];
+
+    // Reserved keywords, before/after keywords, and operators (extracted from MatthiasMullie\Minify\JS data files)
+    private const KEYWORDS_RESERVED = ["do","if","in","for","let","new","try","var","case","else","enum","eval","null","this","true","void","with","break","catch","class","const","false","super","throw","while","yield","delete","export","import","public","return","static","switch","typeof","default","extends","finally","package","private","continue","debugger","function","arguments","interface","protected","implements","instanceof","abstract","boolean","byte","char","double","final","float","goto","int","long","native","short","synchronized","throws","transient","volatile"];
+    private const KEYWORDS_BEFORE = ["do","in","let","new","var","case","else","enum","void","with","class","const","yield","delete","export","import","public","static","typeof","extends","package","private","function","protected","implements","instanceof"];
+    private const KEYWORDS_AFTER = ["in","public","extends","private","protected","implements","instanceof"];
+    private const OPERATORS = ["+","-","*","/","%","=","+=","-=","*=","/=","%=","<<=",">>>=",">>=","&=","^=","|=","&","|","^","~","<",">","<<",">>",">>>","==","===","!=","!==","<=","&&","||","!",".","[","]","?",":",",",";","(",")","{","}"];
+    private const OPERATORS_BEFORE = ["+","-","*","/","%","=","+=","-=","*=","/=","%=","<<=",">>>=",">>=","&=","^=","|=","&","|","^","~","<",">","<<",">>",">>>","==","===","!=","!==","<=","&&","||","!",".","[","?",":",",",";","(","{"];
+    private const OPERATORS_AFTER = ["+","-","*","/","%","=","+=","-=","*=","/=","%=","<<=",">=","<<=",">>=","&=","^=","|=","&","|","^","<",">",">>",">>>","==","===","!=","!==","<=","&&","||",".","[","]","?",":",",",";","(",")","}"];
 
     private string $cache_dir;
     private array $settings;
     private array $extracted = [];
+    private int $extractedCount = 0;
 
     public function __construct() {
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
@@ -80,33 +107,35 @@ final class MinifyJS extends AbstractCacheDriver {
         if (empty($js)) {
             return false;
         }
-    
+
         try {
             $this->extracted = [];
-            $preservedCount = 0;
-    
-            // Preserve content in specific order
-            $js = $this->extractStrings($js);
-            $js = $this->stripComments($js);
-            $js = $this->extractRegexPatterns($js);
-    
-            // Basic minification
-            $js = preg_replace('/\s+/', ' ', $js);
-            $js = preg_replace('/\s*([\{\};\,=\(\)])\s*/', '$1', $js);
-            
-            // Shorten boolean values
-            $js = preg_replace('/\btrue\b/', '!0', $js);
-            $js = preg_replace('/\bfalse\b/', '!1', $js);
-            
-            // Clean up semicolons and brackets
-            $js = preg_replace('/;+/', ';', $js);
-            $js = preg_replace('/}\s*else\b/', '}else', $js);
-            
-            // Restore preserved content
-            foreach ($this->extracted as $key => $value) {
-                $js = str_replace($key, $value, $js);
-            }
-    
+            $this->extractedCount = 0;
+
+            // 1. Extract strings and regexes (to avoid minifying inside them)
+            $js = $this->extract($js, self::REGEX_PATTERNS['strings']);
+            $js = $this->extract($js, self::REGEX_PATTERNS['regex']);
+
+            // 2. Preserve important comments and Remove comments
+            $js = $this->extract($js, self::REGEX_PATTERNS['comments']['preserve']);
+            $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js);
+            $js = preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js);
+
+            // 3. Convert line endings to Unix-style
+            $js = str_replace(["\r\n", "\r"], "\n", $js);
+
+            // 4. Strip whitespace
+            $js = $this->stripWhitespace($js);
+
+            // 5. Shorten booleans (true -> !0, false -> !1)
+            $js = $this->shortenBooleans($js);
+
+            // 6. Optimize property notation (e.g., array["key"] -> array.key)
+            $js = $this->optimizePropertyNotation($js);
+
+            // 7. Restore extracted strings, regexes and comments
+            $js = $this->restoreExtracted($js);
+
             return trim($js);
         } catch (\Throwable $e) {
             $this->logError("JS minification failed", $e);
@@ -114,80 +143,125 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    private function extractStrings(string $js): string {
-        try {
-            // First handle template literals
-            $js = preg_replace_callback(
-                self::REGEX_PATTERNS['template_literals'],
-                function($matches) {
-                    $placeholder = sprintf('__STRING_%d__', count($this->extracted));
-                    $this->extracted[$placeholder] = $matches[0];
-                    return $placeholder;
-                },
-                $js
-            ) ?? $js;
-    
-            // Then handle regular strings
-            return preg_replace_callback(
-                self::REGEX_PATTERNS['strings'],
-                function($matches) {
-                    $placeholder = sprintf('__STRING_%d__', count($this->extracted));
-                    $this->extracted[$placeholder] = $matches[0];
-                    return $placeholder;
-                },
-                $js
-            ) ?? $js;
-        } catch (\Throwable $e) {
-            $this->logError("Failed to extract strings", $e);
-            return $js;
-        }
+    private function extract(string $js, string $pattern): string {
+        return preg_replace_callback(
+            $pattern,
+            function ($matches) {
+                $placeholder = '__EXTRACTED' . $this->extractedCount . '__';
+                $this->extracted[$placeholder] = $matches[0];
+                $this->extractedCount++;
+                return $placeholder;
+            },
+            $js
+        ) ?? $js;
     }
 
-    private function extractRegexPatterns(string $js): string {
-        try {
-            $pattern = '~(?<=^|[=!:&|,?+\-*\/\(\{\[]\s*)/(?:[^/*](?:\\\\.|[^/\\\\\n])*?)/[gimuy]*~';
-            
-            return preg_replace_callback(
-                $pattern,
-                function($matches) {
-                    $placeholder = sprintf('__REGEX_%d__', count($this->extracted));
-                    $this->extracted[$placeholder] = $matches[0];
-                    return $placeholder;
-                },
-                $js
-            ) ?? $js;
-        } catch (\Throwable $e) {
-            $this->logError("Failed to extract regex patterns", $e);
-            return $js;
-        }
+    private function restoreExtracted(string $js): string {
+        return strtr($js, $this->extracted);
     }
 
-    private function stripComments(string $js): string {
-        try {
-            // Preserve important comments
-            $js = preg_replace_callback(
-                self::REGEX_PATTERNS['comments']['preserve'],
-                function($matches) {
-                    $placeholder = sprintf('__COMMENT_%d__', count($this->extracted));
-                    $this->extracted[$placeholder] = $matches[0];
-                    return $placeholder;
-                },
-                $js
-            ) ?? $js;
-    
-            // Remove other comments
-            $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js) ?? $js;
-            return preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js) ?? $js;
-        } catch (\Throwable $e) {
-            $this->logError("Failed to strip comments", $e);
-            return $js;
-        }
+    /**
+     *  Strip whitespace as per the logic in MatthiasMullie\Minify\JS
+     */
+    private function stripWhitespace(string $js): string
+    {
+        // Remove unnecessary whitespace around operators
+        $operatorsBefore = $this->getOperatorsForRegex(self::OPERATORS_BEFORE);
+        $operatorsAfter = $this->getOperatorsForRegex(self::OPERATORS_AFTER);
+
+        // Handle . and = without lookbehinds in the main regex
+        $js = preg_replace('/\s*([+\-*\/%]=?|<<=?|>>>?=?|&=?|\^=?|\|=?|!=?=?|={2,3}|[<>]=?|[~,;:\?\(\{\[])\s*/s', '$1', $js);
+
+        // Collapse whitespace around reserved words into single space
+        $keywordsBefore = $this->getKeywordsForRegex(self::KEYWORDS_BEFORE);
+        $keywordsAfter = $this->getKeywordsForRegex(self::KEYWORDS_AFTER);
+        $js = preg_replace('/(^|[;\}\s])(' . implode('|', $keywordsBefore) . ')\s+/', '\\2 ', $js);
+        $js = preg_replace('/\s+(' . implode('|', $keywordsAfter) . ')(?=([;\{\s]|$))/', ' \\1', $js);
+
+        // Remove whitespace after return if followed by certain characters
+        $js = preg_replace('/\breturn\s+(["\'\/\+\-])/', 'return$1', $js);
+
+        // Remove specific unnecessary whitespaces
+        $js = preg_replace('/\)\s+\{/', '){', $js);
+        $js = preg_replace('/}\n(else|catch|finally)\b/', '}$1', $js);
+
+        // Ensure semicolons are present between top-level statements
+        $js = preg_replace('/(?<=\})\s*(?!\s*(var|let|const|function|class|import|export|{|\[|\())/m', ';', $js);
+
+        // Remove unnecessary semicolons, but avoid removing between statements within blocks
+        $js = preg_replace('/;+(?!\s*(var|let|const|function|if|for|while|switch|try|catch|finally))/', ';', $js);
+        $js = preg_replace('/;(\}|$)/', '$1', $js);
+        $js = preg_replace('/\bfor\(([^;]*);;([^;]*)\)/', 'for(\\1;-;\\2)', $js);
+        $js = preg_replace('/\bfor\(([^;]*);-;([^;]*)\)/', 'for(\\1;;\\2)', $js);
+        $js = ltrim($js, ';');
+
+        return $js;
     }
 
-    // WordPress integration methods remain largely unchanged...
+    /**
+     * Shorten booleans (true -> !0, false -> !1)
+     */
+    private function shortenBooleans(string $js): string {
+        $js = preg_replace('/\btrue\b/', '!0', $js);
+        $js = preg_replace('/\bfalse\b/', '!1', $js);
+        return $js;
+    }
+
+    /**
+     * Optimize property notation (array["key"] -> array.key)
+     */
+    private function optimizePropertyNotation(string $js): string {
+        $pattern = '/
+            (?<![\w\$])            # Negative lookbehind to ensure it is not preceded by a word character or $
+            ([a-zA-Z_$][\w\$]*)    # Capture the object name (must start with a letter, _, or $)
+            \s*\[\s*              # Match the opening bracket with optional whitespace
+            (["\'])([a-zA-Z_$][\w\$]*)\\2  # Capture the property name inside quotes
+            \s*\]                 # Match the closing bracket with optional whitespace
+            (?![\w\$])             # Negative lookahead to ensure it is not followed by a word character or $
+        /x';
+
+        $js = preg_replace_callback(
+            $pattern,
+            function ($matches) {
+                // Check if the property name is a reserved keyword
+                if (in_array($matches[3], self::KEYWORDS_RESERVED)) {
+                    return $matches[0]; // Leave it unchanged
+                }
+                return $matches[1] . '.' . $matches[3];
+            },
+            $js
+        );
+
+        return $js;
+    }
+
+    /**
+     * Prepare operators for regex usage, similar to MatthiasMullie\Minify\JS
+     */
+    private function getOperatorsForRegex(array $operators): array
+    {
+        // Simply escape operators for regex usage
+        return array_map(function ($operator) {
+            return preg_quote($operator, '/');
+        }, $operators);
+    }
+
+    /**
+     * Prepare keywords for regex usage
+     */
+    private function getKeywordsForRegex(array $keywords): array {
+        $escaped = array_map(function ($keyword) {
+            return preg_quote($keyword, '/');
+        }, $keywords);
+
+        return array_map(function ($keyword) {
+            return '\\b' . $keyword . '\\b';
+        }, $escaped);
+    }
+
     public function processScripts(): void {
         global $wp_scripts;
-        
+
         if (empty($wp_scripts->queue)) {
             return;
         }
@@ -209,7 +283,7 @@ final class MinifyJS extends AbstractCacheDriver {
         }
 
         $script = $wp_scripts->registered[$handle];
-        
+
         if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
             return;
         }
@@ -258,7 +332,7 @@ final class MinifyJS extends AbstractCacheDriver {
         }
 
         $src = $script->src;
-        
+
         // Convert relative URL to absolute
         if (strpos($src, 'http') !== 0) {
             $src = site_url($src);
@@ -273,8 +347,8 @@ final class MinifyJS extends AbstractCacheDriver {
     }
 
     private function isValidSource(?string $source): bool {
-        return $source 
-            && is_readable($source) 
+        return $source
+            && is_readable($source)
             && filesize($source) <= self::MAX_FILE_SIZE;
     }
 
