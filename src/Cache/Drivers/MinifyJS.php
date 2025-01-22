@@ -10,16 +10,13 @@ final class MinifyJS extends AbstractCacheDriver {
     private const MAX_FILE_SIZE = 500000; // 500KB
 
     private const REGEX_PATTERNS = [
-        'strings' => '#(["\'])(?:\\.|(?!\1).)*+\1#s', // Changed delimiter to #
+        'strings' => '/(["\'])(?:\\\\.|(?!\1).)*+\1/s',
         'comments' => [
-            'preserve' => '#/\*![\s\S]*?\*/#s',       // Changed delimiter to #
-            'single' => '#//[^\n]*#',                 // Changed delimiter to #
-            'multi' => '#/\*[\s\S]*?\*/#'             // Changed delimiter to #
+            'preserve' => '/\/\*![\s\S]*?\*\//s',
+            'single' => '/\/\/[^\n]*/',
+            'multi' => '/\/\*[\s\S]*?\*\//'
         ],
-        'regex' => '~
-            (?:^|[[({,;=?:+|&!~-]|\b(?:return|yield|delete|throw|typeof|void|case))\s*
-            (/(?![*/])(?:\\\\.|\[(?:\\\\.|[^\]])+\]|[^/\\\n]|/[gimyus]*)*+/[gimyus]*)
-        ~x',
+        'regex' => '/(?:^|[[({,;=?:+|&!~-]|\b(?:return|yield|delete|throw|typeof|void|case))\s*(\/(?![*\/])(?:\\\\.|\[(?:\\\\.|[^\]])+\]|[^/\\\n]|(?<=\/)[gimyus]*)*\/[gimyus]*)~ix', // Modified regex pattern, using / delimiter, and 'i' flag
     ];
 
     // Reserved keywords, before/after keywords, and operators (extracted from MatthiasMullie\Minify\JS data files)
@@ -97,30 +94,63 @@ final class MinifyJS extends AbstractCacheDriver {
 
             // 1. Extract important comments first
             $js = $this->extract($js, self::REGEX_PATTERNS['comments']['preserve']);
-            
+            if ($js === false) return false;
+
             // 2. Extract strings and regexes
             $js = $this->extract($js, self::REGEX_PATTERNS['strings']);
+            if ($js === false) return false;
             $js = $this->extract($js, self::REGEX_PATTERNS['regex']);
+            if ($js === false) return false;
 
             // 3. Remove other comments
-            $js = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js);
-            $js = preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js);
+            $js_temp = preg_replace(self::REGEX_PATTERNS['comments']['single'], '', $js);
+            if ($js_temp === null) {
+                $this->logError("preg_replace failed when removing single-line comments", new \Exception("preg_replace returned null"));
+                return false;
+            }
+            $js = $js_temp;
+
+            $js_temp = preg_replace(self::REGEX_PATTERNS['comments']['multi'], '', $js);
+            if ($js_temp === null) {
+                $this->logError("preg_replace failed when removing multi-line comments", new \Exception("preg_replace returned null"));
+                return false;
+            }
+            $js = $js_temp;
+
 
             // 4. Normalize line endings
             $js = str_replace(["\r\n", "\r"], "\n", $js);
 
             // 5. Advanced whitespace handling
             $js = $this->stripWhitespace($js);
+            if ($js === false) return false;
+
 
             // 6. Safe boolean replacement
-            $js = preg_replace('/\btrue\b/', '!0', $js);
-            $js = preg_replace('/\bfalse\b/', '!1', $js);
+            $js_temp = preg_replace('/\btrue\b/', '!0', $js);
+            if ($js_temp === null) {
+                $this->logError("preg_replace failed during boolean replacement (true)", new \Exception("preg_replace returned null"));
+                return false;
+            }
+            $js = $js_temp;
+
+            $js_temp = preg_replace('/\bfalse\b/', '!1', $js);
+            if ($js_temp === null) {
+                $this->logError("preg_replace failed during boolean replacement (false)", new \Exception("preg_replace returned null"));
+                return false;
+            }
+            $js = $js_temp;
+
 
             // 7. Safe property optimization
             $js = $this->optimizePropertyNotation($js);
+            if ($js === false) return false;
+
 
             // 8. Restore extracted content
             $js = $this->restoreExtracted($js);
+            if ($js === false) return false;
+
 
             return trim($js);
         } catch (\Throwable $e) {
@@ -129,59 +159,109 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    private function stripWhitespace(string $js): string {
-        // Improved operator spacing (changed delimiter to #)
-        $js = preg_replace('#
-            (?<=[\s;}]|^)\s*([-+])\s*(?=\w)  # Unary operators
-        #x', '$1', $js);
+    private function stripWhitespace(string $js): string|false {
+        // Improved operator spacing
+        $js_temp = preg_replace('/(?<=[\s;}]|^)\s*([-+])\s*(?=\w)/', '$1', $js);
+        if ($js_temp === null) {
+            $this->logError("preg_replace failed in stripWhitespace - unary operator spacing", new \Exception("preg_replace returned null"));
+            return false;
+        }
+        $js = $js_temp;
 
-        // General operator spacing (changed delimiter to #, fixed backreference)
-        $js = preg_replace('#
+        // General operator spacing - More robust regex for strings and regex literals
+        $js_temp = preg_replace('/
             \s*([!=<>+*\/%&|^~,;:?{}()[\]])\s*
             (?=
-                [^"\'#]*                # Lookahead to ensure not in string/regex
                 (?:
-                    (?:["\']).*?\1      # Skip strings (corrected to \1)
+                    (?:"(?:\\\\.|[^"])*")  # Double quoted string
                     |
-                    \/[^/].*?\/         # Skip regex
-                )*$
+                    (?:\'(?:\\\\.|[^\'])*\') # Single quoted string
+                    |
+                    (?:\/(?:\\\\.|[^\/])*\/(?:gimyus)?) # Regex literal
+                    |
+                    [^\'"]*                 # Non-string, non-regex part
+                )*
+                $
             )
-        #x', '$1', $js);
+        /x', '$1', $js);
+        if ($js_temp === null) {
+            $this->logError("preg_replace failed in stripWhitespace - general operator spacing", new \Exception("preg_replace returned null"));
+            return false;
+        }
+        $js = $js_temp;
 
-        // Keyword spacing (changed delimiter to #)
+
+        // Keyword spacing
         $keywords = array_merge(
             array_map('preg_quote', self::KEYWORDS_BEFORE),
             array_map('preg_quote', self::KEYWORDS_AFTER)
         );
-        $js = preg_replace('#
-            \b(' . implode('|', $keywords) . ')\s+
-        #x', '$1 ', $js);
+        $js_temp = preg_replace('/\b(' . implode('|', $keywords) . ')\s+/', '$1 ', $js); // Simplified regex
+        if ($js_temp === null) {
+            $this->logError("preg_replace failed in stripWhitespace - keyword spacing", new \Exception("preg_replace returned null"));
+            return false;
+        }
+        $js = $js_temp;
 
-        // Semicolon handling (changed delimiters to #)
-        $js = preg_replace([
-            '#;+\s*(?=\W)#',            # Remove redundant semicolons
-            '#\s*;\s*(?=})#',           # Remove before closing braces
-            '#(\})\s*(?=[\w\$\(])#'     # Add semicolon after blocks
+
+        // Semicolon handling
+        $js_temp_array = preg_replace([
+            '/;+\s*(?=\W)/',            # Remove redundant semicolons
+            '/\s*;\s*(?=})/',           # Remove before closing braces
+            '/(\})\s*(?=[\w\$\(])/'     # Add semicolon after blocks
         ], ['', '', '$1;'], $js);
+
+        if (!is_array($js_temp_array) && $js_temp_array === null) {
+            $this->logError("preg_replace failed in stripWhitespace - semicolon handling", new \Exception("preg_replace with array of patterns returned null"));
+            return false;
+        }
+        if (is_string($js_temp_array)) {
+             $js = $js_temp_array;
+        } elseif (is_array($js_temp_array)) {
+            $js = $js_temp_array; // if array is returned, assume first element is the result (as per docs, if subject is string, string is returned)
+            if (isset($js[0])) {
+                $js = $js[0];
+            } else {
+                $this->logError("preg_replace in semicolon handling returned array but no first element found", new \Exception("preg_replace with array of patterns returned unexpected array format"));
+                return false;
+            }
+        } else {
+             $this->logError("preg_replace in semicolon handling returned unexpected type", new \Exception("preg_replace with array of patterns returned neither string nor array"));
+             return false;
+        }
+
 
         return $js;
     }
 
-    private function optimizePropertyNotation(string $js): string {
-        // Changed delimiter to #
-        return preg_replace_callback(
-            '#(?<!\w)([a-zA-Z_$][\w$]*)\["([a-zA-Z_$][\w$]*)"\]#',
+    private function optimizePropertyNotation(string $js): string|false {
+        $js_temp = preg_replace_callback(
+            '/(?<!\w)([a-zA-Z_$][\w$]*)\["([a-zA-Z_$][\w$]*)"\]/',
             function ($matches) {
-                return in_array($matches[2], self::KEYWORDS_RESERVED) 
-                    ? $matches[0] 
+                return in_array($matches[2], self::KEYWORDS_RESERVED)
+                    ? $matches[0]
                     : "{$matches[1]}.{$matches[2]}";
             },
             $js
         );
+        if ($js_temp === null) {
+            $this->logError("preg_replace_callback failed in optimizePropertyNotation", new \Exception("preg_replace_callback returned null"));
+            return false;
+        }
+        return $js_temp;
     }
 
-    private function extract(string $js, string $pattern): string {
-        return preg_replace_callback(
+    private function extract(string $js, string $pattern): string|false {
+        if (!is_string($js)) {
+            $this->logError("Error in extract: Input \$js is not a string.", new \Exception("Input \$js is not a string"));
+            return false;
+        }
+        if (!is_string($pattern)) {
+            $this->logError("Error in extract: Input \$pattern is not a string.", new \Exception("Input \$pattern is not a string"));
+            return false;
+        }
+
+        $result = preg_replace_callback(
             $pattern,
             function ($matches) {
                 $placeholder = 'MINIFY_EX_' . $this->extractedCount++ . '_';
@@ -189,7 +269,15 @@ final class MinifyJS extends AbstractCacheDriver {
                 return $placeholder;
             },
             $js
-        ) ?? $js;
+        );
+
+        if ($result === null) {
+            $error = error_get_last();
+            $errorMessage = $error ? $error['message'] : 'Unknown preg_replace_callback error';
+            $this->logError("preg_replace_callback failed in extract function with pattern: " . $pattern . " - " . $errorMessage, new \Exception("preg_replace_callback returned null"));
+            return false;
+        }
+        return $result;
     }
 
     private function restoreExtracted(string $js): string {
