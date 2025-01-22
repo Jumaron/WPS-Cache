@@ -195,39 +195,6 @@ final class MinifyJS extends AbstractCacheDriver {
         return strtr($js, $this->extracted);
     }
 
-    /**
-     * Shorten booleans (true -> !0, false -> !1)
-     */
-    private function shortenBooleans(string $js): string {
-        $js = preg_replace('/\btrue\b/', '!0', $js);
-        $js = preg_replace('/\bfalse\b/', '!1', $js);
-        return $js;
-    }
-
-
-    /**
-     * Prepare operators for regex usage, similar to MatthiasMullie\Minify\JS
-     */
-    private function getOperatorsForRegex(array $operators): array
-    {
-        // Simply escape operators for regex usage
-        return array_map(function ($operator) {
-            return preg_quote($operator, '/');
-        }, $operators);
-    }
-
-    /**
-     * Prepare keywords for regex usage
-     */
-    private function getKeywordsForRegex(array $keywords): array {
-        $escaped = array_map(function ($keyword) {
-            return preg_quote($keyword, '/');
-        }, $keywords);
-
-        return array_map(function ($keyword) {
-            return '\\b' . $keyword . '\\b';
-        }, $escaped);
-    }
 
     public function processScripts(): void {
         global $wp_scripts;
