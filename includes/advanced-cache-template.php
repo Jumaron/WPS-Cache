@@ -160,7 +160,14 @@ class WPSAdvancedCache {
      * Sets WPS Cache header
      */
     private function setHeader(string $status): void {
-        header('X-WPS-Cache: ' . $status);
+        if (!headers_sent()) {
+            header('X-WPS-Cache: ' . $status);
+        } else {
+            // Optionally log that headers were already sent
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache: Headers already sent when trying to set X-WPS-Cache status: ' . $status);
+            }
+        }
     }
 
     /**
