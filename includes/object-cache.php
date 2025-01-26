@@ -478,62 +478,54 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param bool $force Whether to force a cache refresh.
          * @return array Array of values, with false for keys not found.
          */
-        public function getMultiple(array $keys, string $group = 'default', bool $force = false): array
+        public function getMultiple(array $keys, string $group = 'default', bool $force = false): array 
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group) || empty($keys)) {
                 return array_fill_keys($keys, false);
             }
-
-            $count = count($keys);
+        
             $results = array_fill_keys($keys, false);
             $derivedKeys = [];
-            $missedIndexes = [];
             $missedKeys = [];
             
+            // Check local cache
             if (!$force) {
-                foreach ($keys as $index => $key) {
+                foreach ($keys as $key) {
                     $derivedKey = $this->buildKey($key, $group);
                     $derivedKeys[$key] = $derivedKey;
                     
-                    // Use array_key_exists for better performance with null values
                     if (array_key_exists($derivedKey, $this->cache)) {
                         $value = $this->cache[$derivedKey];
                         $results[$key] = is_object($value) ? clone $value : $value;
                         ++$this->cacheHits;
                     } else {
-                        $missedIndexes[] = $index;
                         $missedKeys[] = $key;
                     }
                 }
             } else {
-                // When forced, all keys are considered missed
-                foreach ($keys as $index => $key) {
-                    $derivedKeys[$key] = $this->buildKey($key, $group);
-                    $missedIndexes[] = $index;
-                    $missedKeys[] = $key;
-                }
+                $missedKeys = $keys;
+                $derivedKeys = array_combine($keys, array_map(
+                    fn($key) => $this->buildKey($key, $group),
+                    $keys
+                ));
             }
-
+        
             if (empty($missedKeys)) {
                 return $results;
             }
-
+        
             try {
                 $startTime = microtime(true);
                 
-                $pipe = $this->redis->pipeline();
-                foreach ($missedKeys as $key) {
-                    $pipe->get($derivedKeys[$key]);
-                }
-                
-                $pipelineResults = $pipe->exec();
+                // Use MGET instead of pipeline
+                $redisKeys = array_map(fn($key) => $derivedKeys[$key], $missedKeys);
+                $values = $this->redis->mget($redisKeys);
                 
                 foreach ($missedKeys as $index => $key) {
-                    $value = $pipelineResults[$index];
+                    $value = $values[$index];
                     
                     if ($value !== null && $value !== false) {
-
-                        if (is_string($value) && strlen($value) > 4 && preg_match('/^[absiOCrdN]:[0-9]+/', $value)) {
+                        if (isset($value[0]) && in_array($value[0], ['a','b','s','i','O','C','r','d','N'])) {
                             $value = $this->maybeUnserialize($value);
                         }
                         
@@ -544,7 +536,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                         ++$this->cacheMisses;
                     }
                 }
-
+        
                 return $results;
             } catch (Exception $e) {
                 $this->handleException($e);
@@ -606,35 +598,34 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             if (!$this->redisConnected || $this->isIgnoredGroup($group) || empty($data)) {
                 return array_fill_keys(array_keys($data), false);
             }
-
+        
             try {
                 $startTime = microtime(true);
-                $pipe = $this->redis->pipeline();
-                $expiration = $this->validateExpiration($expiration);
-                
-                // Pre-process all values
                 $processedData = [];
+                $msetData = [];
+                
+                // Pre-process all values at once
                 foreach ($data as $key => $value) {
                     $derivedKey = $this->buildKey($key, $group);
                     $serializedValue = $this->maybeSerialize($value);
-                    $processedData[$derivedKey] = [
-                        'value' => $serializedValue,
-                        'original' => $value
-                    ];
-                    
-                    if ($expiration > 0) {
-                        $pipe->setex($derivedKey, $expiration, $serializedValue);
-                    } else {
-                        $pipe->set($derivedKey, $serializedValue);
+                    $processedData[$derivedKey] = $value;
+                    $msetData[$derivedKey] = $serializedValue;
+                }
+                
+                // Atomic MSET
+                $this->redis->mset($msetData);
+                
+                // Batch expire if needed
+                if ($expiration > 0) {
+                    $this->redis->multi();
+                    foreach ($msetData as $key => $_) {
+                        $this->redis->expire($key, $expiration);
                     }
+                    $this->redis->exec();
                 }
                 
-                $pipe->exec();
-                
-                // Bulk update local cache
-                foreach ($processedData as $derivedKey => $item) {
-                    $this->cache[$derivedKey] = $item['original'];
-                }
+                // Bulk local cache update
+                $this->cache = array_replace($this->cache, $processedData);
                 
                 return array_fill_keys(array_keys($data), true);
             } catch (Exception $e) {
@@ -812,8 +803,8 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                     unset($this->cache[$key]);
                 }
 
-                // Use UNLINK for non-blocking deletion
-                $this->redis->unlink(...$derivedKeys);
+                // Single UNLINK call instead of spread
+                $this->redis->unlink($derivedKeys);
                 
                 return array_fill_keys($keys, true);
             } catch (Exception $e) {
@@ -875,23 +866,24 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 return $this->flush();
             }
 
-            $startTime = microtime(true);
-
             try {
+                $startTime = microtime(true);
                 $prefix = $this->isGlobalGroup($group) ? $this->globalKeyPrefix : $this->blogKeyPrefix;
-                $pattern = $prefix . $this->sanitizeKey($group) . ':*';
+                $groupKey = $prefix . $this->sanitizeKey($group);
 
                 // Clear internal cache for this group
-                foreach ($this->cache as $key => $value) {
-                    if (str_starts_with($key, "{$group}:") || strpos($key, ":{$group}:") !== false) {
-                        unset($this->cache[$key]);
-                    }
-                }
+                $this->cache = array_filter(
+                    $this->cache,
+                    fn($key) => !str_starts_with($key, "{$group}:") && strpos($key, ":{$group}:") === false,
+                    ARRAY_FILTER_USE_KEY
+                );
 
-                // Use SCAN to find and delete all keys in the group
-                $result = (bool)$this->redis->evalSha($this->flushScriptSHA1, [$pattern], 1);
-
-                return $result;
+                // Use hash tags for atomic group operations
+                return (bool)$this->redis->evalSha(
+                    $this->flushScriptSHA1,
+                    ["{$groupKey}:{*}"],
+                    1
+                );
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -971,21 +963,21 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function buildKey(string|int $key, string $group = 'default'): string 
         {
-            $key = (string)$key;
-            $group = (string)$group;
-            
-            // Direct string concatenation is faster than sprintf
-            $cacheKey = $group . ':' . $key;
-            
-            // Use array_key_exists instead of isset for null values
-            if (!array_key_exists($cacheKey, self::$keyCache)) {
-                if (count(self::$keyCache) >= self::MAX_KEY_CACHE_SIZE) {
-                    array_shift(self::$keyCache);
-                }
-                self::$keyCache[$cacheKey] = $this->generateKey($key, $group);
+            static $cache;
+            if (!$cache) {
+                $cache = new SplFixedArray(self::MAX_KEY_CACHE_SIZE);
             }
             
-            return self::$keyCache[$cacheKey];
+            $key = (string)$key;
+            $cacheKey = $group . ':' . $key;
+            $hash = crc32($cacheKey);
+            $index = $hash % self::MAX_KEY_CACHE_SIZE;
+            
+            if (!isset($cache[$index]) || $cache[$index][0] !== $cacheKey) {
+                $cache[$index] = [$cacheKey, $this->generateKey($key, $group)];
+            }
+            
+            return $cache[$index][1];
         }
 
         /**
@@ -1035,12 +1027,11 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 return $value;
             }
             
-            // Static pattern for better performance
-            static $pattern = '/^[absiOCrdN]:[0-9]+/';
-            if (!preg_match($pattern, $value)) {
+            // Fast first char check instead of regex
+            if (!isset($value[0]) || !in_array($value[0], ['a','b','s','i','O','C','r','d','N'])) {
                 return $value;
             }
-        
+
             try {
                 $unserialized = @unserialize($value);
                 return ($unserialized !== false || $value === 'b:0;') ? $unserialized : $value;
