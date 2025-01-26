@@ -778,7 +778,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
 
             try {
                 $startTime = microtime(true);
-                return (bool)$this->redis->del($derivedKey);
+                return (bool)$this->redis->unlink($derivedKey);
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -799,25 +799,22 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             if (!$this->redisConnected || $this->isIgnoredGroup($group) || empty($keys)) {
                 return array_fill_keys($keys, false);
             }
-        
+
             try {
                 $startTime = microtime(true);
-                $pipe = $this->redis->pipeline();
-                $derivedKeys = [];
+                $derivedKeys = array_map(
+                    fn($key) => $this->buildKey($key, $group), 
+                    $keys
+                );
                 
-                // Pre-process keys and update local cache
-                foreach ($keys as $key) {
-                    $derivedKey = $this->buildKey($key, $group);
-                    $derivedKeys[] = $derivedKey;
-                    unset($this->cache[$derivedKey]);
+                // Bulk remove from local cache
+                foreach ($derivedKeys as $key) {
+                    unset($this->cache[$key]);
                 }
-        
-                // Batch delete operation
-                if (!empty($derivedKeys)) {
-                    $pipe->del(...$derivedKeys);
-                }
-        
-                $pipe->exec();
+
+                // Use UNLINK for non-blocking deletion
+                $this->redis->unlink(...$derivedKeys);
+                
                 return array_fill_keys($keys, true);
             } catch (Exception $e) {
                 $this->handleException($e);
