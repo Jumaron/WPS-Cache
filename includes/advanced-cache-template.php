@@ -70,13 +70,11 @@ class WPSAdvancedCache {
 	 * @return bool
 	 */
 	private function shouldBypassCache(): bool {
-		// Sanitize and unslash server variables.
-		$request_method = isset( $_SERVER['REQUEST_METHOD'] )
-			? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) )
-			: 'GET';
-		$requested_with = isset( $_SERVER['HTTP_X_REQUESTED_WITH'] )
-			? sanitize_text_field( strtolower( wp_unslash( $_SERVER['HTTP_X_REQUESTED_WITH'] ) ) )
-			: '';
+		// Retrieve and sanitize server variables using filter_input.
+        $request_method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: 'GET';
+        $requested_with = filter_input(INPUT_SERVER, 'HTTP_X_REQUESTED_WITH', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+        $requested_with = $requested_with ? strtolower(trim($requested_with)) : '';
+
 
 		// Process preview GET variable with nonce verification.
 		$preview = '';

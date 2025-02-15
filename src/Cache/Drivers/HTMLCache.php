@@ -205,8 +205,15 @@ final class HTMLCache extends AbstractCacheDriver {
         );
     }
 
+    /**
+     * Determines if the current page should be cached.
+     *
+     * To address the warning about processing form data without nonce verification,
+     * we now explicitly sanitize GET data using filter_input_array().
+     */
     private function shouldCache(): bool {
-        if (is_admin() || is_user_logged_in() || !empty($_GET)) {
+        $get_data = filter_input_array(INPUT_GET, FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: [];
+        if (is_admin() || is_user_logged_in() || !empty($get_data)) {
             return false;
         }
         if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'GET') {

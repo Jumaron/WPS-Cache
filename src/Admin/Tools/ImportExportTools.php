@@ -89,46 +89,48 @@ class ImportExportTools {
         try {
             // Verify nonce for security
             check_admin_referer('wpsc_import_settings');
-    
-            if (!isset($_FILES['settings_file'])) {
+            
+            // Check if the file is provided in $_FILES
+            if (empty($_FILES['settings_file'])) {
                 throw new \Exception('No file uploaded');
             }
-    
-            // Unsplash the file input and sanitize each element
-            $raw_file = wp_unslash($_FILES['settings_file']);
-            $file = [
-                'name'     => sanitize_file_name($raw_file['name']),
-                'type'     => sanitize_text_field($raw_file['type']),
-                'tmp_name' => sanitize_text_field($raw_file['tmp_name']),
-                'error'    => absint($raw_file['error']),
-                'size'     => absint($raw_file['size']),
-            ];
-    
-            // Validate file upload
+            
+            // Retrieve the raw file data
+            $raw_file = $_FILES['settings_file'];
+            
+            // Build a sanitized file array with explicit checks
+            $file = [];
+            $file['name']     = isset($raw_file['name'])     ? sanitize_file_name(wp_unslash($raw_file['name'])) : '';
+            $file['type']     = isset($raw_file['type'])     ? sanitize_text_field(wp_unslash($raw_file['type'])) : '';
+            $file['tmp_name'] = isset($raw_file['tmp_name']) ? sanitize_text_field(wp_unslash($raw_file['tmp_name'])) : '';
+            $file['error']    = isset($raw_file['error'])    ? absint($raw_file['error']) : UPLOAD_ERR_NO_FILE;
+            $file['size']     = isset($raw_file['size'])     ? absint($raw_file['size']) : 0;
+            
+            // Validate file upload error
             if ($file['error'] !== UPLOAD_ERR_OK) {
                 throw new \Exception($this->getFileUploadError($file['error']));
             }
-    
-            // Validate file type
+            
+            // Validate file type and size
             $this->validateUploadedFile($file);
-    
+            
             // Read and validate file contents
             $import_data = $this->readImportFile($file['tmp_name']);
             
             // Validate and sanitize settings
             $settings = $this->validateImportData($import_data);
-    
-            // Create backup before import
+            
+            // Create a backup before import
             $this->createSettingsBackup();
-    
+            
             // Update settings
             update_option('wpsc_settings', $settings);
-    
+            
             return [
                 'status'  => 'success',
                 'message' => esc_html__('Settings imported successfully.', 'WPS-Cache')
             ];
-    
+            
         } catch (\Exception $e) {
             return [
                 'status'  => 'error',
