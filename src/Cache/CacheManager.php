@@ -252,11 +252,11 @@ final class CacheManager {
     }
 
     /**
-     * Safely deletes a file with error handling
+     * Safely deletes a file with error handling using wp_delete_file()
      */
     private function safeUnlink(string $file): void {
         try {
-            if (!@unlink($file)) {
+            if (!wp_delete_file($file)) {
                 $this->logError("Failed to delete file: $file");
             }
         } catch (Throwable $e) {
@@ -265,9 +265,11 @@ final class CacheManager {
     }
 
     /**
-     * Logs an error message
+     * Logs an error message (only in debug mode)
      */
     private function logError(string $message): void {
-        error_log('WPS Cache Error: ' . $message);
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('WPS Cache Error: ' . $message);
+        }
     }
 }

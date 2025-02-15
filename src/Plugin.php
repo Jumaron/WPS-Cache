@@ -185,13 +185,18 @@ final class Plugin {
     }
 
     /**
-     * Creates required directories
+     * Creates required directories using the WP_Filesystem API
      */
     private function createRequiredDirectories(): void {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        global $wp_filesystem;
+        if (empty($wp_filesystem)) {
+            WP_Filesystem();
+        }
         foreach (self::REQUIRED_DIRECTORIES as $dir) {
             $path = WPSC_PLUGIN_DIR . $dir;
             if (!file_exists($path)) {
-                @mkdir($path, 0755, true);
+                $wp_filesystem->mkdir($path, 0755, true);
             }
         }
     }
@@ -211,7 +216,9 @@ final class Plugin {
      */
     private function enableWPCache(): void {
         if (!$this->setWPCache(true)) {
-            error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
+            }
         }
     }
 
@@ -223,7 +230,9 @@ final class Plugin {
         $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
         
         if (!@copy($template_file, $target_file)) {
-            error_log('WPS Cache Warning: Failed to create advanced-cache.php');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Warning: Failed to create advanced-cache.php');
+            }
         }
     }
 
@@ -267,7 +276,9 @@ final class Plugin {
 
         $config_content = file_get_contents($config_file);
         if ($config_content === false) {
-            error_log('WPS Cache Error: Unable to read wp-config.php');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Error: Unable to read wp-config.php');
+            }
             return false;
         }
 
@@ -280,7 +291,9 @@ final class Plugin {
      */
     private function isConfigFileAccessible(string $file): bool {
         if (!file_exists($file)) {
-            error_log('WPS Cache Error: wp-config.php not found');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Error: wp-config.php not found');
+            }
             return false;
         }
         return true;
@@ -314,14 +327,18 @@ final class Plugin {
         // Create backup
         $backup_file = $file . '.backup-' . time();
         if (!@copy($file, $backup_file)) {
-            error_log('WPS Cache Error: Unable to create wp-config.php backup');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Error: Unable to create wp-config.php backup');
+            }
             return false;
         }
 
         // Write updated content
         if (@file_put_contents($file, $content) === false) {
             @copy($backup_file, $file); // Restore backup if write fails
-            error_log('WPS Cache Error: Unable to update wp-config.php');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Error: Unable to update wp-config.php');
+            }
             return false;
         }
 
@@ -333,7 +350,9 @@ final class Plugin {
      */
     private function disableWPCache(): void {
         if (!$this->setWPCache(false)) {
-            error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
+            }
         }
     }
 
@@ -371,13 +390,13 @@ final class Plugin {
     }
 
     /**
-     * Removes a drop-in file if it matches our signature
+     * Removes a drop-in file if it matches our signature using wp_delete_file()
      */
     private function removeDropIn(string $file, string $signature): void {
         if (file_exists($file)) {
             $contents = file_get_contents($file);
             if ($contents && strpos($contents, $signature) !== false) {
-                @unlink($file);
+                wp_delete_file($file);
             }
         }
     }

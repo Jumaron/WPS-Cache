@@ -12,9 +12,9 @@ final class MinifyJS extends AbstractCacheDriver {
 
     private const PRESERVE_PATTERNS = [
         'template_literals' => '/`(?:\\\\.|[^\\\\`])*`/',  // Template literals with expressions
-        'regex_patterns' => '/\/(?:\\\\.|[^\\/])*\/[gimuy]*(?=\s*(?:[)\].,;:\s]|$))/', // Regex patterns
-        'strings' => '/([\'"])((?:\\\\.|(?!\1)[^\\\\])*)\1/', // String literals
-        'comments' => '/\/\*![\s\S]*?\*\//',  // Important comments
+        'regex_patterns'    => '/\/(?:\\\\.|[^\\/])*\/[gimuy]*(?=\s*(?:[)\].,;:\s]|$))/', // Regex patterns
+        'strings'           => '/([\'"])((?:\\\\.|(?!\1)[^\\\\])*)\1/', // String literals
+        'comments'          => '/\/\*![\s\S]*?\*\//',  // Important comments
     ];
 
     private string $cache_dir;
@@ -35,7 +35,12 @@ final class MinifyJS extends AbstractCacheDriver {
     }
 
     public function isConnected(): bool {
-        return is_writable($this->cache_dir);
+        global $wp_filesystem;
+        if (empty($wp_filesystem)) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+        return $wp_filesystem->is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed {
@@ -56,7 +61,7 @@ final class MinifyJS extends AbstractCacheDriver {
 
     public function delete(string $key): void {
         $file = $this->getCacheFile($key);
-        if (file_exists($file) && !@unlink($file)) {
+        if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete JS cache file: $file");
         }
     }
@@ -68,7 +73,7 @@ final class MinifyJS extends AbstractCacheDriver {
         }
 
         foreach ($files as $file) {
-            if (is_file($file) && !@unlink($file)) {
+            if (is_file($file) && !wp_delete_file($file)) {
                 $this->logError("Failed to delete JS file during clear: $file");
             }
         }
@@ -96,8 +101,8 @@ final class MinifyJS extends AbstractCacheDriver {
             $js = preg_replace(
                 [
                     '/\s+/',                            // Multiple whitespace to single
-                    '/\s*([\[\]{}(:,=+\-*\/])\s*/',    // Space around specific operators
-                    '/\s*;+\s*([\]}])\s*/',            // Remove unnecessary semicolons
+                    '/\s*([\[\]{}(:,=+\-*\/])\s*/',      // Space around specific operators
+                    '/\s*;+\s*([\]}])\s*/',              // Remove unnecessary semicolons
                     '/;\s*;/',                         // Multiple semicolons to single
                     '/\)\s*{/',                        // Space between ) and {
                     '/}\s*(\w+)/',                     // Add newline after } followed by word
