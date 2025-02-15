@@ -217,7 +217,7 @@ class ImportExportTools {
                 throw new \Exception(sprintf(
                     /* translators: %s: Name of the missing required setting */
                     esc_html__('Missing required setting: %s', 'WPS-Cache'),
-                    $key
+                    esc_html($key)
                 ));
             }
         }
@@ -264,7 +264,6 @@ class ImportExportTools {
             <?php
             return;
         }
-
         ?>
         <table class="widefat striped">
             <thead>

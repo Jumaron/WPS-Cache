@@ -247,9 +247,10 @@ class NoticeManager {
         // PHP version check
         if (version_compare(PHP_VERSION, '7.4', '<')) {
             /* translators: %s: current PHP version */
+            $message = __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'WPS-Cache');
             $this->renderNotice(
                 sprintf(
-                    __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'WPS-Cache'),
+                    $message,
                     PHP_VERSION
                 ),
                 'error'
@@ -260,9 +261,10 @@ class NoticeManager {
         $conflicting_plugins = $this->getConflictingPlugins();
         if (!empty($conflicting_plugins)) {
             /* translators: %s: list of conflicting plugin names */
+            $message = __('The following plugins may conflict with WPS Cache: %s', 'WPS-Cache');
             $this->renderNotice(
                 sprintf(
-                    __('The following plugins may conflict with WPS Cache: %s', 'WPS-Cache'),
+                    $message,
                     implode(', ', $conflicting_plugins)
                 ),
                 'warning'
@@ -273,9 +275,10 @@ class NoticeManager {
         global $wp_version;
         if (version_compare($wp_version, '5.6', '<')) {
             /* translators: %s: current WordPress version */
+            $message = __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'WPS-Cache');
             $this->renderNotice(
                 sprintf(
-                    __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'WPS-Cache'),
+                    $message,
                     $wp_version
                 ),
                 'warning'
@@ -322,9 +325,10 @@ class NoticeManager {
         global $wp_filesystem;
         if (!$wp_filesystem->is_writable($cache_dir)) {
             /* translators: %s: cache directory path */
+            $message = __('The cache directory %s is not writable. Please check the permissions.', 'WPS-Cache');
             $this->renderNotice(
                 sprintf(
-                    __('The cache directory %s is not writable. Please check the permissions.', 'WPS-Cache'),
+                    $message,
                     '<code>' . esc_html($cache_dir) . '</code>'
                 ),
                 'error'
