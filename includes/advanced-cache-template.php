@@ -21,8 +21,8 @@ class WPSAdvancedCache {
     ];
 
     private const CONTENT_TYPES = [
-        'css' => 'text/css; charset=UTF-8',
-        'js'  => 'application/javascript; charset=UTF-8',
+        'css'  => 'text/css; charset=UTF-8',
+        'js'   => 'application/javascript; charset=UTF-8',
         'html' => 'text/html; charset=UTF-8'
     ];
 
@@ -145,7 +145,8 @@ class WPSAdvancedCache {
         
         $this->setHeader('HIT');
         
-        echo $content;
+        // Escape the cached content to ensure safe output while preserving allowed HTML
+        echo wp_kses_post($content);
         exit;
     }
 
