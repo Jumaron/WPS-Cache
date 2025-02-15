@@ -14,12 +14,12 @@ class DiagnosticTools {
         ?>
         <div class="wpsc-diagnostics-container">
             <p class="description">
-                <?php _e('System information and diagnostic details for troubleshooting.', 'wps-cache'); ?>
+                <?php _e('System information and diagnostic details for troubleshooting.', 'WPS-Cache'); ?>
             </p>
 
             <!-- System Information -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php _e('System Information', 'wps-cache'); ?></h4>
+                <h4><?php _e('System Information', 'WPS-Cache'); ?></h4>
                 <textarea readonly class="large-text code" rows="10">
 <?php echo esc_textarea($this->getFormattedDiagnosticInfo()); ?>
                 </textarea>
@@ -27,19 +27,19 @@ class DiagnosticTools {
 
             <!-- Cache Test Tools -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php _e('Cache Tests', 'wps-cache'); ?></h4>
+                <h4><?php _e('Cache Tests', 'WPS-Cache'); ?></h4>
                 <?php $this->renderCacheTests(); ?>
             </div>
 
             <!-- Error Log Viewer -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php _e('Error Log', 'wps-cache'); ?></h4>
+                <h4><?php _e('Error Log', 'WPS-Cache'); ?></h4>
                 <?php $this->renderErrorLog(); ?>
             </div>
 
             <!-- Debug Controls -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php _e('Debug Controls', 'wps-cache'); ?></h4>
+                <h4><?php _e('Debug Controls', 'WPS-Cache'); ?></h4>
                 <?php $this->renderDebugControls(); ?>
             </div>
         </div>
@@ -232,17 +232,17 @@ class DiagnosticTools {
         ?>
         <div class="wpsc-cache-tests">
             <button type="button" class="button" id="wpsc-test-redis">
-                <?php _e('Test Redis Connection', 'wps-cache'); ?>
+                <?php _e('Test Redis Connection', 'WPS-Cache'); ?>
             </button>
             <button type="button" class="button" id="wpsc-test-varnish">
-                <?php _e('Test Varnish Connection', 'wps-cache'); ?>
+                <?php _e('Test Varnish Connection', 'WPS-Cache'); ?>
             </button>
             <button type="button" class="button" id="wpsc-test-permissions">
-                <?php _e('Test File Permissions', 'wps-cache'); ?>
+                <?php _e('Test File Permissions', 'WPS-Cache'); ?>
             </button>
             
             <div id="wpsc-test-results" class="wpsc-test-results" style="display: none;">
-                <h5><?php _e('Test Results', 'wps-cache'); ?></h5>
+                <h5><?php _e('Test Results', 'WPS-Cache'); ?></h5>
                 <pre class="wpsc-test-output"></pre>
             </div>
         </div>
@@ -253,7 +253,7 @@ class DiagnosticTools {
      * Renders error log viewer
      */
     private function renderErrorLog(): void {
-        $log_file = WP_CONTENT_DIR . '/wps-cache-debug.log';
+        $log_file = WP_CONTENT_DIR . '/WPS-Cache-debug.log';
         ?>
         <div class="wpsc-error-log">
             <?php if (file_exists($log_file)): ?>
@@ -262,15 +262,15 @@ class DiagnosticTools {
                 </textarea>
                 <p>
                     <button type="button" class="button" id="wpsc-clear-log">
-                        <?php _e('Clear Log', 'wps-cache'); ?>
+                        <?php _e('Clear Log', 'WPS-Cache'); ?>
                     </button>
                     <button type="button" class="button" id="wpsc-download-log">
-                        <?php _e('Download Log', 'wps-cache'); ?>
+                        <?php _e('Download Log', 'WPS-Cache'); ?>
                     </button>
                 </p>
             <?php else: ?>
                 <p class="description">
-                    <?php _e('No error log file found.', 'wps-cache'); ?>
+                    <?php _e('No error log file found.', 'WPS-Cache'); ?>
                 </p>
             <?php endif; ?>
         </div>
@@ -286,17 +286,17 @@ class DiagnosticTools {
             <label>
                 <input type="checkbox" id="wpsc-enable-debug" 
                     <?php checked(get_option('wpsc_debug_mode')); ?>>
-                <?php _e('Enable Debug Mode', 'wps-cache'); ?>
+                <?php _e('Enable Debug Mode', 'WPS-Cache'); ?>
             </label>
             <p class="description">
-                <?php _e('Enables detailed logging for troubleshooting.', 'wps-cache'); ?>
+                <?php _e('Enables detailed logging for troubleshooting.', 'WPS-Cache'); ?>
             </p>
 
             <button type="button" class="button" id="wpsc-generate-report">
-                <?php _e('Generate Debug Report', 'wps-cache'); ?>
+                <?php _e('Generate Debug Report', 'WPS-Cache'); ?>
             </button>
             <p class="description">
-                <?php _e('Creates a comprehensive debug report for support.', 'wps-cache'); ?>
+                <?php _e('Creates a comprehensive debug report for support.', 'WPS-Cache'); ?>
             </p>
         </div>
         <?php

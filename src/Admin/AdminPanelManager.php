@@ -67,7 +67,7 @@ final class AdminPanelManager {
             'WPS Cache',
             'WPS Cache',
             'manage_options',
-            'wps-cache',
+            'WPS-Cache',
             [$this, 'renderAdminPage'],
             'dashicons-performance',
             100
@@ -119,18 +119,18 @@ final class AdminPanelManager {
      */
     private function getJsStrings(): array {
         return [
-            'confirm_clear_cache' => __('Are you sure you want to clear all caches?', 'wps-cache'),
-            'confirm_install_dropin' => __('Are you sure you want to install the object cache drop-in?', 'wps-cache'),
-            'confirm_remove_dropin' => __('Are you sure you want to remove the object cache drop-in?', 'wps-cache'),
-            'loading' => __('Loading...', 'wps-cache'),
-            'error' => __('An error occurred', 'wps-cache'),
-            'success' => __('Operation completed successfully', 'wps-cache'),
-            'preload_progress' => __('Preloading: %d%%', 'wps-cache'),
-            'preload_complete' => __('Preloading completed', 'wps-cache'),
-            'preload_error' => __('Error during preloading', 'wps-cache'),
-            'export_error' => __('Error exporting settings', 'wps-cache'),
-            'import_error' => __('Error importing settings', 'wps-cache'),
-            'invalid_file' => __('Invalid settings file', 'wps-cache')
+            'confirm_clear_cache' => __('Are you sure you want to clear all caches?', 'WPS-Cache'),
+            'confirm_install_dropin' => __('Are you sure you want to install the object cache drop-in?', 'WPS-Cache'),
+            'confirm_remove_dropin' => __('Are you sure you want to remove the object cache drop-in?', 'WPS-Cache'),
+            'loading' => __('Loading...', 'WPS-Cache'),
+            'error' => __('An error occurred', 'WPS-Cache'),
+            'success' => __('Operation completed successfully', 'WPS-Cache'),
+            'preload_progress' => __('Preloading: %d%%', 'WPS-Cache'),
+            'preload_complete' => __('Preloading completed', 'WPS-Cache'),
+            'preload_error' => __('Error during preloading', 'WPS-Cache'),
+            'export_error' => __('Error exporting settings', 'WPS-Cache'),
+            'import_error' => __('Error importing settings', 'WPS-Cache'),
+            'invalid_file' => __('Invalid settings file', 'WPS-Cache')
         ];
     }
 
@@ -145,7 +145,7 @@ final class AdminPanelManager {
         $current_tab = $_GET['tab'] ?? 'settings';
         ?>
         <div class="wrap">
-            <h1><?php _e('WPS Cache', 'wps-cache'); ?></h1>
+            <h1><?php _e('WPS Cache', 'WPS-Cache'); ?></h1>
 
             <div class="wpsc-admin-container">
                 <nav class="wpsc-tabs">

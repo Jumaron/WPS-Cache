@@ -24,19 +24,19 @@ class TabManager {
     private function initializeTabs(): void {
         $this->tabs = [
             'settings' => [
-                'label' => __('Settings', 'wps-cache'),
+                'label' => __('Settings', 'WPS-Cache'),
                 'capability' => 'manage_options',
                 'icon' => 'dashicons-admin-generic',
                 'order' => 10
             ],
             'analytics' => [
-                'label' => __('Analytics', 'wps-cache'),
+                'label' => __('Analytics', 'WPS-Cache'),
                 'capability' => 'manage_options',
                 'icon' => 'dashicons-chart-bar',
                 'order' => 20
             ],
             'tools' => [
-                'label' => __('Tools', 'wps-cache'),
+                'label' => __('Tools', 'WPS-Cache'),
                 'capability' => 'manage_options',
                 'icon' => 'dashicons-admin-tools',
                 'order' => 30
@@ -96,7 +96,7 @@ class TabManager {
         }
 
         $url = add_query_arg([
-            'page' => 'wps-cache',
+            'page' => 'WPS-Cache',
             'tab' => $tab_id
         ], admin_url('admin.php'));
         ?>
@@ -210,7 +210,7 @@ class TabManager {
      */
     public function getTabUrl(string $tab_id, array $args = []): string {
         $default_args = [
-            'page' => 'wps-cache',
+            'page' => 'WPS-Cache',
             'tab' => $tab_id
         ];
 
