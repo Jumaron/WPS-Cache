@@ -30,7 +30,7 @@ class NoticeManager {
      * Displays all queued admin notices
      */
     public function displayNotices(): void {
-        $page = isset($_GET['page']) ? sanitize_text_field($_GET['page']) : '';
+        $page = isset($_GET['page']) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
         if ($page !== 'WPS-Cache') {
             return;
         }

@@ -142,7 +142,9 @@ final class AdminPanelManager {
             return;
         }
 
-        $current_tab = $_GET['tab'] ?? 'settings';
+        // Use TabManager's method to retrieve the active tab, which properly sanitizes
+        // and verifies the nonce for the 'tab' query variable.
+        $current_tab = $this->tab_manager->getCurrentTab();
         ?>
        <div class="wrap">
             <h1><?php esc_html_e('WPS Cache', 'WPS-Cache'); ?></h1>

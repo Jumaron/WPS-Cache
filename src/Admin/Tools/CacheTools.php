@@ -327,9 +327,7 @@ class CacheTools {
             set_transient('wpsc_last_cache_clear', time());
 
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Error: ' . $e->getMessage());
-            }
+            // Removed debug logging.
             $success = false;
         }
 
@@ -453,7 +451,8 @@ class CacheTools {
      * Performs scheduled cache maintenance
      */
     public function performMaintenance(): void {
-        try { // Clean expired HTML cache files
+        try {
+            // Clean expired HTML cache files
             $this->cleanExpiredHtmlCache();
 
             // Optimize Redis if enabled
@@ -462,9 +461,7 @@ class CacheTools {
             }
 
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Maintenance Error: ' . $e->getMessage());
-            }
+            // Removed debug logging.
         }
     }
 
@@ -512,9 +509,7 @@ class CacheTools {
             }
 
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Redis Optimization Error: ' . $e->getMessage());
-            }
+            // Removed debug logging.
         }
     }
 

@@ -42,9 +42,7 @@ class MetricsCollector {
             $this->cleanupHistoricalMetrics();
 
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Metrics Collection Error: ' . $e->getMessage());
-            }
+            // Removed error_log() call for production.
         }
     }
 
@@ -141,9 +139,7 @@ class MetricsCollector {
 
             return $stats;
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Redis Metrics Error: ' . $e->getMessage());
-            }
+            // Removed error_log() call for production.
             return null;
         }
     }
@@ -219,9 +215,7 @@ class MetricsCollector {
                 'headers'    => $varnish_headers,
             ];
         } catch (\Exception $e) {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('WPS Cache Varnish Error: ' . $e->getMessage());
-            }
+            // Removed error_log() call for production.
             return null;
         }
     }

@@ -24,22 +24,22 @@ class TabManager {
     private function initializeTabs(): void {
         $this->tabs = [
             'settings' => [
-                'label' => __('Settings', 'WPS-Cache'),
+                'label'      => __('Settings', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-admin-generic',
-                'order' => 10
+                'icon'       => 'dashicons-admin-generic',
+                'order'      => 10
             ],
             'analytics' => [
-                'label' => __('Analytics', 'WPS-Cache'),
+                'label'      => __('Analytics', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-chart-bar',
-                'order' => 20
+                'icon'       => 'dashicons-chart-bar',
+                'order'      => 20
             ],
             'tools' => [
-                'label' => __('Tools', 'WPS-Cache'),
+                'label'      => __('Tools', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-admin-tools',
-                'order' => 30
+                'icon'       => 'dashicons-admin-tools',
+                'order'      => 30
             ]
         ];
     }
@@ -94,10 +94,12 @@ class TabManager {
         if ($is_active) {
             $classes[] = 'nav-tab-active';
         }
-
+        // Generate nonce for the tab URL
+        $nonce = wp_create_nonce('wpsc_tab_nonce');
         $url = add_query_arg([
-            'page' => 'WPS-Cache',
-            'tab' => $tab_id
+            'page'     => 'WPS-Cache',
+            'tab'      => $tab_id,
+            '_wpnonce' => $nonce,
         ], admin_url('admin.php'));
         ?>
         <a href="<?php echo esc_url($url); ?>" 
@@ -177,10 +179,10 @@ class TabManager {
         }
 
         $this->tabs[$tab_id] = [
-            'label' => $label,
+            'label'      => $label,
             'capability' => $capability,
-            'icon' => $icon,
-            'order' => $order
+            'icon'       => $icon,
+            'order'      => $order
         ];
 
         return true;
@@ -211,7 +213,8 @@ class TabManager {
     public function getTabUrl(string $tab_id, array $args = []): string {
         $default_args = [
             'page' => 'WPS-Cache',
-            'tab' => $tab_id
+            'tab'  => $tab_id,
+            '_wpnonce' => wp_create_nonce('wpsc_tab_nonce')
         ];
 
         return add_query_arg(
@@ -226,8 +229,14 @@ class TabManager {
      * @return string Active tab ID
      */
     public function getCurrentTab(): string {
-        $current_tab = $_GET['tab'] ?? 'settings';
-        
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'settings';
+        $nonce       = isset($_GET['_wpnonce']) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+
+        // Verify nonce to ensure the request is valid
+        if ( empty($nonce) || ! wp_verify_nonce($nonce, 'wpsc_tab_nonce') ) {
+            return 'settings';
+        }
+
         if (!$this->isTabAccessible($current_tab)) {
             return 'settings';
         }
