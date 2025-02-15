@@ -104,15 +104,15 @@ class DiagnosticTools {
         global $wp_version;
         
         return [
-            'Version'       => $wp_version,
-            'Site URL'      => get_site_url(),
-            'Home URL'      => get_home_url(),
-            'Is Multisite'  => is_multisite() ? 'Yes' : 'No',
-            'Theme'         => wp_get_theme()->get('Name'),
-            'Theme Version' => wp_get_theme()->get('Version'),
-            'WP_DEBUG'      => defined('WP_DEBUG') && WP_DEBUG ? 'Yes' : 'No',
-            'WP_DEBUG_LOG'  => defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'Yes' : 'No',
-            'SCRIPT_DEBUG'  => defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? 'Yes' : 'No',
+            'Version'        => $wp_version,
+            'Site URL'       => get_site_url(),
+            'Home URL'       => get_home_url(),
+            'Is Multisite'   => is_multisite() ? 'Yes' : 'No',
+            'Theme'          => wp_get_theme()->get('Name'),
+            'Theme Version'  => wp_get_theme()->get('Version'),
+            'WP_DEBUG'       => defined('WP_DEBUG') && WP_DEBUG ? 'Yes' : 'No',
+            'WP_DEBUG_LOG'   => defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'Yes' : 'No',
+            'SCRIPT_DEBUG'   => defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? 'Yes' : 'No',
             'WP Memory Limit'=> WP_MEMORY_LIMIT,
         ];
     }
@@ -121,16 +121,24 @@ class DiagnosticTools {
      * Gets cache information
      */
     private function getCacheInfo(): array {
+        // Load WP_Filesystem if not already available
+        if (!function_exists('WP_Filesystem')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+        $cache_writable = $wp_filesystem->is_writable(WPSC_CACHE_DIR) ? 'Yes' : 'No';
+
         return [
-            'Plugin Version'    => WPSC_VERSION,
-            'Cache Directory'   => WPSC_CACHE_DIR,
-            'Cache Writable'    => is_writable(WPSC_CACHE_DIR) ? 'Yes' : 'No',
+            'Plugin Version'     => WPSC_VERSION,
+            'Cache Directory'    => WPSC_CACHE_DIR,
+            'Cache Writable'     => $cache_writable,
             'Object Cache Dropin'=> file_exists(WP_CONTENT_DIR . '/object-cache.php') ? 'Installed' : 'Not Installed',
-            'Redis Extension'   => extension_loaded('redis') ? 'Yes' : 'No',
-            'Memcache Extension'=> extension_loaded('memcache') ? 'Yes' : 'No',
+            'Redis Extension'    => extension_loaded('redis') ? 'Yes' : 'No',
+            'Memcache Extension' => extension_loaded('memcache') ? 'Yes' : 'No',
             'Memcached Extension'=> extension_loaded('memcached') ? 'Yes' : 'No',
-            'OPcache Status'    => function_exists('opcache_get_status') && opcache_get_status() !== false ? 'Active' : 'Inactive',
-            'Object Caching'    => wp_using_ext_object_cache() ? 'Yes' : 'No',
+            'OPcache Status'     => function_exists('opcache_get_status') && opcache_get_status() !== false ? 'Active' : 'Inactive',
+            'Object Caching'     => wp_using_ext_object_cache() ? 'Yes' : 'No',
         ];
     }
 
@@ -139,13 +147,23 @@ class DiagnosticTools {
      */
     private function getServerInfo(): array {
         return [
-            'Server Software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-            'Server Protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'Unknown',
+            'Server Software' => isset($_SERVER['SERVER_SOFTWARE']) 
+                ? sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']))
+                : 'Unknown',
+            'Server Protocol' => isset($_SERVER['SERVER_PROTOCOL']) 
+                ? sanitize_text_field(wp_unslash($_SERVER['SERVER_PROTOCOL']))
+                : 'Unknown',
             'SSL/TLS'         => is_ssl() ? 'Yes' : 'No',
             'HTTPS'           => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'Yes' : 'No',
-            'Server IP'       => $_SERVER['SERVER_ADDR'] ?? 'Unknown',
-            'Server Port'     => $_SERVER['SERVER_PORT'] ?? 'Unknown',
-            'Document Root'   => $_SERVER['DOCUMENT_ROOT'] ?? 'Unknown',
+            'Server IP'       => isset($_SERVER['SERVER_ADDR']) 
+                ? sanitize_text_field(wp_unslash($_SERVER['SERVER_ADDR']))
+                : 'Unknown',
+            'Server Port'     => isset($_SERVER['SERVER_PORT']) 
+                ? sanitize_text_field(wp_unslash($_SERVER['SERVER_PORT']))
+                : 'Unknown',
+            'Document Root'   => isset($_SERVER['DOCUMENT_ROOT']) 
+                ? sanitize_text_field(wp_unslash($_SERVER['DOCUMENT_ROOT']))
+                : 'Unknown',
             'Save Path'       => session_save_path(),
         ];
     }
@@ -206,6 +224,11 @@ class DiagnosticTools {
      * Gets error reporting level as string
      */
     private function getErrorReportingLevel(): string {
+        // To avoid full path disclosure in production, hide error reporting level when WP_DEBUG is false
+        if ( ! defined('WP_DEBUG') || ! WP_DEBUG ) {
+            return 'Hidden';
+        }
+        
         $level  = error_reporting();
         $levels = [];
 

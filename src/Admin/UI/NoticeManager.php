@@ -16,10 +16,10 @@ class NoticeManager {
      * Notice types and their CSS classes
      */
     private const NOTICE_TYPES = [
-        'info' => 'notice-info',
+        'info'    => 'notice-info',
         'success' => 'notice-success',
         'warning' => 'notice-warning',
-        'error' => 'notice-error'
+        'error'   => 'notice-error'
     ];
 
     public function __construct() {
@@ -59,10 +59,10 @@ class NoticeManager {
 
         $notices = get_transient(self::NOTICES_TRANSIENT) ?: [];
         $notices[] = [
-            'message' => $message,
-            'type' => $type,
+            'message'     => $message,
+            'type'        => $type,
             'dismissible' => $dismissible,
-            'args' => $args
+            'args'        => $args
         ];
 
         set_transient(self::NOTICES_TRANSIENT, $notices, HOUR_IN_SECONDS);
@@ -113,7 +113,8 @@ class NoticeManager {
      */
     private function displayCacheNotices(): void {
         if (isset($_GET['cache_cleared'])) {
-            if (!wp_verify_nonce($_GET['_wpnonce'] ?? '', 'wpsc_cache_cleared')) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_cache_cleared')) {
                 return;
             }
 
@@ -136,7 +137,8 @@ class NoticeManager {
      */
     private function displayObjectCacheNotices(): void {
         if (isset($_GET['object_cache_installed'])) {
-            if (!wp_verify_nonce($_GET['_wpnonce'] ?? '', 'wpsc_dropin_installed')) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_dropin_installed')) {
                 return;
             }
 
@@ -163,7 +165,8 @@ class NoticeManager {
         }
 
         if (isset($_GET['object_cache_removed'])) {
-            if (!wp_verify_nonce($_GET['_wpnonce'] ?? '', 'wpsc_dropin_removed')) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_dropin_removed')) {
                 return;
             }
 
@@ -189,6 +192,10 @@ class NoticeManager {
      */
     private function displaySettingsNotices(): void {
         if (isset($_GET['settings_updated'])) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_settings_update')) {
+                return;
+            }
             $this->renderNotice(
                 __('Settings updated successfully!', 'WPS-Cache'),
                 'success'
@@ -196,6 +203,10 @@ class NoticeManager {
         }
 
         if (isset($_GET['settings_error'])) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_settings_update')) {
+                return;
+            }
             $this->renderNotice(
                 __('Error updating settings. Please try again.', 'WPS-Cache'),
                 'error'
@@ -208,15 +219,23 @@ class NoticeManager {
      */
     private function displayImportExportNotices(): void {
         if (isset($_GET['import_error'])) {
-            $message = match($_GET['import_error']) {
-                'upload' => __('Error uploading settings file.', 'WPS-Cache'),
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_import_export')) {
+                return;
+            }
+            $message = match ($_GET['import_error']) {
+                'upload'  => __('Error uploading settings file.', 'WPS-Cache'),
                 'invalid' => __('Invalid settings file format.', 'WPS-Cache'),
-                default => __('Unknown error importing settings.', 'WPS-Cache')
+                default   => __('Unknown error importing settings.', 'WPS-Cache')
             };
             $this->renderNotice($message, 'error');
         }
 
         if (isset($_GET['settings_imported'])) {
+            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            if (!wp_verify_nonce($nonce, 'wpsc_import_export')) {
+                return;
+            }
             $this->renderNotice(
                 __('Settings imported successfully!', 'WPS-Cache'),
                 'success'
@@ -294,10 +313,15 @@ class NoticeManager {
             );
         }
 
-        // Cache directory permissions
+        // Cache directory permissions using WP_Filesystem
         $cache_dir = WPSC_CACHE_DIR;
-        /* translators: %s: cache directory path */
-        if (!is_writable($cache_dir)) {
+        if (!function_exists('WP_Filesystem')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+        if (!$wp_filesystem->is_writable($cache_dir)) {
+            /* translators: %s: cache directory path */
             $this->renderNotice(
                 sprintf(
                     __('The cache directory %s is not writable. Please check the permissions.', 'WPS-Cache'),
@@ -338,10 +362,10 @@ class NoticeManager {
     private function getConflictingPlugins(): array {
         $conflicting_plugins = [];
         $known_conflicts = [
-            'wp-super-cache/wp-cache.php' => 'WP Super Cache',
-            'w3-total-cache/w3-total-cache.php' => 'W3 Total Cache',
-            'wp-fastest-cache/wpFastestCache.php' => 'WP Fastest Cache',
-            'litespeed-cache/litespeed-cache.php' => 'LiteSpeed Cache'
+            'wp-super-cache/wp-cache.php'            => 'WP Super Cache',
+            'w3-total-cache/w3-total-cache.php'        => 'W3 Total Cache',
+            'wp-fastest-cache/wpFastestCache.php'        => 'WP Fastest Cache',
+            'litespeed-cache/litespeed-cache.php'        => 'LiteSpeed Cache'
         ];
 
         foreach ($known_conflicts as $plugin_path => $plugin_name) {
@@ -367,7 +391,6 @@ class NoticeManager {
         if ($dismissible) {
             $classes[] = 'is-dismissible';
         }
-
         ?>
         <div class="<?php echo esc_attr(implode(' ', $classes)); ?>">
             <p><?php echo wp_kses_post($message); ?></p>
@@ -375,8 +398,8 @@ class NoticeManager {
             <?php if (!empty($args['documentation_url'])): ?>
                 <p>
                     <a href="<?php echo esc_url($args['documentation_url']); ?>" 
-                        target="_blank" 
-                        rel="noopener noreferrer">
+                       target="_blank" 
+                       rel="noopener noreferrer">
                         <?php esc_html_e('Learn more', 'WPS-Cache'); ?> ›
                     </a>
                 </p>

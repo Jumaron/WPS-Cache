@@ -191,8 +191,8 @@ class CacheTools {
         $settings = get_option('wpsc_settings');
         
         return [
-            'html' => $this->getHtmlCacheStats($settings),
-            'redis' => $this->getRedisCacheStats($settings),
+            'html'    => $this->getHtmlCacheStats($settings),
+            'redis'   => $this->getRedisCacheStats($settings),
             'varnish' => $this->getVarnishCacheStats($settings)
         ];
     }
@@ -222,8 +222,8 @@ class CacheTools {
 
         return [
             'enabled' => true,
-            'files' => $file_count,
-            'size' => $total_size
+            'files'   => $file_count,
+            'size'    => $total_size
         ];
     }
 
@@ -245,16 +245,16 @@ class CacheTools {
             $stats = $redis_driver->getStats();
     
             return [
-                'enabled' => true,
-                'memory_used' => $stats['memory_used'] ?? 0,
+                'enabled'           => true,
+                'memory_used'       => $stats['memory_used'] ?? 0,
                 'connected_clients' => $stats['connected_clients'] ?? 0,
-                'hits' => $stats['hits'] ?? 0,
-                'misses' => $stats['misses'] ?? 0
+                'hits'              => $stats['hits'] ?? 0,
+                'misses'            => $stats['misses'] ?? 0
             ];
         } catch (\Exception $e) {
             return [
                 'enabled' => true,
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage()
             ];
         }
     }
@@ -272,22 +272,20 @@ class CacheTools {
             $varnish_host = $settings['varnish_host'] ?? '127.0.0.1';
             $varnish_port = (int)($settings['varnish_port'] ?? 6081);
 
-            $socket = @fsockopen($varnish_host, $varnish_port, $errno, $errstr, 1);
-            $connected = (bool)$socket;
-            if ($socket) {
-                fclose($socket);
-            }
+            // Use wp_remote_get() instead of fsockopen()/fclose()
+            $response = wp_remote_get("http://{$varnish_host}:{$varnish_port}", ['timeout' => 1]);
+            $connected = !is_wp_error($response);
 
             return [
-                'enabled' => true,
+                'enabled'   => true,
                 'connected' => $connected,
-                'error' => $connected ? null : $errstr
+                'error'     => $connected ? null : 'Connection failed'
             ];
         } catch (\Exception $e) {
             return [
-                'enabled' => true,
+                'enabled'   => true,
                 'connected' => false,
-                'error' => $e->getMessage()
+                'error'     => $e->getMessage()
             ];
         }
     }
@@ -329,7 +327,9 @@ class CacheTools {
             set_transient('wpsc_last_cache_clear', time());
 
         } catch (\Exception $e) {
-            error_log('WPS Cache Error: ' . $e->getMessage());
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('WPS Cache Error: ' . $e->getMessage());
+            }
             $success = false;
         }
 
@@ -359,8 +359,8 @@ class CacheTools {
             // Add popular posts
             $popular_posts = get_posts([
                 'posts_per_page' => 10,
-                'orderby' => 'comment_count',
-                'order' => 'DESC'
+                'orderby'        => 'comment_count',
+                'order'          => 'DESC'
             ]);
 
             foreach ($popular_posts as $post) {
@@ -370,8 +370,8 @@ class CacheTools {
             // Add category archives
             $categories = get_categories([
                 'orderby' => 'count',
-                'order' => 'DESC',
-                'number' => 5
+                'order'   => 'DESC',
+                'number'  => 5
             ]);
 
             foreach ($categories as $category) {
@@ -436,10 +436,10 @@ class CacheTools {
         }
     
         $final_progress = [
-            'total'     => $total,
-            'processed' => $total,
-            'progress'  => 100,
-            'results'   => $results,
+            'total'       => $total,
+            'processed'   => $total,
+            'progress'    => 100,
+            'results'     => $results,
             'is_complete' => true
         ];
     
@@ -462,7 +462,9 @@ class CacheTools {
             }
 
         } catch (\Exception $e) {
-            error_log('WPS Cache Maintenance Error: ' . $e->getMessage());
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('WPS Cache Maintenance Error: ' . $e->getMessage());
+            }
         }
     }
 
@@ -479,7 +481,7 @@ class CacheTools {
         if (is_array($files)) {
             foreach ($files as $file) {
                 if (is_file($file) && (time() - filemtime($file)) >= $lifetime) {
-                    if (@unlink($file)) {
+                    if (wp_delete_file($file)) {
                         $cleaned++;
                     }
                 }
@@ -510,7 +512,9 @@ class CacheTools {
             }
 
         } catch (\Exception $e) {
-            error_log('WPS Cache Redis Optimization Error: ' . $e->getMessage());
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('WPS Cache Redis Optimization Error: ' . $e->getMessage());
+            }
         }
     }
 
@@ -533,7 +537,12 @@ class CacheTools {
                 throw new \Exception(esc_html__('Failed to copy object cache drop-in file.', 'WPS-Cache'));
             }
 
-            @chmod($destination, 0644);
+            if (!function_exists('WP_Filesystem')) {
+                require_once(ABSPATH . 'wp-admin/includes/file.php');
+            }
+            WP_Filesystem();
+            global $wp_filesystem;
+            $wp_filesystem->chmod($destination, 0644);
 
             return [
                 'status'  => 'success',
@@ -562,7 +571,7 @@ class CacheTools {
                 ];
             }
 
-            if (!@unlink($object_cache_file)) {
+            if (!@wp_delete_file($object_cache_file)) {
                 throw new \Exception(esc_html__('Failed to remove object cache drop-in file.', 'WPS-Cache'));
             }
 
