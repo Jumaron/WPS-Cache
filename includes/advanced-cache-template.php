@@ -21,8 +21,8 @@ class WPSAdvancedCache {
     ];
 
     private const CONTENT_TYPES = [
-        'css' => 'text/css; charset=UTF-8',
-        'js'  => 'application/javascript; charset=UTF-8',
+        'css'  => 'text/css; charset=UTF-8',
+        'js'   => 'application/javascript; charset=UTF-8',
         'html' => 'text/html; charset=UTF-8'
     ];
 
@@ -73,7 +73,7 @@ class WPSAdvancedCache {
             isset($_GET['preview']) ||
             !empty($_POST) ||
             is_admin() ||
-            ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' ||
+            (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') ||
             !empty($_GET) || // Query parameters bypass cache
             (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
              strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
@@ -123,14 +123,15 @@ class WPSAdvancedCache {
      * Serves a cached file with appropriate headers
      */
     private function serveCachedFile(string $file, string $content_type): bool {
-        $content = @file_get_contents($file);
-        if ($content === false) {
+        // Instead of loading the file into a variable and echoing it,
+        // we use readfile() to output the file directly.
+        if (!file_exists($file)) {
             return false;
         }
 
         $cache_time = filemtime($file);
-        $etag = '"' . md5($content) . '"';
-        
+        $etag = '"' . md5_file($file) . '"';
+
         // Check if-none-match for browser caching
         if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
             header('HTTP/1.1 304 Not Modified');
@@ -142,10 +143,10 @@ class WPSAdvancedCache {
         header('Cache-Control: public, max-age=' . self::YEAR_IN_SECONDS);
         header('ETag: ' . $etag);
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $cache_time) . ' GMT');
-        
+
         $this->setHeader('HIT');
-        
-        echo $content;
+
+        readfile($file);
         exit;
     }
 
