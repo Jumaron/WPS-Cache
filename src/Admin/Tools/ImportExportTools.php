@@ -137,7 +137,6 @@ class ImportExportTools {
             ];
         }
     }
-    
 
     /**
      * Prepares data for export
