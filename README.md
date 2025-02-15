@@ -1,11 +1,18 @@
-# 🚀 WPS-Cache
+=== WPS-Cache ===
+Contributors: Jumaron
+Tags: caching, performance, WordPress, HTML, Redis, Varnish
+Requires at least: 6.0
+Tested up to: 6.3
+Stable tag: 0.0.3
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 [![WordPress Compatible](https://img.shields.io/badge/WordPress-Compatible-0073aa.svg)](https://wordpress.org)
 [![PHP Version](https://img.shields.io/badge/PHP-8.3%2B-blue.svg)](https://php.net)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv2%20or%20later-blue.svg)](http://www.gnu.org/licenses/gpl-2.0.html)
 [![Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)]()
 
-Supercharge your WordPress site with a powerful multi-layer caching solution. WPS-Cache combines HTML, Redis, and Varnish caching to deliver lightning-fast performance and enhanced scalability.
+Boost your WordPress speed with multi-layer caching: HTML, Redis, and Varnish for fast performance.
 
 > ⚠️ **Experimental Status:** This plugin is under active development. Please test thoroughly in a staging environment before production use.
 
@@ -21,15 +28,15 @@ Supercharge your WordPress site with a powerful multi-layer caching solution. WP
 
 ## 🚀 Quick Start
 
-1. Upload `WPS-Cache` to `/wp-content/plugins/` or directly over the Wordpress Admin Interface (Add Plugin -> Upload Plugin)
-2. Activate via WordPress Plugins menu
-3. Configure in 'WPS Cache' settings
+1. Upload `WPS-Cache` to `/wp-content/plugins/` or directly via the WordPress Admin Interface (Add Plugin → Upload Plugin)
+2. Activate via the WordPress Plugins menu
+3. Configure in the "WPS Cache" settings
 
 ## 💡 Usage
 
 ### Cache Management
 
-- Access 'WPS Cache' in admin panel
+- Access "WPS Cache" in the admin panel
 - Toggle individual cache types
 - Clear specific or all caches
 - Import/export settings
@@ -73,13 +80,14 @@ Detailed documentation available at (Coming Soon) [docs.wps-cache.com](https://d
 
 Built with love and support from:
 
-- [WordPress](https://wordpress.org/) - The world's favorite CMS
-- [Redis](https://redis.io/) - Lightning-fast data store
-- [Varnish](https://varnish-cache.org/) - Web acceleration magic
+- [WordPress](https://wordpress.org/) – The world's favorite CMS
+- [Redis](https://redis.io/) – Lightning-fast data store
+- [Varnish](https://varnish-cache.org/) – Web acceleration magic
 
 ## 📝 License
 
-MIT © Jumaron
+GPLv2 or later © Jumaron  
+For more details, please see the [GNU General Public License](http://www.gnu.org/licenses/gpl-2.0.html).
 
 ---
 

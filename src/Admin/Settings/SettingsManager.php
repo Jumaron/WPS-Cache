@@ -70,8 +70,8 @@ class SettingsManager {
             'wpsc_settings',
             [
                 'type'              => 'array',
-                // Changed to a static callback so that no dynamic argument is passed.
-                'sanitize_callback' => [SettingsValidator::class, 'sanitizeSettings'],
+                // Changed to a static string callback so that no dynamic argument is passed.
+                'sanitize_callback' => 'WPSCache\Admin\Settings\SettingsValidator::sanitizeSettings',
                 'default'           => self::DEFAULT_SETTINGS,
             ]
         );
