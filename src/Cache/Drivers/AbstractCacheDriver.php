@@ -17,7 +17,8 @@ abstract class AbstractCacheDriver implements CacheDriverInterface {
     }
     
     /**
-     * Log cache-related errors consistently
+     * Log cache-related errors consistently.
+     * Debug logging is performed only when WP_DEBUG is enabled.
      */
     protected function logError(string $message, ?\Throwable $e = null): void {
         $error = sprintf(
@@ -26,27 +27,30 @@ abstract class AbstractCacheDriver implements CacheDriverInterface {
             $message,
             $e ? ' - ' . $e->getMessage() : ''
         );
-        
-        error_log($error);
-        
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            // Escape the error message before outputting it as a warning.
+            error_log($error);
             trigger_error(esc_html($error), E_USER_WARNING);
         }
     }
     
     /**
-     * Ensure cache directory exists and is writable
+     * Ensure cache directory exists and is writable using WP_Filesystem.
      */
     protected function ensureCacheDirectory(string $dir): bool {
-        if (!file_exists($dir)) {
-            if (!@mkdir($dir, 0755, true)) {
+        if (!function_exists('WP_Filesystem')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+        
+        if (!$wp_filesystem->is_dir($dir)) {
+            if (!$wp_filesystem->mkdir($dir, 0755)) {
                 $this->logError("Failed to create cache directory: $dir");
                 return false;
             }
         }
         
-        if (!is_writable($dir)) {
+        if (!$wp_filesystem->is_writable($dir)) {
             $this->logError("Cache directory is not writable: $dir");
             return false;
         }
