@@ -123,8 +123,8 @@ class CacheTools {
                         <?php if ($stats['html']['enabled']): ?>
                             <span class="wpsc-status-ok">
                                 <?php
-                                /* translators: %1$s: number of files, %2$s: total cache size */
                                 echo esc_html(sprintf(
+                                    /* translators: %1$s: number of files, %2$s: total cache size */
                                     __('Active - %1$s files, %2$s total size', 'WPS-Cache'),
                                     number_format_i18n($stats['html']['files']),
                                     size_format($stats['html']['size'])
@@ -142,8 +142,8 @@ class CacheTools {
                         <?php if ($stats['redis']['enabled']): ?>
                             <span class="wpsc-status-ok">
                                 <?php
-                                /* translators: %1$s: amount of memory used */
                                 echo esc_html(sprintf(
+                                    /* translators: %1$s: amount of memory used */
                                     __('Connected - %1$s memory used', 'WPS-Cache'),
                                     size_format($stats['redis']['memory_used'])
                                 ));

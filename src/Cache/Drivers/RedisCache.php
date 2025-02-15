@@ -76,9 +76,10 @@ final class RedisCache extends AbstractCacheDriver {
         $connect_method = $this->persistent ? 'pconnect' : 'connect';
         $connected = @$this->redis->$connect_method($this->host, $this->port, $this->timeout);
 
+        /* translators: %1$s: Redis host, %2$d: Redis port */
         if (!$connected) {
             throw new RedisException(
-                esc_html(sprintf(__("Failed to connect to Redis server at %s:%d", 'WPS-Cache'), $this->host, $this->port))
+                esc_html(sprintf(__("Failed to connect to Redis server at %1\$s:%2\$d", 'WPS-Cache'), $this->host, $this->port))
             );
         }
 
@@ -86,9 +87,10 @@ final class RedisCache extends AbstractCacheDriver {
             throw new RedisException(esc_html__('Failed to authenticate with Redis server', 'WPS-Cache'));
         }
 
+        /* translators: %1$d: Redis database number */
         if (!$this->redis->select($this->db)) {
             throw new RedisException(
-                esc_html(sprintf(__("Failed to select Redis database %d", 'WPS-Cache'), $this->db))
+                esc_html(sprintf(__("Failed to select Redis database %1\$d", 'WPS-Cache'), $this->db))
             );
         }
     }
