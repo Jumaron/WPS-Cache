@@ -12,32 +12,32 @@ use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, Mini
  */
 final class Plugin {
     private const DEFAULT_SETTINGS = [
-        'html_cache' => true,
-        'redis_cache' => false,
-        'varnish_cache' => false,
-        'css_minify' => false,
-        'js_minify' => false,
+        'html_cache'     => true,
+        'redis_cache'    => false,
+        'varnish_cache'  => false,
+        'css_minify'     => false,
+        'js_minify'      => false,
         'cache_lifetime' => 3600,
-        'excluded_urls' => [],
-        'excluded_css' => [],
-        'excluded_js' => [],
-        'redis_host' => '127.0.0.1',
-        'redis_port' => 6379,
-        'redis_db' => 0,
+        'excluded_urls'  => [],
+        'excluded_css'   => [],
+        'excluded_js'    => [],
+        'redis_host'     => '127.0.0.1',
+        'redis_port'     => 6379,
+        'redis_db'       => 0,
         'redis_password' => '',
-        'redis_prefix' => 'wpsc:',
-        'varnish_host' => '127.0.0.1',
-        'varnish_port' => 6081,
+        'redis_prefix'   => 'wpsc:',
+        'varnish_host'   => '127.0.0.1',
+        'varnish_port'   => 6081,
     ];
 
     private const REQUIRED_DIRECTORIES = [
-        'cache' => 'cache/wps-cache/',
-        'html' => 'cache/wps-cache/html',
+        'cache'    => 'cache/wps-cache/',
+        'html'     => 'cache/wps-cache/html',
         'includes' => 'includes'
     ];
 
-    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
-    private const CACHE_CLEANUP_HOOK = 'wpsc_cache_cleanup';
+    private const HTACCESS_CONTENT    = "Order Deny,Allow\nDeny from all";
+    private const CACHE_CLEANUP_HOOK  = 'wpsc_cache_cleanup';
 
     private static ?self $instance = null;
     private CacheManager $cache_manager;
@@ -74,11 +74,11 @@ final class Plugin {
     private function setupConstants(): void {
         $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
         $constants = [
-            'WPSC_VERSION' => '0.0.1',
-            'WPSC_PLUGIN_FILE' => $plugin_file,
-            'WPSC_PLUGIN_DIR' => plugin_dir_path($plugin_file),
-            'WPSC_PLUGIN_URL' => plugin_dir_url($plugin_file),
-            'WPSC_CACHE_DIR' => WP_CONTENT_DIR . '/cache/wps-cache/',
+            'WPSC_VERSION'      => '0.0.2',
+            'WPSC_PLUGIN_FILE'  => $plugin_file,
+            'WPSC_PLUGIN_DIR'   => plugin_dir_path($plugin_file),
+            'WPSC_PLUGIN_URL'   => plugin_dir_url($plugin_file),
+            'WPSC_CACHE_DIR'    => WP_CONTENT_DIR . '/cache/wps-cache/',
         ];
 
         foreach ($constants as $name => $value) {
@@ -185,13 +185,18 @@ final class Plugin {
     }
 
     /**
-     * Creates required directories
+     * Creates required directories using the WP_Filesystem API
      */
     private function createRequiredDirectories(): void {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        global $wp_filesystem;
+        if (empty($wp_filesystem)) {
+            WP_Filesystem();
+        }
         foreach (self::REQUIRED_DIRECTORIES as $dir) {
             $path = WPSC_PLUGIN_DIR . $dir;
             if (!file_exists($path)) {
-                @mkdir($path, 0755, true);
+                $wp_filesystem->mkdir($path, 0755, true);
             }
         }
     }
@@ -371,13 +376,13 @@ final class Plugin {
     }
 
     /**
-     * Removes a drop-in file if it matches our signature
+     * Removes a drop-in file if it matches our signature using wp_delete_file()
      */
     private function removeDropIn(string $file, string $signature): void {
         if (file_exists($file)) {
             $contents = file_get_contents($file);
             if ($contents && strpos($contents, $signature) !== false) {
-                @unlink($file);
+                wp_delete_file($file);
             }
         }
     }
