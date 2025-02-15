@@ -151,24 +151,24 @@ final class VarnishCache extends AbstractCacheDriver {
         $request_url = $custom_url ?? sprintf('http://%s:%d', $this->host, $this->port);
         
         $response = wp_remote_request($request_url, [
-            'method' => 'PURGE',
+            'method'  => 'PURGE',
             'headers' => $headers,
             'timeout' => self::DEFAULT_TIMEOUT,
             'sslverify' => false
         ]);
 
         if (is_wp_error($response)) {
-            throw new \Exception($response->get_error_message());
+            throw new \Exception( esc_html($response->get_error_message()) );
         }
 
         $http_code = wp_remote_retrieve_response_code($response);
         if ($http_code !== 200) {
             throw new \Exception(
-                sprintf(
+                esc_html(sprintf(
                     "Varnish purge failed with code %d for URL: %s",
                     $http_code,
                     $request_url
-                )
+                ))
             );
         }
     }

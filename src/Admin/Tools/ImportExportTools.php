@@ -20,40 +20,40 @@ class ImportExportTools {
         <div class="wpsc-import-export">
             <!-- Export Section -->
             <div class="wpsc-tool-box">
-                <h4><?php _e('Export Settings', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Export Settings', 'WPS-Cache'); ?></h4>
                 <p class="description">
-                    <?php _e('Export your current cache configuration settings.', 'WPS-Cache'); ?>
+                    <?php esc_html_e('Export your current cache configuration settings.', 'WPS-Cache'); ?>
                 </p>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <?php wp_nonce_field('wpsc_export_settings'); ?>
                     <input type="hidden" name="action" value="wpsc_export_settings">
                     <button type="submit" class="button button-secondary">
-                        <?php _e('Export Settings', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Export Settings', 'WPS-Cache'); ?>
                     </button>
                 </form>
             </div>
 
             <!-- Import Section -->
             <div class="wpsc-tool-box">
-                <h4><?php _e('Import Settings', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Import Settings', 'WPS-Cache'); ?></h4>
                 <p class="description">
-                    <?php _e('Import cache configuration settings from a file.', 'WPS-Cache'); ?>
+                    <?php esc_html_e('Import cache configuration settings from a file.', 'WPS-Cache'); ?>
                 </p>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" 
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" 
                       enctype="multipart/form-data" class="wpsc-import-form">
                     <?php wp_nonce_field('wpsc_import_settings'); ?>
                     <input type="hidden" name="action" value="wpsc_import_settings">
                     <input type="file" name="settings_file" accept=".json"
                            class="wpsc-file-input">
                     <button type="submit" class="button button-secondary">
-                        <?php _e('Import Settings', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Import Settings', 'WPS-Cache'); ?>
                     </button>
                 </form>
             </div>
 
             <!-- Backup Management -->
             <div class="wpsc-tool-box">
-                <h4><?php _e('Backup Management', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Backup Management', 'WPS-Cache'); ?></h4>
                 <?php $this->renderBackupManagement(); ?>
             </div>
         </div>
@@ -67,7 +67,7 @@ class ImportExportTools {
         try {
             $settings = get_option('wpsc_settings');
             if (!$settings) {
-                throw new \Exception(__('No settings found to export.', 'WPS-Cache'));
+                throw new \Exception(esc_html__('No settings found to export.', 'WPS-Cache'));
             }
 
             $export_data = $this->prepareExportData($settings);
@@ -78,7 +78,7 @@ class ImportExportTools {
             exit;
 
         } catch (\Exception $e) {
-            wp_die($e->getMessage());
+            wp_die(esc_html($e->getMessage()));
         }
     }
 
@@ -114,14 +114,14 @@ class ImportExportTools {
             update_option('wpsc_settings', $settings);
 
             return [
-                'status' => 'success',
-                'message' => __('Settings imported successfully.', 'WPS-Cache')
+                'status'  => 'success',
+                'message' => esc_html__('Settings imported successfully.', 'WPS-Cache')
             ];
 
         } catch (\Exception $e) {
             return [
-                'status' => 'error',
-                'error' => 'invalid',
+                'status'  => 'error',
+                'error'   => 'invalid',
                 'message' => $e->getMessage()
             ];
         }
@@ -132,12 +132,12 @@ class ImportExportTools {
      */
     private function prepareExportData(array $settings): array {
         return [
-            'settings' => $settings,
-            'version' => WPSC_VERSION,
-            'timestamp' => current_time('timestamp'),
-            'site_url' => get_site_url(),
-            'wp_version' => get_bloginfo('version'),
-            'is_multisite' => is_multisite(),
+            'settings'       => $settings,
+            'version'        => WPSC_VERSION,
+            'timestamp'      => current_time('timestamp'),
+            'site_url'       => get_site_url(),
+            'wp_version'     => get_bloginfo('version'),
+            'is_multisite'   => is_multisite(),
             'active_plugins' => get_option('active_plugins'),
         ];
     }
@@ -168,7 +168,7 @@ class ImportExportTools {
     private function validateUploadedFile(array $file): void {
         // Check file size (5MB max)
         if ($file['size'] > 5 * 1024 * 1024) {
-            throw new \Exception(__('File size exceeds maximum limit of 5MB.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('File size exceeds maximum limit of 5MB.', 'WPS-Cache'));
         }
 
         // Check MIME type
@@ -176,7 +176,7 @@ class ImportExportTools {
         $mime_type = $finfo->file($file['tmp_name']);
         
         if (!in_array($mime_type, self::ALLOWED_MIME_TYPES)) {
-            throw new \Exception(__('Invalid file type. Only JSON files are allowed.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('Invalid file type. Only JSON files are allowed.', 'WPS-Cache'));
         }
     }
 
@@ -186,12 +186,12 @@ class ImportExportTools {
     private function readImportFile(string $file): array {
         $content = file_get_contents($file);
         if ($content === false) {
-            throw new \Exception(__('Failed to read import file.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('Failed to read import file.', 'WPS-Cache'));
         }
 
         $data = json_decode($content, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception(__('Invalid JSON format in import file.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('Invalid JSON format in import file.', 'WPS-Cache'));
         }
 
         return $data;
@@ -202,7 +202,7 @@ class ImportExportTools {
      */
     private function validateImportData(array $data): array {
         if (!isset($data['settings'], $data['version'])) {
-            throw new \Exception(__('Invalid settings file format.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('Invalid settings file format.', 'WPS-Cache'));
         }
 
         // Validate settings structure
@@ -211,7 +211,7 @@ class ImportExportTools {
             if (!isset($data['settings'][$key])) {
                 /* translators: %s: Name of the missing required setting */
                 throw new \Exception(sprintf(
-                    __('Missing required setting: %s', 'WPS-Cache'),
+                    esc_html__('Missing required setting: %s', 'WPS-Cache'),
                     $key
                 ));
             }
@@ -219,7 +219,7 @@ class ImportExportTools {
 
         // Version compatibility check
         if (version_compare($data['version'], WPSC_VERSION, '>')) {
-            throw new \Exception(__('Settings file is from a newer version of the plugin.', 'WPS-Cache'));
+            throw new \Exception(esc_html__('Settings file is from a newer version of the plugin.', 'WPS-Cache'));
         }
 
         return $data['settings'];
@@ -235,8 +235,8 @@ class ImportExportTools {
         // Add new backup
         $backups[] = [
             'timestamp' => current_time('timestamp'),
-            'settings' => $current_settings,
-            'version' => WPSC_VERSION
+            'settings'  => $current_settings,
+            'version'   => WPSC_VERSION
         ];
 
         // Keep only last 5 backups
@@ -254,7 +254,7 @@ class ImportExportTools {
         if (empty($backups)) {
             ?>
             <p class="description">
-                <?php _e('No backups available.', 'WPS-Cache'); ?>
+                <?php esc_html_e('No backups available.', 'WPS-Cache'); ?>
             </p>
             <?php
             return;
@@ -264,9 +264,9 @@ class ImportExportTools {
         <table class="widefat striped">
             <thead>
                 <tr>
-                    <th><?php _e('Date', 'WPS-Cache'); ?></th>
-                    <th><?php _e('Version', 'WPS-Cache'); ?></th>
-                    <th><?php _e('Actions', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Date', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Version', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Actions', 'WPS-Cache'); ?></th>
                 </tr>
             </thead>
             <tbody>
@@ -284,11 +284,11 @@ class ImportExportTools {
                         <td>
                             <button type="button" class="button button-small wpsc-restore-backup"
                                     data-backup="<?php echo esc_attr($index); ?>">
-                                <?php _e('Restore', 'WPS-Cache'); ?>
+                                <?php esc_html_e('Restore', 'WPS-Cache'); ?>
                             </button>
                             <button type="button" class="button button-small wpsc-download-backup"
                                     data-backup="<?php echo esc_attr($index); ?>">
-                                <?php _e('Download', 'WPS-Cache'); ?>
+                                <?php esc_html_e('Download', 'WPS-Cache'); ?>
                             </button>
                         </td>
                     </tr>
@@ -303,14 +303,14 @@ class ImportExportTools {
      */
     private function getFileUploadError(int $error_code): string {
         return match($error_code) {
-            UPLOAD_ERR_INI_SIZE => __('The uploaded file exceeds the upload_max_filesize directive in php.ini.', 'WPS-Cache'),
-            UPLOAD_ERR_FORM_SIZE => __('The uploaded file exceeds the MAX_FILE_SIZE directive in the HTML form.', 'WPS-Cache'),
-            UPLOAD_ERR_PARTIAL => __('The uploaded file was only partially uploaded.', 'WPS-Cache'),
-            UPLOAD_ERR_NO_FILE => __('No file was uploaded.', 'WPS-Cache'),
-            UPLOAD_ERR_NO_TMP_DIR => __('Missing a temporary folder.', 'WPS-Cache'),
-            UPLOAD_ERR_CANT_WRITE => __('Failed to write file to disk.', 'WPS-Cache'),
-            UPLOAD_ERR_EXTENSION => __('A PHP extension stopped the file upload.', 'WPS-Cache'),
-            default => __('Unknown upload error.', 'WPS-Cache')
+            UPLOAD_ERR_INI_SIZE   => esc_html__('The uploaded file exceeds the upload_max_filesize directive in php.ini.', 'WPS-Cache'),
+            UPLOAD_ERR_FORM_SIZE  => esc_html__('The uploaded file exceeds the MAX_FILE_SIZE directive in the HTML form.', 'WPS-Cache'),
+            UPLOAD_ERR_PARTIAL    => esc_html__('The uploaded file was only partially uploaded.', 'WPS-Cache'),
+            UPLOAD_ERR_NO_FILE    => esc_html__('No file was uploaded.', 'WPS-Cache'),
+            UPLOAD_ERR_NO_TMP_DIR => esc_html__('Missing a temporary folder.', 'WPS-Cache'),
+            UPLOAD_ERR_CANT_WRITE => esc_html__('Failed to write file to disk.', 'WPS-Cache'),
+            UPLOAD_ERR_EXTENSION  => esc_html__('A PHP extension stopped the file upload.', 'WPS-Cache'),
+            default               => esc_html__('Unknown upload error.', 'WPS-Cache')
         };
     }
 }

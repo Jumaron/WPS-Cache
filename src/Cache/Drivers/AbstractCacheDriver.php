@@ -30,7 +30,8 @@ abstract class AbstractCacheDriver implements CacheDriverInterface {
         error_log($error);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            trigger_error($error, E_USER_WARNING);
+            // Escape the error message before outputting it as a warning.
+            trigger_error(esc_html($error), E_USER_WARNING);
         }
     }
     
