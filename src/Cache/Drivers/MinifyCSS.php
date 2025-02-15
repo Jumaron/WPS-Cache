@@ -9,20 +9,20 @@ namespace WPSCache\Cache\Drivers;
 final class MinifyCSS extends AbstractCacheDriver {
     private const PRESERVE_PATTERNS = [
         'data_uris' => '/(url\(\s*[\'"]?)(data:[^;]+;base64,[^\'"]+)([\'"]?\s*\))/i',
-        'calc' => '/calc\(([^)]+)\)/',
-        'comments' => '/\/\*![\s\S]*?\*\//',  // Important comments
-        'strings' => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/'
+        'calc'      => '/calc\(([^)]+)\)/',
+        'comments'  => '/\/\*![\s\S]*?\*\//',  // Important comments
+        'strings'   => '/([\'"])((?:\\\\.|[^\\\\])*?)\1/'
     ];
 
     private const MINIFY_PATTERNS = [
-        'comments' => '/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//',  // Remove non-important comments
+        'comments'   => '/\/\*(?!!)[^*]*\*+([^\/][^*]*\*+)*\//',  // Remove non-important comments
         'whitespace' => [
-            '/\s+/' => ' ',                    // Collapse multiple whitespace
-            '/\s*([:;{},>~+])\s*/' => '$1',    // Remove space around operators
-            '/;}/' => '}',                     // Remove last semicolon
+            '/\s+/'               => ' ',                    // Collapse multiple whitespace
+            '/\s*([:;{},>~+])\s*/' => '$1',                   // Remove space around operators
+            '/;}/'                => '}',                    // Remove last semicolon
         ],
-        'numbers' => [
-            '/(^|[^0-9])0\.([0-9]+)/' => '$1.$2',  // Leading zero in decimal
+        'numbers'    => [
+            '/(^|[^0-9])0\.([0-9]+)/'           => '$1.$2',  // Leading zero in decimal
             '/([^0-9])0(%|em|ex|px|in|cm|mm|pt|pc|rem|vw|vh)/' => '${1}0',  // Zero units
         ]
     ];
@@ -45,7 +45,12 @@ final class MinifyCSS extends AbstractCacheDriver {
     }
 
     public function isConnected(): bool {
-        return is_writable($this->cache_dir);
+        if ( ! function_exists('WP_Filesystem') ) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+        return $wp_filesystem->is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed {
@@ -66,7 +71,7 @@ final class MinifyCSS extends AbstractCacheDriver {
 
     public function delete(string $key): void {
         $file = $this->getCacheFile($key);
-        if (file_exists($file) && !@unlink($file)) {
+        if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete CSS cache file: $file");
         }
     }
@@ -78,7 +83,7 @@ final class MinifyCSS extends AbstractCacheDriver {
         }
 
         foreach ($files as $file) {
-            if (is_file($file) && !@unlink($file)) {
+            if (is_file($file) && !wp_delete_file($file)) {
                 $this->logError("Failed to delete CSS file during clear: $file");
             }
         }
@@ -211,7 +216,8 @@ final class MinifyCSS extends AbstractCacheDriver {
 
     private function preserveContent(string $css): string {
         // Preserve data URIs
-        $css = preg_replace_callback(self::PRESERVE_PATTERNS['data_uris'], 
+        $css = preg_replace_callback(
+            self::PRESERVE_PATTERNS['data_uris'], 
             function($matches) {
                 $key = '___URI_' . count($this->preserved) . '___';
                 $this->preserved[$key] = $matches[0];
@@ -221,7 +227,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         );
 
         // Preserve calc() operations
-        $css = preg_replace_callback(self::PRESERVE_PATTERNS['calc'],
+        $css = preg_replace_callback(
+            self::PRESERVE_PATTERNS['calc'],
             function($matches) {
                 $key = '___CALC_' . count($this->preserved) . '___';
                 $calc = 'calc(' . preg_replace('/\s*([+\-*\/])\s*/', ' $1 ', $matches[1]) . ')';
@@ -233,7 +240,8 @@ final class MinifyCSS extends AbstractCacheDriver {
 
         // Preserve important comments and strings
         foreach (['comments', 'strings'] as $type) {
-            $css = preg_replace_callback(self::PRESERVE_PATTERNS[$type],
+            $css = preg_replace_callback(
+                self::PRESERVE_PATTERNS[$type],
                 function($matches) use ($type) {
                     $key = '___' . strtoupper($type) . '_' . count($this->preserved) . '___';
                     $this->preserved[$key] = $matches[0];

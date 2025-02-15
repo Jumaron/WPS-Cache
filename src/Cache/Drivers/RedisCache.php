@@ -76,16 +76,22 @@ final class RedisCache extends AbstractCacheDriver {
         $connect_method = $this->persistent ? 'pconnect' : 'connect';
         $connected = @$this->redis->$connect_method($this->host, $this->port, $this->timeout);
 
+        /* translators: %1$s: Redis host, %2$d: Redis port */
         if (!$connected) {
-            throw new RedisException("Failed to connect to Redis server at {$this->host}:{$this->port}");
+            throw new RedisException(
+                esc_html(sprintf(__("Failed to connect to Redis server at %1\$s:%2\$d", 'WPS-Cache'), $this->host, $this->port))
+            );
         }
 
         if ($this->password && !$this->redis->auth($this->password)) {
-            throw new RedisException("Failed to authenticate with Redis server");
+            throw new RedisException(esc_html__('Failed to authenticate with Redis server', 'WPS-Cache'));
         }
 
+        /* translators: %1$d: Redis database number */
         if (!$this->redis->select($this->db)) {
-            throw new RedisException("Failed to select Redis database {$this->db}");
+            throw new RedisException(
+                esc_html(sprintf(__("Failed to select Redis database %1\$d", 'WPS-Cache'), $this->db))
+            );
         }
     }
 
@@ -257,12 +263,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
 
         try {
-            // Run garbage collection
             $this->redis->bgrewriteaof();
-            
-            // Delete expired keys
             $this->deleteExpired();
-
             return true;
         } catch (RedisException $e) {
             $this->logError("Redis optimization failed", $e);
@@ -279,15 +281,12 @@ final class RedisCache extends AbstractCacheDriver {
         }
     
         try {
-            // Use SCAN to iterate through keys
             $iterator = null;
             $pattern = $this->prefix . '*';
             
             while ($keys = $this->redis->scan($iterator, $pattern, 100)) {
                 foreach ($keys as $key) {
-                    // Check TTL for each key
                     $ttl = $this->redis->ttl($key);
-                    // If TTL is -2, the key has expired
                     if ($ttl === -2) {
                         $this->redis->del($key);
                         $this->metrics['deletes']++;
@@ -300,7 +299,6 @@ final class RedisCache extends AbstractCacheDriver {
     }
 
     private function buildStatsArray(array $info): array {
-        // Calculate hit ratio including Redis stats
         $total_hits = $this->metrics['hits'] + ($info['keyspace_hits'] ?? 0);
         $total_misses = $this->metrics['misses'] + ($info['keyspace_misses'] ?? 0);
         $total_ops = $total_hits + $total_misses;

@@ -26,10 +26,10 @@ class MetricsCollector {
         try {
             $metrics = [
                 'timestamp' => current_time('timestamp'),
-                'html' => $this->getHtmlCacheStats(),
-                'redis' => $this->getRedisMetrics(),
-                'varnish' => $this->getVarnishStats(),
-                'system' => $this->getSystemMetrics()
+                'html'      => $this->getHtmlCacheStats(),
+                'redis'     => $this->getRedisMetrics(),
+                'varnish'   => $this->getVarnishStats(),
+                'system'    => $this->getSystemMetrics()
             ];
 
             // Store current metrics
@@ -42,7 +42,7 @@ class MetricsCollector {
             $this->cleanupHistoricalMetrics();
 
         } catch (\Exception $e) {
-            error_log('WPS Cache Metrics Collection Error: ' . $e->getMessage());
+            // Removed error_log() call for production.
         }
     }
 
@@ -107,13 +107,13 @@ class MetricsCollector {
         $hit_ratio = $total_requests > 0 ? ($hits / $total_requests) * 100 : 0;
 
         return [
-            'total_files' => $file_count,
+            'total_files'   => $file_count,
             'expired_files' => $expired_count,
-            'total_size' => $total_size,
-            'hits' => $hits,
-            'misses' => $misses,
-            'hit_ratio' => round($hit_ratio, 2),
-            'cache_dir' => $cache_dir,
+            'total_size'    => $total_size,
+            'hits'          => $hits,
+            'misses'        => $misses,
+            'hit_ratio'     => round($hit_ratio, 2),
+            'cache_dir'     => $cache_dir,
         ];
     }
 
@@ -139,7 +139,7 @@ class MetricsCollector {
 
             return $stats;
         } catch (\Exception $e) {
-            error_log('WPS Cache Redis Metrics Error: ' . $e->getMessage());
+            // Removed error_log() call for production.
             return null;
         }
     }
@@ -155,19 +155,19 @@ class MetricsCollector {
         $hit_ratio = $total_ops > 0 ? ($hits / $total_ops) * 100 : 0;
 
         return [
-            'connected' => true,
-            'version' => $info['redis_version'] ?? 'unknown',
-            'uptime' => $info['uptime_in_seconds'] ?? 0,
-            'memory_used' => $info['used_memory'] ?? 0,
-            'memory_peak' => $info['used_memory_peak'] ?? 0,
-            'hit_ratio' => round($hit_ratio, 2),
-            'hits' => $hits,
-            'misses' => $misses,
-            'total_connections' => $info['total_connections_received'] ?? 0,
-            'connected_clients' => $info['connected_clients'] ?? 0,
-            'evicted_keys' => $info['evicted_keys'] ?? 0,
-            'expired_keys' => $info['expired_keys'] ?? 0,
-            'last_save_time' => $info['last_save_time'] ?? 0,
+            'connected'              => true,
+            'version'                => $info['redis_version'] ?? 'unknown',
+            'uptime'                 => $info['uptime_in_seconds'] ?? 0,
+            'memory_used'            => $info['used_memory'] ?? 0,
+            'memory_peak'            => $info['used_memory_peak'] ?? 0,
+            'hit_ratio'              => round($hit_ratio, 2),
+            'hits'                   => $hits,
+            'misses'                 => $misses,
+            'total_connections'      => $info['total_connections_received'] ?? 0,
+            'connected_clients'      => $info['connected_clients'] ?? 0,
+            'evicted_keys'           => $info['evicted_keys'] ?? 0,
+            'expired_keys'           => $info['expired_keys'] ?? 0,
+            'last_save_time'         => $info['last_save_time'] ?? 0,
             'total_commands_processed' => $info['total_commands_processed'] ?? 0
         ];
     }
@@ -185,22 +185,20 @@ class MetricsCollector {
             $varnish_host = $settings['varnish_host'] ?? '127.0.0.1';
             $varnish_port = (int)($settings['varnish_port'] ?? 6081);
 
-            // Check Varnish connection
-            $socket = @fsockopen($varnish_host, $varnish_port, $errno, $errstr, 1);
-            $is_active = (bool)$socket;
-            if ($socket) {
-                fclose($socket);
-            }
+            // Check Varnish connection using wp_remote_get() instead of fsockopen()
+            $url = "http://{$varnish_host}:{$varnish_port}";
+            $response = wp_remote_get($url, ['timeout' => 1]);
+            $is_active = !is_wp_error($response);
 
             // Get Varnish headers from test request
-            $response = wp_remote_get(home_url(), [
+            $test_response = wp_remote_get(home_url(), [
                 'headers' => ['X-WPSC-Cache-Check' => '1'],
                 'timeout' => 5,
             ]);
 
             $varnish_headers = [];
-            if (!is_wp_error($response)) {
-                $headers = wp_remote_retrieve_headers($response);
+            if (!is_wp_error($test_response)) {
+                $headers = wp_remote_retrieve_headers($test_response);
                 foreach ($headers as $key => $value) {
                     if (stripos($key, 'x-varnish') === 0 || stripos($key, 'via') === 0) {
                         $varnish_headers[$key] = $value;
@@ -209,15 +207,15 @@ class MetricsCollector {
             }
 
             return [
-                'connected' => $is_active,
+                'connected'  => $is_active,
                 'is_varnish' => !empty($varnish_headers),
-                'status' => $is_active ? 'Active' : 'Inactive',
-                'host' => $varnish_host,
-                'port' => $varnish_port,
-                'headers' => $varnish_headers,
+                'status'     => $is_active ? 'Active' : 'Inactive',
+                'host'       => $varnish_host,
+                'port'       => $varnish_port,
+                'headers'    => $varnish_headers,
             ];
         } catch (\Exception $e) {
-            error_log('WPS Cache Varnish Error: ' . $e->getMessage());
+            // Removed error_log() call for production.
             return null;
         }
     }
@@ -227,9 +225,9 @@ class MetricsCollector {
      */
     private function getSystemMetrics(): array {
         return [
-            'memory_usage' => memory_get_usage(true),
-            'memory_peak' => memory_get_peak_usage(true),
-            'opcache_enabled' => function_exists('opcache_get_status') && 
+            'memory_usage'  => memory_get_usage(true),
+            'memory_peak'   => memory_get_peak_usage(true),
+            'opcache_enabled' => function_exists('opcache_get_status') &&
                 opcache_get_status() !== false,
             'opcache_stats' => $this->getOpcacheStats(),
         ];
@@ -249,11 +247,11 @@ class MetricsCollector {
         }
 
         return [
-            'hits' => $stats['opcache_statistics']['hits'] ?? 0,
-            'misses' => $stats['opcache_statistics']['misses'] ?? 0,
-            'memory_used' => $stats['memory_usage']['used_memory'] ?? 0,
-            'memory_free' => $stats['memory_usage']['free_memory'] ?? 0,
-            'cached_scripts' => $stats['opcache_statistics']['num_cached_scripts'] ?? 0,
+            'hits'            => $stats['opcache_statistics']['hits'] ?? 0,
+            'misses'          => $stats['opcache_statistics']['misses'] ?? 0,
+            'memory_used'     => $stats['memory_usage']['used_memory'] ?? 0,
+            'memory_free'     => $stats['memory_usage']['free_memory'] ?? 0,
+            'cached_scripts'  => $stats['opcache_statistics']['num_cached_scripts'] ?? 0,
         ];
     }
 
@@ -270,10 +268,10 @@ class MetricsCollector {
         
         // Store essential metrics
         $historical[$timestamp] = [
-            'hit_ratio' => $metrics['redis']['hit_ratio'] ?? 0,
-            'memory_used' => $metrics['redis']['memory_used'] ?? 0,
-            'total_ops' => ($metrics['redis']['hits'] ?? 0) + 
-                ($metrics['redis']['misses'] ?? 0),
+            'hit_ratio'     => $metrics['redis']['hit_ratio'] ?? 0,
+            'memory_used'   => $metrics['redis']['memory_used'] ?? 0,
+            'total_ops'     => ($metrics['redis']['hits'] ?? 0) + 
+                               ($metrics['redis']['misses'] ?? 0),
             'system_memory' => $metrics['system']['memory_usage'] ?? 0,
         ];
 
@@ -304,9 +302,9 @@ class MetricsCollector {
         $now = current_time('timestamp');
         $period = match($interval) {
             'hourly' => HOUR_IN_SECONDS,
-            'daily' => DAY_IN_SECONDS,
+            'daily'  => DAY_IN_SECONDS,
             'weekly' => WEEK_IN_SECONDS,
-            default => DAY_IN_SECONDS
+            default  => DAY_IN_SECONDS
         };
 
         $aggregated = [];

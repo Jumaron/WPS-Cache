@@ -24,22 +24,22 @@ class TabManager {
     private function initializeTabs(): void {
         $this->tabs = [
             'settings' => [
-                'label' => __('Settings', 'wps-cache'),
+                'label'      => __('Settings', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-admin-generic',
-                'order' => 10
+                'icon'       => 'dashicons-admin-generic',
+                'order'      => 10
             ],
             'analytics' => [
-                'label' => __('Analytics', 'wps-cache'),
+                'label'      => __('Analytics', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-chart-bar',
-                'order' => 20
+                'icon'       => 'dashicons-chart-bar',
+                'order'      => 20
             ],
             'tools' => [
-                'label' => __('Tools', 'wps-cache'),
+                'label'      => __('Tools', 'WPS-Cache'),
                 'capability' => 'manage_options',
-                'icon' => 'dashicons-admin-tools',
-                'order' => 30
+                'icon'       => 'dashicons-admin-tools',
+                'order'      => 30
             ]
         ];
     }
@@ -96,8 +96,8 @@ class TabManager {
         }
 
         $url = add_query_arg([
-            'page' => 'wps-cache',
-            'tab' => $tab_id
+            'page'     => 'wps-cache',
+            'tab'      => $tab_id
         ], admin_url('admin.php'));
         ?>
         <a href="<?php echo esc_url($url); ?>" 
@@ -177,10 +177,10 @@ class TabManager {
         }
 
         $this->tabs[$tab_id] = [
-            'label' => $label,
+            'label'      => $label,
             'capability' => $capability,
-            'icon' => $icon,
-            'order' => $order
+            'icon'       => $icon,
+            'order'      => $order
         ];
 
         return true;
@@ -211,7 +211,7 @@ class TabManager {
     public function getTabUrl(string $tab_id, array $args = []): string {
         $default_args = [
             'page' => 'wps-cache',
-            'tab' => $tab_id
+            'tab'  => $tab_id
         ];
 
         return add_query_arg(
@@ -226,8 +226,8 @@ class TabManager {
      * @return string Active tab ID
      */
     public function getCurrentTab(): string {
-        $current_tab = $_GET['tab'] ?? 'settings';
-        
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'settings';
+       
         if (!$this->isTabAccessible($current_tab)) {
             return 'settings';
         }
