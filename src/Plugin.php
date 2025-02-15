@@ -12,32 +12,32 @@ use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, Mini
  */
 final class Plugin {
     private const DEFAULT_SETTINGS = [
-        'html_cache' => true,
-        'redis_cache' => false,
-        'varnish_cache' => false,
-        'css_minify' => false,
-        'js_minify' => false,
+        'html_cache'     => true,
+        'redis_cache'    => false,
+        'varnish_cache'  => false,
+        'css_minify'     => false,
+        'js_minify'      => false,
         'cache_lifetime' => 3600,
-        'excluded_urls' => [],
-        'excluded_css' => [],
-        'excluded_js' => [],
-        'redis_host' => '127.0.0.1',
-        'redis_port' => 6379,
-        'redis_db' => 0,
+        'excluded_urls'  => [],
+        'excluded_css'   => [],
+        'excluded_js'    => [],
+        'redis_host'     => '127.0.0.1',
+        'redis_port'     => 6379,
+        'redis_db'       => 0,
         'redis_password' => '',
-        'redis_prefix' => 'wpsc:',
-        'varnish_host' => '127.0.0.1',
-        'varnish_port' => 6081,
+        'redis_prefix'   => 'wpsc:',
+        'varnish_host'   => '127.0.0.1',
+        'varnish_port'   => 6081,
     ];
 
     private const REQUIRED_DIRECTORIES = [
-        'cache' => 'cache/wps-cache/',
-        'html' => 'cache/wps-cache/html',
+        'cache'    => 'cache/wps-cache/',
+        'html'     => 'cache/wps-cache/html',
         'includes' => 'includes'
     ];
 
-    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
-    private const CACHE_CLEANUP_HOOK = 'wpsc_cache_cleanup';
+    private const HTACCESS_CONTENT    = "Order Deny,Allow\nDeny from all";
+    private const CACHE_CLEANUP_HOOK  = 'wpsc_cache_cleanup';
 
     private static ?self $instance = null;
     private CacheManager $cache_manager;
@@ -74,11 +74,11 @@ final class Plugin {
     private function setupConstants(): void {
         $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
         $constants = [
-            'WPSC_VERSION' => '0.0.1',
-            'WPSC_PLUGIN_FILE' => $plugin_file,
-            'WPSC_PLUGIN_DIR' => plugin_dir_path($plugin_file),
-            'WPSC_PLUGIN_URL' => plugin_dir_url($plugin_file),
-            'WPSC_CACHE_DIR' => WP_CONTENT_DIR . '/cache/wps-cache/',
+            'WPSC_VERSION'      => '0.0.1',
+            'WPSC_PLUGIN_FILE'  => $plugin_file,
+            'WPSC_PLUGIN_DIR'   => plugin_dir_path($plugin_file),
+            'WPSC_PLUGIN_URL'   => plugin_dir_url($plugin_file),
+            'WPSC_CACHE_DIR'    => WP_CONTENT_DIR . '/cache/wps-cache/',
         ];
 
         foreach ($constants as $name => $value) {
@@ -216,9 +216,7 @@ final class Plugin {
      */
     private function enableWPCache(): void {
         if (!$this->setWPCache(true)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
-            }
+            // Debug logging removed.
         }
     }
 
@@ -230,9 +228,7 @@ final class Plugin {
         $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
         
         if (!@copy($template_file, $target_file)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Warning: Failed to create advanced-cache.php');
-            }
+            // Debug logging removed.
         }
     }
 
@@ -276,9 +272,7 @@ final class Plugin {
 
         $config_content = file_get_contents($config_file);
         if ($config_content === false) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Error: Unable to read wp-config.php');
-            }
+            // Debug logging removed.
             return false;
         }
 
@@ -291,9 +285,7 @@ final class Plugin {
      */
     private function isConfigFileAccessible(string $file): bool {
         if (!file_exists($file)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Error: wp-config.php not found');
-            }
+            // Debug logging removed.
             return false;
         }
         return true;
@@ -327,18 +319,14 @@ final class Plugin {
         // Create backup
         $backup_file = $file . '.backup-' . time();
         if (!@copy($file, $backup_file)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Error: Unable to create wp-config.php backup');
-            }
+            // Debug logging removed.
             return false;
         }
 
         // Write updated content
         if (@file_put_contents($file, $content) === false) {
             @copy($backup_file, $file); // Restore backup if write fails
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Error: Unable to update wp-config.php');
-            }
+            // Debug logging removed.
             return false;
         }
 
@@ -350,9 +338,7 @@ final class Plugin {
      */
     private function disableWPCache(): void {
         if (!$this->setWPCache(false)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
-            }
+            // Debug logging removed.
         }
     }
 

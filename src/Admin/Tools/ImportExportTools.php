@@ -94,9 +94,10 @@ class ImportExportTools {
                 throw new \Exception('No file uploaded');
             }
 
-            // Unsplash the file input
+            // Unsplash the file input and sanitize file name
             $file = wp_unslash($_FILES['settings_file']);
-            
+            $file['name'] = sanitize_file_name($file['name']);
+
             // Validate file upload
             if ($file['error'] !== UPLOAD_ERR_OK) {
                 throw new \Exception($this->getFileUploadError($file['error']));

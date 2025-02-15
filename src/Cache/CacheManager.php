@@ -7,7 +7,7 @@ use WPSCache\Cache\Drivers\CacheDriverInterface;
 use Throwable;
 
 /**
- * cache management class handling multiple cache drivers
+ * Cache management class handling multiple cache drivers
  */
 final class CacheManager {
     private const CACHE_CLEANUP_HOOKS = [
@@ -265,11 +265,9 @@ final class CacheManager {
     }
 
     /**
-     * Logs an error message (only in debug mode)
+     * Logs an error message (disabled in production)
      */
     private function logError(string $message): void {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('WPS Cache Error: ' . $message);
-        }
+        // Debug logging removed to prevent error_log() usage in production.
     }
 }
