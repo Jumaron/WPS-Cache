@@ -89,40 +89,46 @@ class ImportExportTools {
         try {
             // Verify nonce for security
             check_admin_referer('wpsc_import_settings');
-
+    
             if (!isset($_FILES['settings_file'])) {
                 throw new \Exception('No file uploaded');
             }
-
-            // Unsplash the file input and sanitize file name
-            $file = wp_unslash($_FILES['settings_file']);
-            $file['name'] = sanitize_file_name($file['name']);
-
+    
+            // Unsplash the file input and sanitize each element
+            $raw_file = wp_unslash($_FILES['settings_file']);
+            $file = [
+                'name'     => sanitize_file_name($raw_file['name']),
+                'type'     => sanitize_text_field($raw_file['type']),
+                'tmp_name' => sanitize_text_field($raw_file['tmp_name']),
+                'error'    => absint($raw_file['error']),
+                'size'     => absint($raw_file['size']),
+            ];
+    
             // Validate file upload
             if ($file['error'] !== UPLOAD_ERR_OK) {
                 throw new \Exception($this->getFileUploadError($file['error']));
             }
-
+    
             // Validate file type
             $this->validateUploadedFile($file);
-
+    
             // Read and validate file contents
             $import_data = $this->readImportFile($file['tmp_name']);
             
             // Validate and sanitize settings
             $settings = $this->validateImportData($import_data);
-
+    
             // Create backup before import
             $this->createSettingsBackup();
-
+    
             // Update settings
             update_option('wpsc_settings', $settings);
-
+    
             return [
                 'status'  => 'success',
                 'message' => esc_html__('Settings imported successfully.', 'WPS-Cache')
             ];
-
+    
         } catch (\Exception $e) {
             return [
                 'status'  => 'error',
@@ -131,6 +137,7 @@ class ImportExportTools {
             ];
         }
     }
+    
 
     /**
      * Prepares data for export
