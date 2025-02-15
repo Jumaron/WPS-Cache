@@ -238,7 +238,7 @@ final class HTMLCache extends AbstractCacheDriver {
     }
 
     private function getCacheFile(string $key): string {
-        return $this->cache_dir . $this->generateCacheKey($key) . '.html';
+        return $this->cache_dir . $key . '.html';
     }
 
     private function isPageCached(): bool {
