@@ -29,7 +29,12 @@ final class HTMLCache extends AbstractCacheDriver {
     }
 
     public function isConnected(): bool {
-        return is_writable($this->cache_dir);
+        if ( ! function_exists('WP_Filesystem') ) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+        return $wp_filesystem->is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed {
@@ -41,7 +46,7 @@ final class HTMLCache extends AbstractCacheDriver {
         // Check expiration before reading file
         $lifetime = $this->settings['cache_lifetime'] ?? 3600;
         if ((time() - filemtime($file)) > $lifetime) {
-            @unlink($file);
+            wp_delete_file($file);
             return null;
         }
 
@@ -62,7 +67,7 @@ final class HTMLCache extends AbstractCacheDriver {
 
     public function delete(string $key): void {
         $file = $this->getCacheFile($key);
-        if (file_exists($file) && !@unlink($file)) {
+        if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete cache file: $file");
         }
     }
@@ -74,7 +79,7 @@ final class HTMLCache extends AbstractCacheDriver {
         }
         
         foreach ($files as $file) {
-            if (is_file($file) && !@unlink($file)) {
+            if (is_file($file) && !wp_delete_file($file)) {
                 $this->logError("Failed to delete cache file during clear: $file");
             }
         }
@@ -105,8 +110,11 @@ final class HTMLCache extends AbstractCacheDriver {
             // Add cache metadata
             $minified .= $this->getCacheComment($content, $minified);
             
-            // Cache the processed content
-            $key = $this->generateCacheKey($_SERVER['REQUEST_URI']);
+            // Sanitize the REQUEST_URI before generating the cache key
+            $request_uri = isset($_SERVER['REQUEST_URI'])
+                ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
+                : '';
+            $key = $this->generateCacheKey($request_uri);
             $this->set($key, $minified);
             
             return $minified;
@@ -190,24 +198,34 @@ final class HTMLCache extends AbstractCacheDriver {
         
         return sprintf(
             "\n<!-- Page cached by WPS-Cache on %s. Size saved %.2f%%. From %d bytes to %d bytes -->",
-            date('Y-m-d H:i:s'),
+            gmdate('Y-m-d H:i:s'),
             round($savings, 2),
             $raw_size,
             $compressed_size
         );
     }
 
+    /**
+     * Determines if the current page should be cached.
+     *
+     * To address the warning about processing form data without nonce verification,
+     * we now explicitly sanitize GET data using filter_input_array().
+     */
     private function shouldCache(): bool {
-        return !is_admin() && 
-               !$this->isPageCached() && 
-               !is_user_logged_in() && 
-               $_SERVER['REQUEST_METHOD'] === 'GET' && 
-               empty($_GET) &&
-               !$this->isExcludedUrl();
+        $get_data = filter_input_array(INPUT_GET, FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: [];
+        if (is_admin() || is_user_logged_in() || !empty($get_data)) {
+            return false;
+        }
+        if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'GET') {
+            return false;
+        }
+        return !$this->isPageCached() && !$this->isExcludedUrl();
     }
 
     private function isExcludedUrl(): bool {
-        $current_url = $_SERVER['REQUEST_URI'];
+        $current_url = isset($_SERVER['REQUEST_URI'])
+            ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
+            : '';
         $excluded_urls = $this->settings['excluded_urls'] ?? [];
         
         foreach ($excluded_urls as $pattern) {

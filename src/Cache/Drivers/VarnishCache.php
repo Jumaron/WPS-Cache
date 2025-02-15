@@ -45,7 +45,7 @@ final class VarnishCache extends AbstractCacheDriver {
     public function isConnected(): bool {
         try {
             $response = wp_remote_get(sprintf('http://%s:%d', $this->host, $this->port), [
-                'timeout' => self::DEFAULT_TIMEOUT,
+                'timeout'   => self::DEFAULT_TIMEOUT,
                 'sslverify' => false
             ]);
             
@@ -85,7 +85,7 @@ final class VarnishCache extends AbstractCacheDriver {
         try {
             // Purge by host
             $site_url = get_site_url();
-            $host = parse_url($site_url, PHP_URL_HOST);
+            $host = wp_parse_url($site_url, PHP_URL_HOST);
             
             if ($host) {
                 $this->purgeByHost($host);
@@ -103,22 +103,22 @@ final class VarnishCache extends AbstractCacheDriver {
 
     private function purgeByHost(string $host): void {
         $this->sendPurgeRequest([
-            'Host' => $host,
-            'X-Purge-Method' => 'regex',
-            'X-Purge-Debug' => 'true'
+            'Host'            => $host,
+            'X-Purge-Method'  => 'regex',
+            'X-Purge-Debug'   => 'true'
         ]);
     }
 
     private function purgeByTag(string $tag): void {
         $this->sendPurgeRequest([
-            'X-Cache-Tags' => $tag,
-            'X-Purge-Method' => 'regex',
-            'X-Purge-Debug' => 'true'
+            'X-Cache-Tags'    => $tag,
+            'X-Purge-Method'  => 'regex',
+            'X-Purge-Debug'   => 'true'
         ]);
     }
 
     public function purgeUrl(string $url): void {
-        $parsed_url = parse_url($url);
+        $parsed_url = wp_parse_url($url);
         if (!isset($parsed_url['host'])) {
             throw new \Exception('Invalid URL provided for purge');
         }
@@ -126,9 +126,9 @@ final class VarnishCache extends AbstractCacheDriver {
         $request_url = $this->buildPurgeUrl($parsed_url);
         
         $this->sendPurgeRequest([
-            'Host' => $parsed_url['host'],
-            'X-Purge-Method' => 'exact',
-            'X-Purge-Debug' => 'true'
+            'Host'            => $parsed_url['host'],
+            'X-Purge-Method'  => 'exact',
+            'X-Purge-Debug'   => 'true'
         ], $request_url);
     }
 
@@ -151,24 +151,24 @@ final class VarnishCache extends AbstractCacheDriver {
         $request_url = $custom_url ?? sprintf('http://%s:%d', $this->host, $this->port);
         
         $response = wp_remote_request($request_url, [
-            'method' => 'PURGE',
-            'headers' => $headers,
-            'timeout' => self::DEFAULT_TIMEOUT,
+            'method'    => 'PURGE',
+            'headers'   => $headers,
+            'timeout'   => self::DEFAULT_TIMEOUT,
             'sslverify' => false
         ]);
 
         if (is_wp_error($response)) {
-            throw new \Exception($response->get_error_message());
+            throw new \Exception( esc_html($response->get_error_message()) );
         }
 
         $http_code = wp_remote_retrieve_response_code($response);
         if ($http_code !== 200) {
             throw new \Exception(
-                sprintf(
+                esc_html(sprintf(
                     "Varnish purge failed with code %d for URL: %s",
                     $http_code,
                     $request_url
-                )
+                ))
             );
         }
     }

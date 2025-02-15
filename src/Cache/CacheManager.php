@@ -7,7 +7,7 @@ use WPSCache\Cache\Drivers\CacheDriverInterface;
 use Throwable;
 
 /**
- * cache management class handling multiple cache drivers
+ * Cache management class handling multiple cache drivers
  */
 final class CacheManager {
     private const CACHE_CLEANUP_HOOKS = [
@@ -230,7 +230,7 @@ final class CacheManager {
         $files = glob($cache_dir . '*') ?: [];
         foreach ($files as $file) {
             if (is_file($file)) {
-                $this->safeUnlink($file);
+                $this->safeDelete($file);
             }
         }
     }
@@ -242,21 +242,42 @@ final class CacheManager {
         global $wpdb;
         
         foreach (self::TRANSIENT_PATTERNS as $pattern) {
-            $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-                $pattern
-            ));
+            // Attempt to retrieve cached list of transient option names.
+            $cache_key = 'wpsc_transients_' . md5($pattern);
+            $transients = wp_cache_get($cache_key, 'wpsc');
+            
+            if ($transients === false) {
+                // Retrieve matching option names from the database.
+                $transients = $wpdb->get_col($wpdb->prepare(
+                    "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+                    $pattern
+                ));
+                // Cache the result for 5 minutes.
+                wp_cache_set($cache_key, $transients, 'wpsc', 300);
+            }
+            
+            if (!empty($transients)) {
+                foreach ($transients as $option_name) {
+                    if (strpos($option_name, '_site_transient_') === 0) {
+                        $transient = substr($option_name, strlen('_site_transient_'));
+                        delete_site_transient($transient);
+                    } elseif (strpos($option_name, '_transient_') === 0) {
+                        $transient = substr($option_name, strlen('_transient_'));
+                        delete_transient($transient);
+                    }
+                }
+            }
         }
         
         wp_cache_flush();
     }
 
     /**
-     * Safely deletes a file with error handling
+     * Safely deletes a file with error handling using wp_delete_file()
      */
-    private function safeUnlink(string $file): void {
+    private function safeDelete(string $file): void {
         try {
-            if (!@unlink($file)) {
+            if (!wp_delete_file($file)) {
                 $this->logError("Failed to delete file: $file");
             }
         } catch (Throwable $e) {
