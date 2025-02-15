@@ -35,6 +35,11 @@ class NoticeManager {
             return;
         }
 
+        // Verify nonce for the admin notices page
+        if ( ! isset($_GET['_wpnonce']) || ! wp_verify_nonce( sanitize_text_field( wp_unslash($_GET['_wpnonce']) ), 'wpsc_admin_page' ) ) {
+            return;
+        }
+
         $this->displayQueuedNotices();
         $this->displayStatusNotices();
         $this->displaySystemNotices();
@@ -367,10 +372,10 @@ class NoticeManager {
     private function getConflictingPlugins(): array {
         $conflicting_plugins = [];
         $known_conflicts = [
-            'wp-super-cache/wp-cache.php'            => 'WP Super Cache',
-            'w3-total-cache/w3-total-cache.php'        => 'W3 Total Cache',
-            'wp-fastest-cache/wpFastestCache.php'        => 'WP Fastest Cache',
-            'litespeed-cache/litespeed-cache.php'        => 'LiteSpeed Cache'
+            'wp-super-cache/wp-cache.php'     => 'WP Super Cache',
+            'w3-total-cache/w3-total-cache.php' => 'W3 Total Cache',
+            'wp-fastest-cache/wpFastestCache.php' => 'WP Fastest Cache',
+            'litespeed-cache/litespeed-cache.php' => 'LiteSpeed Cache'
         ];
 
         foreach ($known_conflicts as $plugin_path => $plugin_name) {
