@@ -209,6 +209,7 @@ class ImportExportTools {
         $required_keys = ['html_cache', 'redis_cache', 'varnish_cache', 'cache_lifetime'];
         foreach ($required_keys as $key) {
             if (!isset($data['settings'][$key])) {
+                /* translators: %s: Name of the missing required setting */
                 throw new \Exception(sprintf(
                     __('Missing required setting: %s', 'WPS-Cache'),
                     $key

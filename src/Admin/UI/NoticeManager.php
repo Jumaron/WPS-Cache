@@ -375,9 +375,9 @@ class NoticeManager {
             <?php if (!empty($args['documentation_url'])): ?>
                 <p>
                     <a href="<?php echo esc_url($args['documentation_url']); ?>" 
-                       target="_blank" 
-                       rel="noopener noreferrer">
-                        <?php _e('Learn more', 'WPS-Cache'); ?> ›
+                        target="_blank" 
+                        rel="noopener noreferrer">
+                        <?php esc_html_e('Learn more', 'WPS-Cache'); ?> ›
                     </a>
                 </p>
             <?php endif; ?>

@@ -122,11 +122,14 @@ class CacheTools {
                     <td>
                         <?php if ($stats['html']['enabled']): ?>
                             <span class="wpsc-status-ok">
-                                <?php echo sprintf(
-                                    __('Active - %s files, %s total size', 'WPS-Cache'),
+                                <?php
+                                /* translators: %1$s: number of files, %2$s: total cache size */
+                                echo sprintf(
+                                    __('Active - %1$s files, %2$s total size', 'WPS-Cache'),
                                     number_format_i18n($stats['html']['files']),
                                     size_format($stats['html']['size'])
-                                ); ?>
+                                );
+                                ?>
                             </span>
                         <?php else: ?>
                             <span class="wpsc-status-inactive"><?php _e('Inactive', 'WPS-Cache'); ?></span>
@@ -138,10 +141,13 @@ class CacheTools {
                     <td>
                         <?php if ($stats['redis']['enabled']): ?>
                             <span class="wpsc-status-ok">
-                                <?php echo sprintf(
-                                    __('Connected - %s memory used', 'WPS-Cache'),
+                                <?php
+                                /* translators: %1$s: amount of memory used */
+                                echo sprintf(
+                                    __('Connected - %1$s memory used', 'WPS-Cache'),
                                     size_format($stats['redis']['memory_used'])
-                                ); ?>
+                                );
+                                ?>
                             </span>
                         <?php else: ?>
                             <span class="wpsc-status-inactive"><?php _e('Inactive', 'WPS-Cache'); ?></span>
@@ -485,7 +491,6 @@ class CacheTools {
      */
     private function optimizeRedisCache(): void {
         try {
-
             $redis_driver = $this->cache_manager->getDriver('redis');
             if (!$redis_driver instanceof RedisCache) {
                 return;
@@ -533,7 +538,6 @@ class CacheTools {
             ];
 
         } catch (\Exception $e) {
-
             return [
                 'status' => 'error_copy',
                 'message' => $e->getMessage()
@@ -568,7 +572,6 @@ class CacheTools {
             ];
 
         } catch (\Exception $e) {
-    
             return [
                 'status' => 'error_remove',
                 'message' => $e->getMessage()

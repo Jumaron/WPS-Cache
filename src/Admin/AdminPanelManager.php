@@ -90,7 +90,6 @@ final class AdminPanelManager {
             WPSC_VERSION
         );
     
-
         wp_enqueue_script(
             'wpsc-admin-scripts',
             WPSC_PLUGIN_URL . 'assets/js/admin.js',
@@ -119,18 +118,19 @@ final class AdminPanelManager {
      */
     private function getJsStrings(): array {
         return [
-            'confirm_clear_cache' => __('Are you sure you want to clear all caches?', 'WPS-Cache'),
-            'confirm_install_dropin' => __('Are you sure you want to install the object cache drop-in?', 'WPS-Cache'),
-            'confirm_remove_dropin' => __('Are you sure you want to remove the object cache drop-in?', 'WPS-Cache'),
-            'loading' => __('Loading...', 'WPS-Cache'),
-            'error' => __('An error occurred', 'WPS-Cache'),
-            'success' => __('Operation completed successfully', 'WPS-Cache'),
-            'preload_progress' => __('Preloading: %d%%', 'WPS-Cache'),
-            'preload_complete' => __('Preloading completed', 'WPS-Cache'),
-            'preload_error' => __('Error during preloading', 'WPS-Cache'),
-            'export_error' => __('Error exporting settings', 'WPS-Cache'),
-            'import_error' => __('Error importing settings', 'WPS-Cache'),
-            'invalid_file' => __('Invalid settings file', 'WPS-Cache')
+            'confirm_clear_cache'      => __('Are you sure you want to clear all caches?', 'WPS-Cache'),
+            'confirm_install_dropin'   => __('Are you sure you want to install the object cache drop-in?', 'WPS-Cache'),
+            'confirm_remove_dropin'    => __('Are you sure you want to remove the object cache drop-in?', 'WPS-Cache'),
+            'loading'                  => __('Loading...', 'WPS-Cache'),
+            'error'                    => __('An error occurred', 'WPS-Cache'),
+            'success'                  => __('Operation completed successfully', 'WPS-Cache'),
+            /* translators: %d: percentage of preloading progress */
+            'preload_progress'         => __('Preloading: %d%%', 'WPS-Cache'),
+            'preload_complete'         => __('Preloading completed', 'WPS-Cache'),
+            'preload_error'            => __('Error during preloading', 'WPS-Cache'),
+            'export_error'             => __('Error exporting settings', 'WPS-Cache'),
+            'import_error'             => __('Error importing settings', 'WPS-Cache'),
+            'invalid_file'             => __('Invalid settings file', 'WPS-Cache')
         ];
     }
 
