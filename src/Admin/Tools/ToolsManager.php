@@ -49,29 +49,29 @@ class ToolsManager {
         }
         ?>
         <div class="wpsc-tools-container">
-            <h2><?php _e('Cache Tools', 'wps-cache'); ?></h2>
+            <h2><?php esc_html_e('Cache Tools', 'WPS-Cache'); ?></h2>
             
             <!-- Cache Management -->
             <div class="wpsc-tool-section">
-                <h3><?php _e('Cache Management', 'wps-cache'); ?></h3>
+                <h3><?php esc_html_e('Cache Management', 'WPS-Cache'); ?></h3>
                 <?php $this->cache_tools->renderCacheManagement(); ?>
             </div>
 
             <!-- Cache Preloading -->
             <div class="wpsc-tool-section">
-                <h3><?php _e('Cache Preloading', 'wps-cache'); ?></h3>
+                <h3><?php esc_html_e('Cache Preloading', 'WPS-Cache'); ?></h3>
                 <?php $this->cache_tools->renderPreloadingTools(); ?>
             </div>
 
             <!-- Import/Export -->
             <div class="wpsc-tool-section">
-                <h3><?php _e('Import/Export Settings', 'wps-cache'); ?></h3>
+                <h3><?php esc_html_e('Import/Export Settings', 'WPS-Cache'); ?></h3>
                 <?php $this->import_export_tools->renderImportExport(); ?>
             </div>
 
             <!-- Diagnostic Information -->
             <div class="wpsc-tool-section">
-                <h3><?php _e('Diagnostic Information', 'wps-cache'); ?></h3>
+                <h3><?php esc_html_e('Diagnostic Information', 'WPS-Cache'); ?></h3>
                 <?php $this->diagnostic_tools->renderDiagnostics(); ?>
             </div>
         </div>
@@ -83,7 +83,7 @@ class ToolsManager {
      */
     public function handleCacheClear(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'wps-cache'));
+            wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
 
         check_admin_referer('wpsc_clear_cache');
@@ -91,10 +91,10 @@ class ToolsManager {
 
         wp_redirect(add_query_arg(
             [
-                'page' => 'wps-cache',
-                'tab' => 'tools',
+                'page'       => 'wps-cache',
+                'tab'        => 'tools',
                 'cache_cleared' => 'success',
-                '_wpnonce' => wp_create_nonce('wpsc_cache_cleared')
+                '_wpnonce'   => wp_create_nonce('wpsc_cache_cleared')
             ],
             admin_url('admin.php')
         ));
@@ -106,7 +106,7 @@ class ToolsManager {
      */
     public function handleInstallObjectCache(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'wps-cache'));
+            wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
 
         check_admin_referer('wpsc_install_object_cache');
@@ -114,10 +114,10 @@ class ToolsManager {
 
         wp_redirect(add_query_arg(
             [
-                'page' => 'wps-cache',
-                'tab' => 'tools',
+                'page'                   => 'wps-cache',
+                'tab'                    => 'tools',
                 'object_cache_installed' => $result['status'],
-                '_wpnonce' => wp_create_nonce('wpsc_dropin_installed')
+                '_wpnonce'               => wp_create_nonce('wpsc_dropin_installed')
             ],
             admin_url('admin.php')
         ));
@@ -129,7 +129,7 @@ class ToolsManager {
      */
     public function handleRemoveObjectCache(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'wps-cache'));
+            wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
 
         check_admin_referer('wpsc_remove_object_cache');
@@ -137,10 +137,10 @@ class ToolsManager {
 
         wp_redirect(add_query_arg(
             [
-                'page' => 'wps-cache',
-                'tab' => 'tools',
-                'object_cache_removed' => $result['status'],
-                '_wpnonce' => wp_create_nonce('wpsc_dropin_removed')
+                'page'                   => 'wps-cache',
+                'tab'                    => 'tools',
+                'object_cache_removed'   => $result['status'],
+                '_wpnonce'               => wp_create_nonce('wpsc_dropin_removed')
             ],
             admin_url('admin.php')
         ));
@@ -152,7 +152,7 @@ class ToolsManager {
      */
     public function handleExportSettings(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'wps-cache'));
+            wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
 
         check_admin_referer('wpsc_export_settings');
@@ -164,7 +164,7 @@ class ToolsManager {
      */
     public function handleImportSettings(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'wps-cache'));
+            wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
 
         check_admin_referer('wpsc_import_settings');
@@ -195,7 +195,7 @@ class ToolsManager {
         } catch (\Exception $e) {
             wp_send_json_error([
                 'message' => $e->getMessage(),
-                'url' => $result['current_url'] ?? ''
+                'url'     => $result['current_url'] ?? ''
             ]);
         }
     }
