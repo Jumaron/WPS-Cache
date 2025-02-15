@@ -30,7 +30,8 @@ class NoticeManager {
      * Displays all queued admin notices
      */
     public function displayNotices(): void {
-        if (!isset($_GET['page']) || $_GET['page'] !== 'WPS-Cache') {
+        $page = isset($_GET['page']) ? sanitize_text_field($_GET['page']) : '';
+        if ($page !== 'WPS-Cache') {
             return;
         }
 
@@ -113,7 +114,7 @@ class NoticeManager {
      */
     private function displayCacheNotices(): void {
         if (isset($_GET['cache_cleared'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_cache_cleared')) {
                 return;
             }
@@ -137,7 +138,7 @@ class NoticeManager {
      */
     private function displayObjectCacheNotices(): void {
         if (isset($_GET['object_cache_installed'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_dropin_installed')) {
                 return;
             }
@@ -165,7 +166,7 @@ class NoticeManager {
         }
 
         if (isset($_GET['object_cache_removed'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_dropin_removed')) {
                 return;
             }
@@ -192,7 +193,7 @@ class NoticeManager {
      */
     private function displaySettingsNotices(): void {
         if (isset($_GET['settings_updated'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_settings_update')) {
                 return;
             }
@@ -203,7 +204,7 @@ class NoticeManager {
         }
 
         if (isset($_GET['settings_error'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_settings_update')) {
                 return;
             }
@@ -219,7 +220,7 @@ class NoticeManager {
      */
     private function displayImportExportNotices(): void {
         if (isset($_GET['import_error'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_import_export')) {
                 return;
             }
@@ -232,7 +233,7 @@ class NoticeManager {
         }
 
         if (isset($_GET['settings_imported'])) {
-            $nonce = isset($_GET['_wpnonce']) ? wp_unslash($_GET['_wpnonce']) : '';
+            $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_import_export')) {
                 return;
             }

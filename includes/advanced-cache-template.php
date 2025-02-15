@@ -34,7 +34,8 @@ class WPSAdvancedCache {
     private int $cache_lifetime;
 
     public function __construct() {
-        $this->request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        // Unsash the REQUEST_URI before using it.
+        $this->request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
         $this->settings = $this->getSettings();
         $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
     }
@@ -68,15 +69,18 @@ class WPSAdvancedCache {
             }
         }
 
+        // Sanitize and unslash server variables before usage.
+        $request_method = isset($_SERVER['REQUEST_METHOD']) ? wp_unslash($_SERVER['REQUEST_METHOD']) : 'GET';
+        $requested_with = isset($_SERVER['HTTP_X_REQUESTED_WITH']) ? strtolower(wp_unslash($_SERVER['HTTP_X_REQUESTED_WITH'])) : '';
+
         // Check request conditions
         return (
             isset($_GET['preview']) ||
             !empty($_POST) ||
             is_admin() ||
-            ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' ||
+            $request_method !== 'GET' ||
             !empty($_GET) || // Query parameters bypass cache
-            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
-             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
+            ($requested_with === 'xmlhttprequest') // AJAX requests
         );
     }
 
@@ -88,7 +92,8 @@ class WPSAdvancedCache {
             return false;
         }
 
-        $file_path = parse_url($this->request_uri, PHP_URL_PATH);
+        // Use wp_parse_url() instead of parse_url() for consistent output.
+        $file_path = wp_parse_url($this->request_uri, PHP_URL_PATH);
         if (!$file_path) {
             return false;
         }
@@ -131,8 +136,9 @@ class WPSAdvancedCache {
         $cache_time = filemtime($file);
         $etag = '"' . md5($content) . '"';
         
-        // Check if-none-match for browser caching
-        if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
+        // Unsash and trim the HTTP_IF_NONE_MATCH header.
+        $if_none_match = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim(wp_unslash($_SERVER['HTTP_IF_NONE_MATCH'])) : '';
+        if ($if_none_match === $etag) {
             header('HTTP/1.1 304 Not Modified');
             exit;
         }
@@ -145,7 +151,7 @@ class WPSAdvancedCache {
         
         $this->setHeader('HIT');
         
-        // Escape the cached content to ensure safe output while preserving allowed HTML
+        // Escape the cached content for safe output while preserving allowed HTML.
         echo wp_kses_post($content);
         exit;
     }
