@@ -62,8 +62,10 @@ class WPSAdvancedCache {
 
     /**
      * Checks if cache should be bypassed.
-     * 
+     *
      * Note: Nonce verification is not required here as this drop-in only serves cached content.
+     *
+     * @return bool
      */
     private function shouldBypassCache(): bool {
         // Sanitize and unslash server variables before usage.
@@ -71,13 +73,16 @@ class WPSAdvancedCache {
             ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD']))
             : 'GET';
         $requested_with = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
-            ? sanitize_text_field(strtolower(wp_unslash($_SERVER['HTTP_X_REQUESTED_WITH'])))
+            ? sanitize_text_field(strtolower(wp_unslash($_SERVER['HTTP_X_REQUESTED_WITH']))) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
             : '';
         $preview = isset($_GET['preview'])
-            ? sanitize_text_field(wp_unslash($_GET['preview']))
+            ? sanitize_text_field(wp_unslash($_GET['preview'])) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
             : '';
+        $query_params = !empty($_GET)
+            ? array_map('sanitize_text_field', wp_unslash($_GET))
+            : [];
         $post_data = !empty($_POST)
-            ? array_map('sanitize_text_field', wp_unslash($_POST))
+            ? array_map('sanitize_text_field', wp_unslash($_POST)) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
             : [];
 
         return (
@@ -85,8 +90,8 @@ class WPSAdvancedCache {
             !empty($post_data) ||
             is_admin() ||
             $request_method !== 'GET' ||
-            !empty($_GET) || // Query parameters bypass cache
-            ($requested_with === 'xmlhttprequest') // AJAX requests
+            !empty($query_params) || // Query parameters bypass cache
+            ($requested_with === 'xmlhttprequest')
         );
     }
 
