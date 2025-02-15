@@ -95,16 +95,24 @@ class ImportExportTools {
                 throw new \Exception('No file uploaded');
             }
             
-            // Retrieve the raw file data
-            $raw_file = $_FILES['settings_file'];
+            $file = [
+                'name'     => isset($_FILES['settings_file']['name'])
+                                ? sanitize_file_name( wp_unslash($_FILES['settings_file']['name']) )
+                                : '',
+                'type'     => isset($_FILES['settings_file']['type'])
+                                ? sanitize_text_field( wp_unslash($_FILES['settings_file']['type']) )
+                                : '',
+                'tmp_name' => isset($_FILES['settings_file']['tmp_name'])
+                                ? sanitize_text_field( wp_unslash($_FILES['settings_file']['tmp_name']) )
+                                : '',
+                'error'    => isset($_FILES['settings_file']['error'])
+                                ? absint($_FILES['settings_file']['error'])
+                                : UPLOAD_ERR_NO_FILE,
+                'size'     => isset($_FILES['settings_file']['size'])
+                                ? absint($_FILES['settings_file']['size'])
+                                : 0,
+            ];
             
-            // Build a sanitized file array with explicit checks
-            $file = [];
-            $file['name']     = isset($raw_file['name'])     ? sanitize_file_name(wp_unslash($raw_file['name'])) : '';
-            $file['type']     = isset($raw_file['type'])     ? sanitize_text_field(wp_unslash($raw_file['type'])) : '';
-            $file['tmp_name'] = isset($raw_file['tmp_name']) ? sanitize_text_field(wp_unslash($raw_file['tmp_name'])) : '';
-            $file['error']    = isset($raw_file['error'])    ? absint($raw_file['error']) : UPLOAD_ERR_NO_FILE;
-            $file['size']     = isset($raw_file['size'])     ? absint($raw_file['size']) : 0;
             
             // Validate file upload error
             if ($file['error'] !== UPLOAD_ERR_OK) {
