@@ -1,4 +1,4 @@
-<?php
+<?php 
 /**
  * WordPress Redis Object Cache Backend
  *
@@ -1323,19 +1323,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function getSelectiveFlushScript(): string
         {
-            return <<<LUA
-            local cursor = "0"
-            local count = 0
-            repeat
-                local result = redis.call('SCAN', cursor, 'MATCH', ARGV[1])
-                cursor = result[1]
-                local keys = result[2]
-                if #keys > 0 then
-                    count = count + redis.call('DEL', unpack(keys))
-                end
-            until cursor == "0"
-            return count
-            LUA;
+            return "local cursor = \"0\"\nlocal count = 0\nrepeat\n    local result = redis.call('SCAN', cursor, 'MATCH', ARGV[1])\n    cursor = result[1]\n    local keys = result[2]\n    if #keys > 0 then\n        count = count + redis.call('DEL', unpack(keys))\n    end\nuntil cursor == \"0\"\nreturn count";
         }
 
         /**
