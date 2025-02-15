@@ -110,8 +110,10 @@ final class HTMLCache extends AbstractCacheDriver {
             // Add cache metadata
             $minified .= $this->getCacheComment($content, $minified);
             
-            // Validate and unslash the REQUEST_URI before generating the cache key
-            $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+            // Sanitize the REQUEST_URI before generating the cache key
+            $request_uri = isset($_SERVER['REQUEST_URI'])
+                ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
+                : '';
             $key = $this->generateCacheKey($request_uri);
             $this->set($key, $minified);
             
@@ -214,7 +216,9 @@ final class HTMLCache extends AbstractCacheDriver {
     }
 
     private function isExcludedUrl(): bool {
-        $current_url = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+        $current_url = isset($_SERVER['REQUEST_URI'])
+            ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
+            : '';
         $excluded_urls = $this->settings['excluded_urls'] ?? [];
         
         foreach ($excluded_urls as $pattern) {

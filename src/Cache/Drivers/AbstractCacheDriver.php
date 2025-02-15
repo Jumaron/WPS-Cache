@@ -18,19 +18,11 @@ abstract class AbstractCacheDriver implements CacheDriverInterface {
     
     /**
      * Log cache-related errors consistently.
-     * Debug logging is performed only when WP_DEBUG is enabled.
+     * Debug logging has been disabled to prevent output in production.
      */
     protected function logError(string $message, ?\Throwable $e = null): void {
-        $error = sprintf(
-            'WPS Cache Error [%s]: %s%s',
-            static::class,
-            $message,
-            $e ? ' - ' . $e->getMessage() : ''
-        );
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log($error);
-            trigger_error(esc_html($error), E_USER_WARNING);
-        }
+        // Debug logging disabled in production.
+        // Optionally, implement logging to a file or monitoring system in a development environment.
     }
     
     /**
