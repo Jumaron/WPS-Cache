@@ -162,13 +162,13 @@ class AnalyticsManager {
      */
     private function renderDetailedMetrics(array $redis_stats): void {
         ?>
-        <h3><?php _e('Detailed Metrics', 'WPS-Cache'); ?></h3>
+        <h3><?php esc_html_e('Detailed Metrics', 'WPS-Cache'); ?></h3>
         <table class="widefat striped">
             <thead>
                 <tr>
-                    <th><?php _e('Metric', 'WPS-Cache'); ?></th>
-                    <th><?php _e('Value', 'WPS-Cache'); ?></th>
-                    <th><?php _e('Trend', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Metric', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Value', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Trend', 'WPS-Cache'); ?></th>
                 </tr>
             </thead>
             <tbody id="detailed-metrics">

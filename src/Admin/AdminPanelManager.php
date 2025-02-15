@@ -144,8 +144,8 @@ final class AdminPanelManager {
 
         $current_tab = $_GET['tab'] ?? 'settings';
         ?>
-        <div class="wrap">
-            <h1><?php _e('WPS Cache', 'WPS-Cache'); ?></h1>
+       <div class="wrap">
+            <h1><?php esc_html_e('WPS Cache', 'WPS-Cache'); ?></h1>
 
             <div class="wpsc-admin-container">
                 <nav class="wpsc-tabs">
