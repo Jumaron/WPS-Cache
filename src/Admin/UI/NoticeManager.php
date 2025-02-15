@@ -227,6 +227,7 @@ class NoticeManager {
     private function displayCompatibilityNotices(): void {
         // PHP version check
         if (version_compare(PHP_VERSION, '7.4', '<')) {
+            /* translators: %s: current PHP version */
             $this->renderNotice(
                 sprintf(
                     __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'WPS-Cache'),
@@ -239,6 +240,7 @@ class NoticeManager {
         // Check for conflicting plugins
         $conflicting_plugins = $this->getConflictingPlugins();
         if (!empty($conflicting_plugins)) {
+            /* translators: %s: list of conflicting plugin names */
             $this->renderNotice(
                 sprintf(
                     __('The following plugins may conflict with WPS Cache: %s', 'WPS-Cache'),
@@ -251,6 +253,7 @@ class NoticeManager {
         // WordPress version check
         global $wp_version;
         if (version_compare($wp_version, '5.6', '<')) {
+            /* translators: %s: current WordPress version */
             $this->renderNotice(
                 sprintf(
                     __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'WPS-Cache'),
@@ -293,6 +296,7 @@ class NoticeManager {
 
         // Cache directory permissions
         $cache_dir = WPSC_CACHE_DIR;
+        /* translators: %s: cache directory path */
         if (!is_writable($cache_dir)) {
             $this->renderNotice(
                 sprintf(
@@ -410,5 +414,3 @@ class NoticeManager {
         return get_transient(self::NOTICES_TRANSIENT) ?: [];
     }
 }
-
-   
