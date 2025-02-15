@@ -51,13 +51,13 @@ class DiagnosticTools {
      */
     public function getDiagnosticInfo(): array {
         return [
-            'System'        => $this->getSystemInfo(),
-            'WordPress'     => $this->getWordPressInfo(),
-            'Cache'         => $this->getCacheInfo(),
-            'Server'        => $this->getServerInfo(),
-            'PHP'           => $this->getPHPInfo(),
-            'Database'      => $this->getDatabaseInfo(),
-            'Active Plugins'=> $this->getActivePlugins(),
+            'System'         => $this->getSystemInfo(),
+            'WordPress'      => $this->getWordPressInfo(),
+            'Cache'          => $this->getCacheInfo(),
+            'Server'         => $this->getServerInfo(),
+            'PHP'            => $this->getPHPInfo(),
+            'Database'       => $this->getDatabaseInfo(),
+            'Active Plugins' => $this->getActivePlugins(),
         ];
     }
 
@@ -84,16 +84,16 @@ class DiagnosticTools {
      */
     private function getSystemInfo(): array {
         return [
-            'OS'                => PHP_OS,
-            'Architecture'      => PHP_INT_SIZE * 8 . 'bit',
-            'Memory Limit'      => ini_get('memory_limit'),
-            'Max Execution Time'=> ini_get('max_execution_time') . 's',
-            'Max Input Vars'    => ini_get('max_input_vars'),
-            'Post Max Size'     => ini_get('post_max_size'),
-            'Upload Max Size'   => ini_get('upload_max_filesize'),
-            'Time Zone'         => date_default_timezone_get(),
-            'System Time'       => current_time('mysql'),
-            'Temp Directory'    => sys_get_temp_dir(),
+            'OS'                 => PHP_OS,
+            'Architecture'       => PHP_INT_SIZE * 8 . 'bit',
+            'Memory Limit'       => ini_get('memory_limit'),
+            'Max Execution Time' => ini_get('max_execution_time') . 's',
+            'Max Input Vars'     => ini_get('max_input_vars'),
+            'Post Max Size'      => ini_get('post_max_size'),
+            'Upload Max Size'    => ini_get('upload_max_filesize'),
+            'Time Zone'          => date_default_timezone_get(),
+            'System Time'        => current_time('mysql'),
+            'Temp Directory'     => sys_get_temp_dir(),
         ];
     }
 
@@ -104,16 +104,16 @@ class DiagnosticTools {
         global $wp_version;
         
         return [
-            'Version'        => $wp_version,
-            'Site URL'       => get_site_url(),
-            'Home URL'       => get_home_url(),
-            'Is Multisite'   => is_multisite() ? 'Yes' : 'No',
-            'Theme'          => wp_get_theme()->get('Name'),
-            'Theme Version'  => wp_get_theme()->get('Version'),
-            'WP_DEBUG'       => defined('WP_DEBUG') && WP_DEBUG ? 'Yes' : 'No',
-            'WP_DEBUG_LOG'   => defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'Yes' : 'No',
-            'SCRIPT_DEBUG'   => defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? 'Yes' : 'No',
-            'WP Memory Limit'=> WP_MEMORY_LIMIT,
+            'Version'         => $wp_version,
+            'Site URL'        => get_site_url(),
+            'Home URL'        => get_home_url(),
+            'Is Multisite'    => is_multisite() ? 'Yes' : 'No',
+            'Theme'           => wp_get_theme()->get('Name'),
+            'Theme Version'   => wp_get_theme()->get('Version'),
+            'WP_DEBUG'        => defined('WP_DEBUG') && WP_DEBUG ? 'Yes' : 'No',
+            'WP_DEBUG_LOG'    => defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'Yes' : 'No',
+            'SCRIPT_DEBUG'    => defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? 'Yes' : 'No',
+            'WP Memory Limit' => WP_MEMORY_LIMIT,
         ];
     }
 
@@ -130,15 +130,15 @@ class DiagnosticTools {
         $cache_writable = $wp_filesystem->is_writable(WPSC_CACHE_DIR) ? 'Yes' : 'No';
 
         return [
-            'Plugin Version'     => WPSC_VERSION,
-            'Cache Directory'    => WPSC_CACHE_DIR,
-            'Cache Writable'     => $cache_writable,
-            'Object Cache Dropin'=> file_exists(WP_CONTENT_DIR . '/object-cache.php') ? 'Installed' : 'Not Installed',
-            'Redis Extension'    => extension_loaded('redis') ? 'Yes' : 'No',
-            'Memcache Extension' => extension_loaded('memcache') ? 'Yes' : 'No',
-            'Memcached Extension'=> extension_loaded('memcached') ? 'Yes' : 'No',
-            'OPcache Status'     => function_exists('opcache_get_status') && opcache_get_status() !== false ? 'Active' : 'Inactive',
-            'Object Caching'     => wp_using_ext_object_cache() ? 'Yes' : 'No',
+            'Plugin Version'      => WPSC_VERSION,
+            'Cache Directory'     => WPSC_CACHE_DIR,
+            'Cache Writable'      => $cache_writable,
+            'Object Cache Dropin' => file_exists(WP_CONTENT_DIR . '/object-cache.php') ? 'Installed' : 'Not Installed',
+            'Redis Extension'     => extension_loaded('redis') ? 'Yes' : 'No',
+            'Memcache Extension'  => extension_loaded('memcache') ? 'Yes' : 'No',
+            'Memcached Extension' => extension_loaded('memcached') ? 'Yes' : 'No',
+            'OPcache Status'      => function_exists('opcache_get_status') && opcache_get_status() !== false ? 'Active' : 'Inactive',
+            'Object Caching'      => wp_using_ext_object_cache() ? 'Yes' : 'No',
         ];
     }
 
@@ -224,28 +224,8 @@ class DiagnosticTools {
      * Gets error reporting level as string
      */
     private function getErrorReportingLevel(): string {
-        // To avoid full path disclosure in production, hide error reporting level when WP_DEBUG is false
-        if ( ! defined('WP_DEBUG') || ! WP_DEBUG ) {
-            return 'Hidden';
-        }
-        
-        $level  = error_reporting();
-        $levels = [];
-
-        $constants = [
-            'E_ALL', 'E_ERROR', 'E_WARNING', 'E_PARSE', 'E_NOTICE', 
-            'E_STRICT', 'E_DEPRECATED', 'E_CORE_ERROR', 'E_CORE_WARNING',
-            'E_COMPILE_ERROR', 'E_COMPILE_WARNING', 'E_USER_ERROR',
-            'E_USER_WARNING', 'E_USER_NOTICE', 'E_USER_DEPRECATED'
-        ];
-
-        foreach ($constants as $constant) {
-            if (defined($constant) && ($level & constant($constant))) {
-                $levels[] = $constant;
-            }
-        }
-
-        return implode(' | ', $levels);
+        // To avoid full path disclosure, do not reveal error reporting settings
+        return 'Hidden';
     }
 
     /**
