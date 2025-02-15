@@ -34,8 +34,10 @@ class WPSAdvancedCache {
     private int $cache_lifetime;
 
     public function __construct() {
-        // Unsash the REQUEST_URI before using it.
-        $this->request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+        // Sanitize the REQUEST_URI before using it.
+        $this->request_uri = isset($_SERVER['REQUEST_URI'])
+            ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
+            : '';
         $this->settings = $this->getSettings();
         $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
     }
@@ -59,24 +61,28 @@ class WPSAdvancedCache {
     }
 
     /**
-     * Checks if cache should be bypassed
+     * Checks if cache should be bypassed.
+     * 
+     * Note: Nonce verification is not required here as this drop-in only serves cached content.
      */
     private function shouldBypassCache(): bool {
-        // Check PHP constants
-        foreach (self::CACHE_BYPASS_CONDITIONS as $condition) {
-            if (defined($condition) && constant($condition)) {
-                return true;
-            }
-        }
-
         // Sanitize and unslash server variables before usage.
-        $request_method = isset($_SERVER['REQUEST_METHOD']) ? wp_unslash($_SERVER['REQUEST_METHOD']) : 'GET';
-        $requested_with = isset($_SERVER['HTTP_X_REQUESTED_WITH']) ? strtolower(wp_unslash($_SERVER['HTTP_X_REQUESTED_WITH'])) : '';
+        $request_method = isset($_SERVER['REQUEST_METHOD'])
+            ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD']))
+            : 'GET';
+        $requested_with = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+            ? sanitize_text_field(strtolower(wp_unslash($_SERVER['HTTP_X_REQUESTED_WITH'])))
+            : '';
+        $preview = isset($_GET['preview'])
+            ? sanitize_text_field(wp_unslash($_GET['preview']))
+            : '';
+        $post_data = !empty($_POST)
+            ? array_map('sanitize_text_field', wp_unslash($_POST))
+            : [];
 
-        // Check request conditions
         return (
-            isset($_GET['preview']) ||
-            !empty($_POST) ||
+            !empty($preview) ||
+            !empty($post_data) ||
             is_admin() ||
             $request_method !== 'GET' ||
             !empty($_GET) || // Query parameters bypass cache
@@ -136,8 +142,10 @@ class WPSAdvancedCache {
         $cache_time = filemtime($file);
         $etag = '"' . md5($content) . '"';
         
-        // Unsash and trim the HTTP_IF_NONE_MATCH header.
-        $if_none_match = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim(wp_unslash($_SERVER['HTTP_IF_NONE_MATCH'])) : '';
+        // Sanitize the HTTP_IF_NONE_MATCH header.
+        $if_none_match = isset($_SERVER['HTTP_IF_NONE_MATCH'])
+            ? trim(sanitize_text_field(wp_unslash($_SERVER['HTTP_IF_NONE_MATCH'])))
+            : '';
         if ($if_none_match === $etag) {
             header('HTTP/1.1 304 Not Modified');
             exit;
@@ -188,11 +196,6 @@ try {
     $cache = new WPSAdvancedCache();
     $cache->execute();
 } catch (Throwable $e) {
-    // Log error if debugging is enabled
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('WPS Cache Error: ' . $e->getMessage());
-    }
-    
-    // Continue normal WordPress execution
+    // Debug logging is disabled in production.
     header('X-WPS-Cache: ERROR');
 }

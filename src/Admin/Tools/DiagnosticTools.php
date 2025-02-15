@@ -192,14 +192,28 @@ class DiagnosticTools {
     private function getDatabaseInfo(): array {
         global $wpdb;
         
+        // Cache the list of tables for one hour.
+        $tables = wp_cache_get('wpsc_database_tables', 'diagnostic');
+        if ($tables === false) {
+            $tables = $wpdb->get_col("SHOW TABLES");
+            wp_cache_set('wpsc_database_tables', $tables, 'diagnostic', 3600);
+        }
+        
+        // Cache the database version for one hour.
+        $db_version = wp_cache_get('wpsc_db_version', 'diagnostic');
+        if ($db_version === false) {
+            $db_version = $wpdb->get_var("SELECT VERSION()");
+            wp_cache_set('wpsc_db_version', $db_version, 'diagnostic', 3600);
+        }
+
         return [
-            'Version'      => $wpdb->get_var("SELECT VERSION()"),
+            'Version'      => $db_version,
             'Database'     => $wpdb->dbname,
             'Charset'      => $wpdb->charset,
             'Collate'      => $wpdb->collate,
             'Table Prefix' => $wpdb->prefix,
             'DB Host'      => $wpdb->dbhost,
-            'Tables'       => implode(', ', $wpdb->get_col("SHOW TABLES")),
+            'Tables'       => implode(', ', $tables),
         ];
     }
 
