@@ -1,18 +1,11 @@
-=== WPS-Cache ===
-Contributors: Jumaron
-Tags: caching, performance, HTML, Redis, Varnish
-Requires at least: 6.3
-Tested up to: 6.7
-Stable tag: 0.0.2
-License: GPLv2 or later
-License URI: http://www.gnu.org/licenses/gpl-2.0.html
+# WPS-Cache
 
 [![WordPress Compatible](https://img.shields.io/badge/WordPress-Compatible-0073aa.svg)](https://wordpress.org)
 [![PHP Version](https://img.shields.io/badge/PHP-8.3%2B-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPLv2%20or%20later-blue.svg)](http://www.gnu.org/licenses/gpl-2.0.html)
 [![Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)]()
 
-Boost your WordPress speed with multi-layer caching: HTML, Redis, and Varnish for fast performance.
+**Boost your WordPress speed with multi-layer caching** using HTML, Redis, and Varnish for lightning-fast performance.
 
 > ⚠️ **Experimental Status:** This plugin is under active development. Please test thoroughly in a staging environment before production use.
 
