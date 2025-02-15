@@ -87,11 +87,15 @@ class ImportExportTools {
      */
     public function importSettings(): array {
         try {
+            // Verify nonce for security
+            check_admin_referer('wpsc_import_settings');
+
             if (!isset($_FILES['settings_file'])) {
                 throw new \Exception('No file uploaded');
             }
 
-            $file = $_FILES['settings_file'];
+            // Unsplash the file input
+            $file = wp_unslash($_FILES['settings_file']);
             
             // Validate file upload
             if ($file['error'] !== UPLOAD_ERR_OK) {
@@ -147,7 +151,8 @@ class ImportExportTools {
      */
     private function generateExportFilename(): string {
         $site_name = sanitize_title(get_bloginfo('name'));
-        $date = date('Y-m-d-His');
+        // Use gmdate() to avoid runtime timezone changes affecting date display
+        $date = gmdate('Y-m-d-His');
         return "WPS-Cache-{$site_name}-{$date}.json";
     }
 
