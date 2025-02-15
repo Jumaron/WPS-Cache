@@ -74,7 +74,7 @@ final class Plugin {
     private function setupConstants(): void {
         $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
         $constants = [
-            'WPSC_VERSION'      => '0.0.2',
+            'WPSC_VERSION'      => '0.0.3',
             'WPSC_PLUGIN_FILE'  => $plugin_file,
             'WPSC_PLUGIN_DIR'   => plugin_dir_path($plugin_file),
             'WPSC_PLUGIN_URL'   => plugin_dir_url($plugin_file),
