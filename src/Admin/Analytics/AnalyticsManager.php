@@ -237,15 +237,14 @@ class AnalyticsManager {
     /**
      * Gets Redis cache statistics
      */
-    private function getRedisStats(): ?array {
+    private function getRedisStats(): array {
         $redis_driver = $this->cache_manager->getDriver('redis');
         if (!$redis_driver instanceof RedisCache) {
-            return null;
+            return [];
         }
-
         return $redis_driver->getStats();
     }
-
+    
     /**
      * Gets HTML cache statistics
      */
