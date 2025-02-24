@@ -30,42 +30,42 @@ class CacheTools
         <div class="wpsc-cache-management">
             <!-- Clear Cache -->
             <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Clear Cache', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Clear Cache', 'wps-cache'); ?></h4>
                 <p class="description">
-                    <?php esc_html_e('Clear all active caches including HTML, Redis, and Varnish caches.', 'WPS-Cache'); ?>
+                    <?php esc_html_e('Clear all active caches including HTML, Redis, and Varnish caches.', 'wps-cache'); ?>
                 </p>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <?php wp_nonce_field('wpsc_clear_cache'); ?>
                     <input type="hidden" name="action" value="wpsc_clear_cache">
                     <button type="submit" class="button button-primary">
-                        <?php esc_html_e('Clear All Caches', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Clear All Caches', 'wps-cache'); ?>
                     </button>
                 </form>
             </div>
 
             <!-- Object Cache Drop-in -->
             <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Object Cache Drop-in', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Object Cache Drop-in', 'wps-cache'); ?></h4>
                 <?php if ($object_cache_installed): ?>
                     <p class="wpsc-status-ok">
-                        <?php esc_html_e('Object cache drop-in is installed and active.', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Object cache drop-in is installed and active.', 'wps-cache'); ?>
                     </p>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                         <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
                         <input type="hidden" name="action" value="wpsc_remove_object_cache">
                         <button type="submit" class="button button-secondary">
-                            <?php esc_html_e('Remove Object Cache Drop-in', 'WPS-Cache'); ?>
+                            <?php esc_html_e('Remove Object Cache Drop-in', 'wps-cache'); ?>
                         </button>
                     </form>
                 <?php else: ?>
                     <p class="wpsc-status-warning">
-                        <?php esc_html_e('Object cache drop-in is not installed.', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Object cache drop-in is not installed.', 'wps-cache'); ?>
                     </p>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                         <?php wp_nonce_field('wpsc_install_object_cache'); ?>
                         <input type="hidden" name="action" value="wpsc_install_object_cache">
                         <button type="submit" class="button button-primary">
-                            <?php esc_html_e('Install Object Cache Drop-in', 'WPS-Cache'); ?>
+                            <?php esc_html_e('Install Object Cache Drop-in', 'wps-cache'); ?>
                         </button>
                     </form>
                 <?php endif; ?>
@@ -73,7 +73,7 @@ class CacheTools
 
             <!-- Cache Status -->
             <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Cache Status', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Cache Status', 'wps-cache'); ?></h4>
                 <?php $this->renderCacheStatus(); ?>
             </div>
         </div>
@@ -89,21 +89,21 @@ class CacheTools
     ?>
         <div class="wpsc-preload-tools">
             <p class="description">
-                <?php esc_html_e('Preload cache for your most important pages to ensure optimal performance.', 'WPS-Cache'); ?>
+                <?php esc_html_e('Preload cache for your most important pages to ensure optimal performance.', 'wps-cache'); ?>
             </p>
 
             <div class="wpsc-preload-urls">
-                <h4><?php esc_html_e('URLs to Preload', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('URLs to Preload', 'wps-cache'); ?></h4>
                 <textarea id="wpsc-preload-urls" class="large-text code" rows="5" readonly>
                     <?php echo esc_textarea(implode("\n", $urls)); ?>
                 </textarea>
                 <p class="description">
-                    <?php esc_html_e('These URLs will be preloaded. You can customize the list in settings.', 'WPS-Cache'); ?>
+                    <?php esc_html_e('These URLs will be preloaded. You can customize the list in settings.', 'wps-cache'); ?>
                 </p>
             </div>
 
             <button type="button" class="button button-primary" id="wpsc-preload-cache">
-                <?php esc_html_e('Start Preloading', 'WPS-Cache'); ?>
+                <?php esc_html_e('Start Preloading', 'wps-cache'); ?>
             </button>
 
             <div id="wpsc-preload-progress" style="display: none;">
@@ -124,63 +124,63 @@ class CacheTools
         <table class="widefat striped">
             <tbody>
                 <tr>
-                    <th><?php esc_html_e('HTML Cache', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('HTML Cache', 'wps-cache'); ?></th>
                     <td>
                         <?php if ($stats['html']['enabled']): ?>
                             <span class="wpsc-status-ok">
                                 <?php
                                 echo esc_html(sprintf(
                                     /* translators: %1$s: number of files, %2$s: total cache size */
-                                    __('Active - %1$s files, %2$s total size', 'WPS-Cache'),
+                                    __('Active - %1$s files, %2$s total size', 'wps-cache'),
                                     number_format_i18n($stats['html']['files']),
                                     size_format($stats['html']['size'])
                                 ));
                                 ?>
                             </span>
                         <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'WPS-Cache'); ?></span>
+                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
                 <tr>
-                    <th><?php esc_html_e('Redis Cache', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Redis Cache', 'wps-cache'); ?></th>
                     <td>
                         <?php if ($stats['redis']['enabled']): ?>
                             <span class="wpsc-status-ok">
                                 <?php
                                 echo esc_html(sprintf(
                                     /* translators: %1$s: amount of memory used */
-                                    __('Connected - %1$s memory used', 'WPS-Cache'),
+                                    __('Connected - %1$s memory used', 'wps-cache'),
                                     size_format($stats['redis']['memory_used'])
                                 ));
                                 ?>
                             </span>
                         <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'WPS-Cache'); ?></span>
+                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
                 <tr>
-                    <th><?php esc_html_e('Varnish Cache', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Varnish Cache', 'wps-cache'); ?></th>
                     <td>
                         <?php if ($stats['varnish']['enabled']): ?>
                             <span class="wpsc-status-ok">
-                                <?php esc_html_e('Active and responding', 'WPS-Cache'); ?>
+                                <?php esc_html_e('Active and responding', 'wps-cache'); ?>
                             </span>
                         <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'WPS-Cache'); ?></span>
+                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
                 <tr>
-                    <th><?php esc_html_e('Last Cache Clear', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Last Cache Clear', 'wps-cache'); ?></th>
                     <td>
                         <?php
                         $last_clear = get_transient('wpsc_last_cache_clear');
                         echo esc_html(
                             $last_clear
-                                ? human_time_diff($last_clear) . ' ' . __('ago', 'WPS-Cache')
-                                : __('Never', 'WPS-Cache')
+                                ? human_time_diff($last_clear) . ' ' . __('ago', 'wps-cache')
+                                : __('Never', 'wps-cache')
                         );
                         ?>
                     </td>
@@ -537,12 +537,12 @@ class CacheTools
             if (file_exists($destination)) {
                 return [
                     'status'  => 'error_exists',
-                    'message' => esc_html__('Object cache drop-in already exists.', 'WPS-Cache')
+                    'message' => esc_html__('Object cache drop-in already exists.', 'wps-cache')
                 ];
             }
 
             if (!@copy($source, $destination)) {
-                throw new \Exception(esc_html__('Failed to copy object cache drop-in file.', 'WPS-Cache'));
+                throw new \Exception(esc_html__('Failed to copy object cache drop-in file.', 'wps-cache'));
             }
 
             if (!function_exists('WP_Filesystem')) {
@@ -554,7 +554,7 @@ class CacheTools
 
             return [
                 'status'  => 'success',
-                'message' => esc_html__('Object cache drop-in installed successfully.', 'WPS-Cache')
+                'message' => esc_html__('Object cache drop-in installed successfully.', 'wps-cache')
             ];
         } catch (\Exception $e) {
             return [
@@ -575,12 +575,12 @@ class CacheTools
             if (!file_exists($object_cache_file)) {
                 return [
                     'status'  => 'error_not_exists',
-                    'message' => esc_html__('Object cache drop-in does not exist.', 'WPS-Cache')
+                    'message' => esc_html__('Object cache drop-in does not exist.', 'wps-cache')
                 ];
             }
 
             if (!@wp_delete_file($object_cache_file)) {
-                throw new \Exception(esc_html__('Failed to remove object cache drop-in file.', 'WPS-Cache'));
+                throw new \Exception(esc_html__('Failed to remove object cache drop-in file.', 'wps-cache'));
             }
 
             // Clear object cache
@@ -588,7 +588,7 @@ class CacheTools
 
             return [
                 'status'  => 'success',
-                'message' => esc_html__('Object cache drop-in removed successfully.', 'WPS-Cache')
+                'message' => esc_html__('Object cache drop-in removed successfully.', 'wps-cache')
             ];
         } catch (\Exception $e) {
             return [

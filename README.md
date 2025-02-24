@@ -19,6 +19,15 @@
 - 🔧 **Easy Management** - Intuitive WordPress admin integration
 - 💾 **Import/Export** - Simple configuration backup and migration
 
+## External Services
+
+This plugin connects to external services to enhance caching performance:
+
+- **Varnish Cache:**  
+  The plugin sends HTTP requests (including purge requests and connection checks) to a configured Varnish caching server. No personally identifiable data is transmitted during these communications. For more details, please review the [Varnish Cache documentation](https://varnish-cache.org/), its [Terms of Service](https://varnish-cache.org/TOS), and [Privacy Policy](https://varnish-cache.org/privacy).
+
+_Note: If you configure your setup to use a remote Varnish server, ensure that you trust the server and have reviewed its policies._
+
 ## 🚀 Quick Start
 
 1. Upload `WPS-Cache` to `/wp-content/plugins/` or directly via the WordPress Admin Interface (Add Plugin → Upload Plugin)

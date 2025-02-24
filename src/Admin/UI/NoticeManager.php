@@ -125,12 +125,12 @@ class NoticeManager
 
             if ($_GET['cache_cleared'] === 'success') {
                 $this->renderNotice(
-                    __('All caches have been successfully cleared!', 'WPS-Cache'),
+                    __('All caches have been successfully cleared!', 'wps-cache'),
                     'success'
                 );
             } else {
                 $this->renderNotice(
-                    __('There was an error clearing some caches. Please check the error log.', 'WPS-Cache'),
+                    __('There was an error clearing some caches. Please check the error log.', 'wps-cache'),
                     'error'
                 );
             }
@@ -151,19 +151,19 @@ class NoticeManager
             switch ($_GET['object_cache_installed']) {
                 case 'success':
                     $this->renderNotice(
-                        __('Object cache drop-in installed successfully!', 'WPS-Cache'),
+                        __('Object cache drop-in installed successfully!', 'wps-cache'),
                         'success'
                     );
                     break;
                 case 'error_exists':
                     $this->renderNotice(
-                        __('Object cache drop-in already exists.', 'WPS-Cache'),
+                        __('Object cache drop-in already exists.', 'wps-cache'),
                         'error'
                     );
                     break;
                 case 'error_copy':
                     $this->renderNotice(
-                        __('Error installing object cache drop-in. Please check file permissions.', 'WPS-Cache'),
+                        __('Error installing object cache drop-in. Please check file permissions.', 'wps-cache'),
                         'error'
                     );
                     break;
@@ -179,13 +179,13 @@ class NoticeManager
             switch ($_GET['object_cache_removed']) {
                 case 'success':
                     $this->renderNotice(
-                        __('Object cache drop-in removed successfully!', 'WPS-Cache'),
+                        __('Object cache drop-in removed successfully!', 'wps-cache'),
                         'success'
                     );
                     break;
                 case 'error_remove':
                     $this->renderNotice(
-                        __('Error removing object cache drop-in. Please check file permissions.', 'WPS-Cache'),
+                        __('Error removing object cache drop-in. Please check file permissions.', 'wps-cache'),
                         'error'
                     );
                     break;
@@ -204,7 +204,7 @@ class NoticeManager
                 return;
             }
             $this->renderNotice(
-                __('Settings updated successfully!', 'WPS-Cache'),
+                __('Settings updated successfully!', 'wps-cache'),
                 'success'
             );
         }
@@ -215,7 +215,7 @@ class NoticeManager
                 return;
             }
             $this->renderNotice(
-                __('Error updating settings. Please try again.', 'WPS-Cache'),
+                __('Error updating settings. Please try again.', 'wps-cache'),
                 'error'
             );
         }
@@ -232,9 +232,9 @@ class NoticeManager
                 return;
             }
             $message = match ($_GET['import_error']) {
-                'upload'  => __('Error uploading settings file.', 'WPS-Cache'),
-                'invalid' => __('Invalid settings file format.', 'WPS-Cache'),
-                default   => __('Unknown error importing settings.', 'WPS-Cache')
+                'upload'  => __('Error uploading settings file.', 'wps-cache'),
+                'invalid' => __('Invalid settings file format.', 'wps-cache'),
+                default   => __('Unknown error importing settings.', 'wps-cache')
             };
             $this->renderNotice($message, 'error');
         }
@@ -245,7 +245,7 @@ class NoticeManager
                 return;
             }
             $this->renderNotice(
-                __('Settings imported successfully!', 'WPS-Cache'),
+                __('Settings imported successfully!', 'wps-cache'),
                 'success'
             );
         }
@@ -256,7 +256,7 @@ class NoticeManager
         // PHP version check
         if (version_compare(PHP_VERSION, '7.4', '<')) {
             /* translators: %s: current PHP version */
-            $message = __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'WPS-Cache');
+            $message = __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'wps-cache');
             $this->renderNotice(
                 sprintf(
                     $message,
@@ -270,7 +270,7 @@ class NoticeManager
         $conflicting_plugins = $this->getConflictingPlugins();
         if (!empty($conflicting_plugins)) {
             /* translators: %s: list of conflicting plugin names */
-            $message = __('The following plugins may conflict with WPS Cache: %s', 'WPS-Cache');
+            $message = __('The following plugins may conflict with WPS Cache: %s', 'wps-cache');
             $this->renderNotice(
                 sprintf(
                     $message,
@@ -284,7 +284,7 @@ class NoticeManager
         global $wp_version;
         if (version_compare($wp_version, '5.6', '<')) {
             /* translators: %s: current WordPress version */
-            $message = __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'WPS-Cache');
+            $message = __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'wps-cache');
             $this->renderNotice(
                 sprintf(
                     $message,
@@ -305,7 +305,7 @@ class NoticeManager
         // Redis extension check
         if (($settings['redis_cache'] ?? false) && !extension_loaded('redis')) {
             $this->renderNotice(
-                __('Redis cache is enabled but the Redis PHP extension is not installed.', 'WPS-Cache'),
+                __('Redis cache is enabled but the Redis PHP extension is not installed.', 'wps-cache'),
                 'error'
             );
         }
@@ -313,7 +313,7 @@ class NoticeManager
         // Object cache dropin check
         if (($settings['redis_cache'] ?? false) && !file_exists(WP_CONTENT_DIR . '/object-cache.php')) {
             $this->renderNotice(
-                __('Redis cache is enabled but the object cache drop-in is not installed.', 'WPS-Cache'),
+                __('Redis cache is enabled but the object cache drop-in is not installed.', 'wps-cache'),
                 'warning'
             );
         }
@@ -321,7 +321,7 @@ class NoticeManager
         // Varnish configuration check
         if (($settings['varnish_cache'] ?? false) && !function_exists('curl_init')) {
             $this->renderNotice(
-                __('Varnish cache is enabled but the PHP cURL extension is not installed.', 'WPS-Cache'),
+                __('Varnish cache is enabled but the PHP cURL extension is not installed.', 'wps-cache'),
                 'warning'
             );
         }
@@ -335,7 +335,7 @@ class NoticeManager
         global $wp_filesystem;
         if (!$wp_filesystem->is_writable($cache_dir)) {
             /* translators: %s: cache directory path */
-            $message = __('The cache directory %s is not writable. Please check the permissions.', 'WPS-Cache');
+            $message = __('The cache directory %s is not writable. Please check the permissions.', 'wps-cache');
             $this->renderNotice(
                 sprintf(
                     $message,
@@ -354,7 +354,7 @@ class NoticeManager
         // OPcache check
         if (!function_exists('opcache_get_status')) {
             $this->renderNotice(
-                __('OPcache is not enabled. Enabling it can significantly improve performance.', 'WPS-Cache'),
+                __('OPcache is not enabled. Enabling it can significantly improve performance.', 'wps-cache'),
                 'info',
                 true,
                 ['documentation_url' => 'https://www.php.net/manual/en/book.opcache.php']
@@ -365,7 +365,7 @@ class NoticeManager
         $memory_limit = wp_convert_hr_to_bytes(ini_get('memory_limit'));
         if ($memory_limit < 64 * MB_IN_BYTES) {
             $this->renderNotice(
-                __('PHP memory limit is low. Consider increasing it to at least 64MB for better performance.', 'WPS-Cache'),
+                __('PHP memory limit is low. Consider increasing it to at least 64MB for better performance.', 'wps-cache'),
                 'warning'
             );
         }
@@ -416,7 +416,7 @@ class NoticeManager
                     <a href="<?php echo esc_url($args['documentation_url']); ?>"
                         target="_blank"
                         rel="noopener noreferrer">
-                        <?php esc_html_e('Learn more', 'WPS-Cache'); ?> ›
+                        <?php esc_html_e('Learn more', 'wps-cache'); ?> ›
                     </a>
                 </p>
             <?php endif; ?>

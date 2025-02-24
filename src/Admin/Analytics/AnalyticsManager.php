@@ -117,26 +117,26 @@ class AnalyticsManager
     {
         $stats = [
             [
-                'title' => __('Cache Hit Ratio', 'WPS-Cache'),
+                'title' => __('Cache Hit Ratio', 'wps-cache'),
                 'value' => isset($redis_stats['hit_ratio']) ?
                     number_format_i18n($redis_stats['hit_ratio'], 2) . '%' : 'N/A',
                 'metric' => 'hit_ratio'
             ],
             [
-                'title' => __('Memory Usage', 'WPS-Cache'),
+                'title' => __('Memory Usage', 'wps-cache'),
                 'value' => isset($redis_stats['memory_used']) ?
                     size_format($redis_stats['memory_used']) : 'N/A',
                 'metric' => 'memory_used'
             ],
             [
-                'title' => __('Cache Operations', 'WPS-Cache'),
+                'title' => __('Cache Operations', 'wps-cache'),
                 'value' => number_format_i18n(
                     ($redis_stats['hits'] ?? 0) + ($redis_stats['misses'] ?? 0)
                 ),
                 'metric' => 'total_ops'
             ],
             [
-                'title' => __('Server Uptime', 'WPS-Cache'),
+                'title' => __('Server Uptime', 'wps-cache'),
                 'value' => isset($redis_stats['uptime']) ?
                     human_time_diff(time() - $redis_stats['uptime']) : 'N/A'
             ]
@@ -155,8 +155,7 @@ class AnalyticsManager
     ?>
         <div class="wpsc-stat-card">
             <h3><?php echo esc_html($stat['title']); ?></h3>
-            <div class="wpsc-stat-value" id="<?php echo isset($stat['metric']) ?
-                                                    esc_attr($stat['metric']) : ''; ?>">
+            <div class="wpsc-stat-value" id="<?php echo isset($stat['metric']) ? esc_attr($stat['metric']) : ''; ?>">
                 <?php echo esc_html($stat['value']); ?>
             </div>
             <?php if (isset($stat['metric'])): ?>
@@ -172,13 +171,13 @@ class AnalyticsManager
     private function renderDetailedMetrics(array $redis_stats): void
     {
     ?>
-        <h3><?php esc_html_e('Detailed Metrics', 'WPS-Cache'); ?></h3>
+        <h3><?php esc_html_e('Detailed Metrics', 'wps-cache'); ?></h3>
         <table class="widefat striped">
             <thead>
                 <tr>
-                    <th><?php esc_html_e('Metric', 'WPS-Cache'); ?></th>
-                    <th><?php esc_html_e('Value', 'WPS-Cache'); ?></th>
-                    <th><?php esc_html_e('Trend', 'WPS-Cache'); ?></th>
+                    <th><?php esc_html_e('Metric', 'wps-cache'); ?></th>
+                    <th><?php esc_html_e('Value', 'wps-cache'); ?></th>
+                    <th><?php esc_html_e('Trend', 'wps-cache'); ?></th>
                 </tr>
             </thead>
             <tbody id="detailed-metrics">
@@ -194,15 +193,15 @@ class AnalyticsManager
     private function renderMetricsTableRows(array $stats): void
     {
         $metrics = [
-            'hits' => __('Cache Hits', 'WPS-Cache'),
-            'misses' => __('Cache Misses', 'WPS-Cache'),
-            'hit_ratio' => __('Hit Ratio', 'WPS-Cache'),
-            'memory_used' => __('Memory Usage', 'WPS-Cache'),
-            'memory_peak' => __('Peak Memory', 'WPS-Cache'),
-            'total_connections' => __('Total Connections', 'WPS-Cache'),
-            'connected_clients' => __('Connected Clients', 'WPS-Cache'),
-            'evicted_keys' => __('Evicted Keys', 'WPS-Cache'),
-            'expired_keys' => __('Expired Keys', 'WPS-Cache'),
+            'hits' => __('Cache Hits', 'wps-cache'),
+            'misses' => __('Cache Misses', 'wps-cache'),
+            'hit_ratio' => __('Hit Ratio', 'wps-cache'),
+            'memory_used' => __('Memory Usage', 'wps-cache'),
+            'memory_peak' => __('Peak Memory', 'wps-cache'),
+            'total_connections' => __('Total Connections', 'wps-cache'),
+            'connected_clients' => __('Connected Clients', 'wps-cache'),
+            'evicted_keys' => __('Evicted Keys', 'wps-cache'),
+            'expired_keys' => __('Expired Keys', 'wps-cache'),
         ];
 
         foreach ($metrics as $key => $label) {
@@ -225,8 +224,7 @@ class AnalyticsManager
             <td><?php echo esc_html($value); ?></td>
             <td class="wpsc-trend <?php echo $trend > 0 ? 'positive' : ($trend < 0 ? 'negative' : ''); ?>">
                 <?php if ($trend !== null): ?>
-                    <span class="dashicons <?php echo $trend > 0 ?
-                                                'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'; ?>">
+                    <span class="dashicons <?php echo $trend > 0 ? 'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'; ?>">
                     </span>
                     <?php echo esc_html(number_format_i18n(abs($trend), 2)) . '%'; ?>
                 <?php endif; ?>
