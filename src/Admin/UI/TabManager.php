@@ -28,19 +28,19 @@ class TabManager
     {
         $this->tabs = [
             'settings' => [
-                'label'      => __('Settings', 'WPS-Cache'),
+                'label'      => __('Settings', 'wps-cache'),
                 'capability' => 'manage_options',
                 'icon'       => 'dashicons-admin-generic',
                 'order'      => 10
             ],
             'analytics' => [
-                'label'      => __('Analytics', 'WPS-Cache'),
+                'label'      => __('Analytics', 'wps-cache'),
                 'capability' => 'manage_options',
                 'icon'       => 'dashicons-chart-bar',
                 'order'      => 20
             ],
             'tools' => [
-                'label'      => __('Tools', 'WPS-Cache'),
+                'label'      => __('Tools', 'wps-cache'),
                 'capability' => 'manage_options',
                 'icon'       => 'dashicons-admin-tools',
                 'order'      => 30

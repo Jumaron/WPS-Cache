@@ -37,12 +37,12 @@ class SettingsManager
     public function registerSettings(): void
     {
         register_setting(
-            'wpsc_settings',
-            'wpsc_settings',
+            'wpscac_settings',
+            'wpscac_settings',
             [
                 'type'              => 'array',
                 'sanitize_callback' => [$this->validator, 'sanitizeSettings'],
-                'default' => $this->getDefaultSettings()
+                'default'           => $this->getDefaultSettings()
             ]
         );
 
@@ -57,34 +57,34 @@ class SettingsManager
     {
         // Cache Settings Section
         add_settings_section(
-            'wpsc_cache_settings',
-            __('Cache Settings', 'WPS-Cache'),
+            'wpscac_cache_settings',
+            __('Cache Settings', 'wps-cache'),
             [$this->renderer, 'renderCacheSettingsInfo'],
-            'WPS-Cache'
+            'wps-cache'
         );
 
         // Redis Settings Section
         add_settings_section(
-            'wpsc_redis_settings',
-            __('Redis Settings', 'WPS-Cache'),
+            'wpscac_redis_settings',
+            __('Redis Settings', 'wps-cache'),
             [$this->renderer, 'renderRedisSettingsInfo'],
-            'WPS-Cache'
+            'wps-cache'
         );
 
         // Varnish Settings Section
         add_settings_section(
-            'wpsc_varnish_settings',
-            __('Varnish Settings', 'WPS-Cache'),
+            'wpscac_varnish_settings',
+            __('Varnish Settings', 'wps-cache'),
             [$this->renderer, 'renderVarnishSettingsInfo'],
-            'WPS-Cache'
+            'wps-cache'
         );
 
         // Advanced Settings Section
         add_settings_section(
-            'wpsc_advanced_settings',
-            __('Advanced Settings', 'WPS-Cache'),
+            'wpscac_advanced_settings',
+            __('Advanced Settings', 'wps-cache'),
             [$this->renderer, 'renderAdvancedSettingsInfo'],
-            'WPS-Cache'
+            'wps-cache'
         );
     }
 
@@ -95,179 +95,179 @@ class SettingsManager
     {
         // Cache Type Fields
         add_settings_field(
-            'wpsc_html_cache',
-            __('HTML Cache', 'WPS-Cache'),
+            'wpscac_html_cache',
+            __('HTML Cache', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_cache_settings',
+            'wps-cache',
+            'wpscac_cache_settings',
             [
-                'label_for'   => 'wpsc_html_cache',
+                'label_for'   => 'wpscac_html_cache',
                 'option_name' => 'html_cache',
-                'description' => __('Enable static HTML caching', 'WPS-Cache')
+                'description' => __('Enable static HTML caching', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_redis_cache',
-            __('Redis Cache', 'WPS-Cache'),
+            'wpscac_redis_cache',
+            __('Redis Cache', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_cache_settings',
+            'wps-cache',
+            'wpscac_cache_settings',
             [
-                'label_for'   => 'wpsc_redis_cache',
+                'label_for'   => 'wpscac_redis_cache',
                 'option_name' => 'redis_cache',
-                'description' => __('Enable Redis object caching', 'WPS-Cache')
+                'description' => __('Enable Redis object caching', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_varnish_cache',
-            __('Varnish Cache', 'WPS-Cache'),
+            'wpscac_varnish_cache',
+            __('Varnish Cache', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_cache_settings',
+            'wps-cache',
+            'wpscac_cache_settings',
             [
-                'label_for'   => 'wpsc_varnish_cache',
+                'label_for'   => 'wpscac_varnish_cache',
                 'option_name' => 'varnish_cache',
-                'description' => __('Enable Varnish HTTP cache', 'WPS-Cache')
+                'description' => __('Enable Varnish HTTP cache', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_css_minify',
-            __('CSS Minification', 'WPS-Cache'),
+            'wpscac_css_minify',
+            __('CSS Minification', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_cache_settings',
+            'wps-cache',
+            'wpscac_cache_settings',
             [
-                'label_for'   => 'wpsc_css_minify',
+                'label_for'   => 'wpscac_css_minify',
                 'option_name' => 'css_minify',
-                'description' => __('Minify CSS (Experimental)', 'WPS-Cache')
+                'description' => __('Minify CSS (Experimental)', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_js_minify',
-            __('JS Minification', 'WPS-Cache'),
+            'wpscac_js_minify',
+            __('JS Minification', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_cache_settings',
+            'wps-cache',
+            'wpscac_cache_settings',
             [
-                'label_for'   => 'wpsc_js_minify',
+                'label_for'   => 'wpscac_js_minify',
                 'option_name' => 'js_minify',
-                'description' => __('Minify JS (Experimental)', 'WPS-Cache')
+                'description' => __('Minify JS (Experimental)', 'wps-cache')
             ]
         );
 
         // Redis Fields
         add_settings_field(
-            'wpsc_redis_host',
-            __('Redis Host', 'WPS-Cache'),
+            'wpscac_redis_host',
+            __('Redis Host', 'wps-cache'),
             [$this->renderer, 'renderTextField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_host',
+                'label_for'   => 'wpscac_redis_host',
                 'option_name' => 'redis_host',
-                'description' => __('Redis server hostname or IP', 'WPS-Cache')
+                'description' => __('Redis server hostname or IP', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_redis_port',
-            __('Redis Port', 'WPS-Cache'),
+            'wpscac_redis_port',
+            __('Redis Port', 'wps-cache'),
             [$this->renderer, 'renderNumberField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_port',
+                'label_for'   => 'wpscac_redis_port',
                 'option_name' => 'redis_port',
-                'description' => __('Redis server port', 'WPS-Cache'),
+                'description' => __('Redis server port', 'wps-cache'),
                 'min'         => 1,
                 'max'         => 65535
             ]
         );
         add_settings_field(
-            'wpsc_redis_db',
-            __('Redis Database', 'WPS-Cache'),
+            'wpscac_redis_db',
+            __('Redis Database', 'wps-cache'),
             [$this->renderer, 'renderNumberField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_db',
+                'label_for'   => 'wpscac_redis_db',
                 'option_name' => 'redis_db',
-                'description' => __('Redis database index', 'WPS-Cache'),
+                'description' => __('Redis database index', 'wps-cache'),
                 'min'         => 0,
                 'max'         => 15
             ]
         );
         add_settings_field(
-            'wpsc_redis_password',
-            __('Redis Password', 'WPS-Cache'),
+            'wpscac_redis_password',
+            __('Redis Password', 'wps-cache'),
             [$this->renderer, 'renderPasswordField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_password',
+                'label_for'   => 'wpscac_redis_password',
                 'option_name' => 'redis_password',
-                'description' => __('Redis password (leave blank if none)', 'WPS-Cache')
+                'description' => __('Redis password (leave blank if none)', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_redis_prefix',
-            __('Redis Prefix', 'WPS-Cache'),
+            'wpscac_redis_prefix',
+            __('Redis Prefix', 'wps-cache'),
             [$this->renderer, 'renderTextField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_prefix',
+                'label_for'   => 'wpscac_redis_prefix',
                 'option_name' => 'redis_prefix',
-                'description' => __('Prefix for Redis keys', 'WPS-Cache')
+                'description' => __('Prefix for Redis keys', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_redis_persistent',
-            __('Persistent Connections', 'WPS-Cache'),
+            'wpscac_redis_persistent',
+            __('Persistent Connections', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_persistent',
+                'label_for'   => 'wpscac_redis_persistent',
                 'option_name' => 'redis_persistent',
-                'description' => __('Use persistent Redis connections', 'WPS-Cache')
+                'description' => __('Use persistent Redis connections', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_redis_compression',
-            __('Redis Compression', 'WPS-Cache'),
+            'wpscac_redis_compression',
+            __('Redis Compression', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'WPS-Cache',
-            'wpsc_redis_settings',
+            'wps-cache',
+            'wpscac_redis_settings',
             [
-                'label_for'   => 'wpsc_redis_compression',
+                'label_for'   => 'wpscac_redis_compression',
                 'option_name' => 'redis_compression',
-                'description' => __('Enable compression for Redis data', 'WPS-Cache')
+                'description' => __('Enable compression for Redis data', 'wps-cache')
             ]
         );
 
         // Varnish Fields
         add_settings_field(
-            'wpsc_varnish_host',
-            __('Varnish Host', 'WPS-Cache'),
+            'wpscac_varnish_host',
+            __('Varnish Host', 'wps-cache'),
             [$this->renderer, 'renderTextField'],
-            'WPS-Cache',
-            'wpsc_varnish_settings',
+            'wps-cache',
+            'wpscac_varnish_settings',
             [
-                'label_for'   => 'wpsc_varnish_host',
+                'label_for'   => 'wpscac_varnish_host',
                 'option_name' => 'varnish_host',
-                'description' => __('Varnish server hostname or IP', 'WPS-Cache')
+                'description' => __('Varnish server hostname or IP', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_varnish_port',
-            __('Varnish Port', 'WPS-Cache'),
+            'wpscac_varnish_port',
+            __('Varnish Port', 'wps-cache'),
             [$this->renderer, 'renderNumberField'],
-            'WPS-Cache',
-            'wpsc_varnish_settings',
+            'wps-cache',
+            'wpscac_varnish_settings',
             [
-                'label_for'   => 'wpsc_varnish_port',
+                'label_for'   => 'wpscac_varnish_port',
                 'option_name' => 'varnish_port',
-                'description' => __('Varnish server port', 'WPS-Cache'),
+                'description' => __('Varnish server port', 'wps-cache'),
                 'min'         => 1,
                 'max'         => 65535
             ]
@@ -275,55 +275,55 @@ class SettingsManager
 
         // Advanced Settings Fields
         add_settings_field(
-            'wpsc_cache_lifetime',
-            __('Cache Lifetime', 'WPS-Cache'),
+            'wpscac_cache_lifetime',
+            __('Cache Lifetime', 'wps-cache'),
             [$this->renderer, 'renderNumberField'],
-            'WPS-Cache',
-            'wpsc_advanced_settings',
+            'wps-cache',
+            'wpscac_advanced_settings',
             [
-                'label_for'   => 'wpsc_cache_lifetime',
+                'label_for'   => 'wpscac_cache_lifetime',
                 'option_name' => 'cache_lifetime',
-                'description' => __('Cache lifetime in seconds', 'WPS-Cache'),
+                'description' => __('Cache lifetime in seconds', 'wps-cache'),
                 'min'         => 60,
                 'max'         => 2592000
             ]
         );
         add_settings_field(
-            'wpsc_excluded_urls',
-            __('Excluded URLs', 'WPS-Cache'),
+            'wpscac_excluded_urls',
+            __('Excluded URLs', 'wps-cache'),
             [$this->renderer, 'renderTextareaField'],
-            'WPS-Cache',
-            'wpsc_advanced_settings',
+            'wps-cache',
+            'wpscac_advanced_settings',
             [
-                'label_for'   => 'wpsc_excluded_urls',
+                'label_for'   => 'wpscac_excluded_urls',
                 'option_name' => 'excluded_urls',
-                'description' => __('URLs to exclude from caching (one per line)', 'WPS-Cache')
+                'description' => __('URLs to exclude from caching (one per line)', 'wps-cache')
             ]
         );
         add_settings_field(
-            'wpsc_object_cache_alloptions_limit',
-            __('Alloptions Limit', 'WPS-Cache'),
+            'wpscac_object_cache_alloptions_limit',
+            __('Alloptions Limit', 'wps-cache'),
             [$this->renderer, 'renderNumberField'],
-            'WPS-Cache',
-            'wpsc_advanced_settings',
+            'wps-cache',
+            'wpscac_advanced_settings',
             [
-                'label_for'   => 'wpsc_object_cache_alloptions_limit',
+                'label_for'   => 'wpscac_object_cache_alloptions_limit',
                 'option_name' => 'advanced_settings[object_cache_alloptions_limit]',
-                'description' => __('Limit for alloptions object cache', 'WPS-Cache'),
+                'description' => __('Limit for alloptions object cache', 'wps-cache'),
                 'min'         => 100,
                 'max'         => 5000
             ]
         );
         add_settings_field(
-            'wpsc_cache_groups',
-            __('Cache Groups', 'WPS-Cache'),
+            'wpscac_cache_groups',
+            __('Cache Groups', 'wps-cache'),
             [$this->renderer, 'renderTextareaField'],
-            'WPS-Cache',
-            'wpsc_advanced_settings',
+            'wps-cache',
+            'wpscac_advanced_settings',
             [
-                'label_for'   => 'wpsc_cache_groups',
+                'label_for'   => 'wpscac_cache_groups',
                 'option_name' => 'advanced_settings[cache_groups]',
-                'description' => __('Cache groups to include (one per line)', 'WPS-Cache')
+                'description' => __('Cache groups to include (one per line)', 'wps-cache')
             ]
         );
     }
@@ -348,33 +348,33 @@ class SettingsManager
     public function getDefaultSettings(): array
     {
         return [
-            'html_cache' => false,
-            'redis_cache' => false,
-            'varnish_cache' => false,
-            'css_minify' => false,
-            'js_minify' => false,
-            'cache_lifetime' => 3600,
-            'excluded_urls' => [],
-            'excluded_css' => [],
-            'excluded_js' => [],
-            'redis_host' => '127.0.0.1',
-            'redis_port' => 6379,
-            'redis_db' => 0,
-            'redis_password' => '',
-            'redis_prefix' => 'wpsc:',
-            'redis_persistent' => false,
-            'redis_compression' => true,
-            'varnish_host' => '127.0.0.1',
-            'varnish_port' => 6081,
-            'preload_urls' => [],
-            'preload_interval' => 'daily',
-            'enable_metrics' => true,
-            'metrics_retention' => 30,
-            'advanced_settings' => [
+            'html_cache'         => false,
+            'redis_cache'        => false,
+            'varnish_cache'      => false,
+            'css_minify'         => false,
+            'js_minify'          => false,
+            'cache_lifetime'     => 3600,
+            'excluded_urls'      => [],
+            'excluded_css'       => [],
+            'excluded_js'        => [],
+            'redis_host'         => '127.0.0.1',
+            'redis_port'         => 6379,
+            'redis_db'           => 0,
+            'redis_password'     => '',
+            'redis_prefix'       => 'wpscac:',
+            'redis_persistent'   => false,
+            'redis_compression'  => true,
+            'varnish_host'       => '127.0.0.1',
+            'varnish_port'       => 6081,
+            'preload_urls'       => [],
+            'preload_interval'   => 'daily',
+            'enable_metrics'     => true,
+            'metrics_retention'  => 30,
+            'advanced_settings'  => [
                 'object_cache_alloptions_limit' => 1000,
-                'max_ttl' => 86400,
-                'cache_groups' => [],
-                'ignored_groups' => [],
+                'max_ttl'                       => 86400,
+                'cache_groups'                  => [],
+                'ignored_groups'                => [],
             ]
         ];
     }
@@ -389,11 +389,11 @@ class SettingsManager
     {
         $validated_settings = $this->validator->sanitizeSettings($settings);
 
-        $updated = update_option('wpsc_settings', $validated_settings);
+        $updated = update_option('wpscac_settings', $validated_settings);
 
         if ($updated) {
             $this->cache_manager->clearAllCaches();
-            do_action('wpsc_settings_updated', $validated_settings);
+            do_action('wpscac_settings_updated', $validated_settings);
         }
 
         return $updated;
@@ -406,7 +406,7 @@ class SettingsManager
      */
     public function getSettings(): array
     {
-        return get_option('wpsc_settings', $this->getDefaultSettings());
+        return get_option('wpscac_settings', $this->getDefaultSettings());
     }
 
     /**

@@ -83,18 +83,18 @@ final class RedisCache extends AbstractCacheDriver
         /* translators: %1$s: Redis host, %2$d: Redis port */
         if (!$connected) {
             throw new RedisException(
-                esc_html(sprintf(__("Failed to connect to Redis server at %1\$s:%2\$d", 'WPS-Cache'), $this->host, $this->port))
+                esc_html(sprintf(__("Failed to connect to Redis server at %1\$s:%2\$d", "wps-cache"), $this->host, $this->port))
             );
         }
 
         if ($this->password && !$this->redis->auth($this->password)) {
-            throw new RedisException(esc_html__('Failed to authenticate with Redis server', 'WPS-Cache'));
+            throw new RedisException(esc_html__('Failed to authenticate with Redis server', "wps-cache"));
         }
 
         /* translators: %1$d: Redis database number */
         if (!$this->redis->select($this->db)) {
             throw new RedisException(
-                esc_html(sprintf(__("Failed to select Redis database %1\$d", 'WPS-Cache'), $this->db))
+                esc_html(sprintf(__("Failed to select Redis database %1\$d", "wps-cache"), $this->db))
             );
         }
     }

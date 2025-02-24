@@ -17,12 +17,12 @@ class DiagnosticTools
 ?>
         <div class="wpsc-diagnostics-container">
             <p class="description">
-                <?php esc_html_e('System information and diagnostic details for troubleshooting.', 'WPS-Cache'); ?>
+                <?php esc_html_e('System information and diagnostic details for troubleshooting.', 'wps-cache'); ?>
             </p>
 
             <!-- System Information -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php esc_html_e('System Information', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('System Information', 'wps-cache'); ?></h4>
                 <textarea readonly class="large-text code" rows="10">
 <?php echo esc_textarea($this->getFormattedDiagnosticInfo()); ?>
                 </textarea>
@@ -30,19 +30,19 @@ class DiagnosticTools
 
             <!-- Cache Test Tools -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php esc_html_e('Cache Tests', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Cache Tests', 'wps-cache'); ?></h4>
                 <?php $this->renderCacheTests(); ?>
             </div>
 
             <!-- Error Log Viewer -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php esc_html_e('Error Log', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Error Log', 'wps-cache'); ?></h4>
                 <?php $this->renderErrorLog(); ?>
             </div>
 
             <!-- Debug Controls -->
             <div class="wpsc-diagnostic-section">
-                <h4><?php esc_html_e('Debug Controls', 'WPS-Cache'); ?></h4>
+                <h4><?php esc_html_e('Debug Controls', 'wps-cache'); ?></h4>
                 <?php $this->renderDebugControls(); ?>
             </div>
         </div>
@@ -263,17 +263,17 @@ class DiagnosticTools
     ?>
         <div class="wpsc-cache-tests">
             <button type="button" class="button" id="wpsc-test-redis">
-                <?php esc_html_e('Test Redis Connection', 'WPS-Cache'); ?>
+                <?php esc_html_e('Test Redis Connection', 'wps-cache'); ?>
             </button>
             <button type="button" class="button" id="wpsc-test-varnish">
-                <?php esc_html_e('Test Varnish Connection', 'WPS-Cache'); ?>
+                <?php esc_html_e('Test Varnish Connection', 'wps-cache'); ?>
             </button>
             <button type="button" class="button" id="wpsc-test-permissions">
-                <?php esc_html_e('Test File Permissions', 'WPS-Cache'); ?>
+                <?php esc_html_e('Test File Permissions', 'wps-cache'); ?>
             </button>
 
             <div id="wpsc-test-results" class="wpsc-test-results" style="display: none;">
-                <h5><?php esc_html_e('Test Results', 'WPS-Cache'); ?></h5>
+                <h5><?php esc_html_e('Test Results', 'wps-cache'); ?></h5>
                 <pre class="wpsc-test-output"></pre>
             </div>
         </div>
@@ -294,15 +294,15 @@ class DiagnosticTools
                 </textarea>
                 <p>
                     <button type="button" class="button" id="wpsc-clear-log">
-                        <?php esc_html_e('Clear Log', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Clear Log', 'wps-cache'); ?>
                     </button>
                     <button type="button" class="button" id="wpsc-download-log">
-                        <?php esc_html_e('Download Log', 'WPS-Cache'); ?>
+                        <?php esc_html_e('Download Log', 'wps-cache'); ?>
                     </button>
                 </p>
             <?php else: ?>
                 <p class="description">
-                    <?php esc_html_e('No error log file found.', 'WPS-Cache'); ?>
+                    <?php esc_html_e('No error log file found.', 'wps-cache'); ?>
                 </p>
             <?php endif; ?>
         </div>
@@ -319,17 +319,17 @@ class DiagnosticTools
             <label>
                 <input type="checkbox" id="wpsc-enable-debug"
                     <?php checked(get_option('wpsc_debug_mode')); ?>>
-                <?php esc_html_e('Enable Debug Mode', 'WPS-Cache'); ?>
+                <?php esc_html_e('Enable Debug Mode', 'wps-cache'); ?>
             </label>
             <p class="description">
-                <?php esc_html_e('Enables detailed logging for troubleshooting.', 'WPS-Cache'); ?>
+                <?php esc_html_e('Enables detailed logging for troubleshooting.', 'wps-cache'); ?>
             </p>
 
             <button type="button" class="button" id="wpsc-generate-report">
-                <?php esc_html_e('Generate Debug Report', 'WPS-Cache'); ?>
+                <?php esc_html_e('Generate Debug Report', 'wps-cache'); ?>
             </button>
             <p class="description">
-                <?php esc_html_e('Creates a comprehensive debug report for support.', 'WPS-Cache'); ?>
+                <?php esc_html_e('Creates a comprehensive debug report for support.', 'wps-cache'); ?>
             </p>
         </div>
 <?php

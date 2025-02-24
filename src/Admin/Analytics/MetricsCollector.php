@@ -92,7 +92,7 @@ class MetricsCollector
         $expired_count = 0;
 
         $settings = get_option('wpsc_settings');
-        $lifetime = $settings['cache_lifetime'] ?? 3600;
+        $lifetime = isset($settings['cache_lifetime']) ? absint($settings['cache_lifetime']) : 3600;
 
         if (is_array($files)) {
             $file_count = count($files);
@@ -163,43 +163,52 @@ class MetricsCollector
         $hit_ratio = $total_ops > 0 ? ($hits / $total_ops) * 100 : 0;
 
         return [
-            'connected'              => true,
-            'version'                => $info['redis_version'] ?? 'unknown',
-            'uptime'                 => $info['uptime_in_seconds'] ?? 0,
-            'memory_used'            => $info['used_memory'] ?? 0,
-            'memory_peak'            => $info['used_memory_peak'] ?? 0,
-            'hit_ratio'              => round($hit_ratio, 2),
-            'hits'                   => $hits,
-            'misses'                 => $misses,
-            'total_connections'      => $info['total_connections_received'] ?? 0,
-            'connected_clients'      => $info['connected_clients'] ?? 0,
-            'evicted_keys'           => $info['evicted_keys'] ?? 0,
-            'expired_keys'           => $info['expired_keys'] ?? 0,
-            'last_save_time'         => $info['last_save_time'] ?? 0,
+            'connected'               => true,
+            'version'                 => $info['redis_version'] ?? 'unknown',
+            'uptime'                  => $info['uptime_in_seconds'] ?? 0,
+            'memory_used'             => $info['used_memory'] ?? 0,
+            'memory_peak'             => $info['used_memory_peak'] ?? 0,
+            'hit_ratio'               => round($hit_ratio, 2),
+            'hits'                    => $hits,
+            'misses'                  => $misses,
+            'total_connections'       => $info['total_connections_received'] ?? 0,
+            'connected_clients'       => $info['connected_clients'] ?? 0,
+            'evicted_keys'            => $info['evicted_keys'] ?? 0,
+            'expired_keys'            => $info['expired_keys'] ?? 0,
+            'last_save_time'          => $info['last_save_time'] ?? 0,
             'total_commands_processed' => $info['total_commands_processed'] ?? 0
         ];
     }
 
     /**
-     * Gets Varnish statistics
+     * Gets Varnish statistics.
+     *
+     * This function connects to an external Varnish caching service using wp_remote_get.
+     * It sends a GET request to the configured Varnish server to check its connection status,
+     * and a test request to the site's home URL with a custom header to detect Varnish-related headers.
+     * No sensitive user data is transmitted. For details on this external service,
+     * please refer to the plugin's readme documentation.
+     *
+     * @return array|null Varnish stats if available, otherwise null.
      */
     public function getVarnishStats(): ?array
     {
         $settings = get_option('wpsc_settings');
-        if (!($settings['varnish_cache'] ?? false)) {
+        if (empty($settings['varnish_cache'])) {
             return null;
         }
 
-        try {
-            $varnish_host = $settings['varnish_host'] ?? '127.0.0.1';
-            $varnish_port = (int)($settings['varnish_port'] ?? 6081);
+        // Sanitize the Varnish host and port options.
+        $varnish_host = sanitize_text_field($settings['varnish_host'] ?? '127.0.0.1');
+        $varnish_port = absint($settings['varnish_port'] ?? 6081);
 
-            // Check Varnish connection using wp_remote_get() instead of fsockopen()
+        try {
+            // Send a request to the Varnish server to check connection.
             $url = "http://{$varnish_host}:{$varnish_port}";
             $response = wp_remote_get($url, ['timeout' => 1]);
             $is_active = !is_wp_error($response);
 
-            // Get Varnish headers from test request
+            // Send a test request to the home URL with a custom header to detect Varnish-related headers.
             $test_response = wp_remote_get(home_url(), [
                 'headers' => ['X-WPSC-Cache-Check' => '1'],
                 'timeout' => 5,
@@ -235,11 +244,11 @@ class MetricsCollector
     private function getSystemMetrics(): array
     {
         return [
-            'memory_usage'  => memory_get_usage(true),
-            'memory_peak'   => memory_get_peak_usage(true),
+            'memory_usage'   => memory_get_usage(true),
+            'memory_peak'    => memory_get_peak_usage(true),
             'opcache_enabled' => function_exists('opcache_get_status') &&
                 opcache_get_status() !== false,
-            'opcache_stats' => $this->getOpcacheStats(),
+            'opcache_stats'  => $this->getOpcacheStats(),
         ];
     }
 
@@ -258,11 +267,11 @@ class MetricsCollector
         }
 
         return [
-            'hits'            => $stats['opcache_statistics']['hits'] ?? 0,
-            'misses'          => $stats['opcache_statistics']['misses'] ?? 0,
-            'memory_used'     => $stats['memory_usage']['used_memory'] ?? 0,
-            'memory_free'     => $stats['memory_usage']['free_memory'] ?? 0,
-            'cached_scripts'  => $stats['opcache_statistics']['num_cached_scripts'] ?? 0,
+            'hits'           => $stats['opcache_statistics']['hits'] ?? 0,
+            'misses'         => $stats['opcache_statistics']['misses'] ?? 0,
+            'memory_used'    => $stats['memory_usage']['used_memory'] ?? 0,
+            'memory_free'    => $stats['memory_usage']['free_memory'] ?? 0,
+            'cached_scripts' => $stats['opcache_statistics']['num_cached_scripts'] ?? 0,
         ];
     }
 
@@ -271,7 +280,8 @@ class MetricsCollector
      */
     private function storeHistoricalMetrics(array $metrics): void
     {
-        if (!get_option('wpsc_settings')['enable_metrics']) {
+        $settings = get_option('wpsc_settings');
+        if (empty($settings['enable_metrics'])) {
             return;
         }
 

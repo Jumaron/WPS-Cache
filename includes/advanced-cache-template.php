@@ -37,7 +37,9 @@ class WPSAdvancedCache
 
     public function __construct()
     {
-        $this->request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $this->request_uri = isset($_SERVER['REQUEST_URI'])
+            ? filter_var($_SERVER['REQUEST_URI'], FILTER_SANITIZE_URL)
+            : '';
         $this->settings = $this->getSettings();
         $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
     }
