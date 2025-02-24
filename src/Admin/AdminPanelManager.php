@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin;
@@ -13,7 +14,8 @@ use WPSCache\Admin\UI\NoticeManager;
 /**
  * Main coordinator class for the WPS Cache admin interface
  */
-final class AdminPanelManager {
+final class AdminPanelManager
+{
     private CacheManager $cache_manager;
     private SettingsManager $settings_manager;
     private AnalyticsManager $analytics_manager;
@@ -21,7 +23,8 @@ final class AdminPanelManager {
     private TabManager $tab_manager;
     private NoticeManager $notice_manager;
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
         $this->initializeComponents();
         $this->initializeHooks();
@@ -30,7 +33,8 @@ final class AdminPanelManager {
     /**
      * Initializes all admin component managers
      */
-    private function initializeComponents(): void {
+    private function initializeComponents(): void
+    {
         $this->settings_manager = new SettingsManager($this->cache_manager);
         $this->analytics_manager = new AnalyticsManager($this->cache_manager);
         $this->tools_manager = new ToolsManager($this->cache_manager);
@@ -41,7 +45,8 @@ final class AdminPanelManager {
     /**
      * Sets up WordPress admin hooks
      */
-    private function initializeHooks(): void {
+    private function initializeHooks(): void
+    {
         // Admin menu and assets
         add_action('admin_menu', [$this, 'addAdminMenu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAdminAssets']);
@@ -62,7 +67,8 @@ final class AdminPanelManager {
     /**
      * Adds the plugin's admin menu item
      */
-    public function addAdminMenu(): void {
+    public function addAdminMenu(): void
+    {
         add_menu_page(
             'WPS Cache',
             'WPS Cache',
@@ -77,11 +83,12 @@ final class AdminPanelManager {
     /**
      * Enqueues admin scripts and styles
      */
-    public function enqueueAdminAssets(string $hook): void {
+    public function enqueueAdminAssets(string $hook): void
+    {
         if ('toplevel_page_wps-cache' !== $hook) {
             return;
         }
-    
+
         // Styles
         wp_enqueue_style(
             'wpsc-admin-styles',
@@ -89,7 +96,7 @@ final class AdminPanelManager {
             [],
             WPSC_VERSION
         );
-    
+
         wp_enqueue_script(
             'wpsc-admin-scripts',
             WPSC_PLUGIN_URL . 'assets/js/admin.js',
@@ -97,14 +104,15 @@ final class AdminPanelManager {
             WPSC_VERSION,
             true
         );
-    
+
         wp_localize_script('wpsc-admin-scripts', 'wpsc_admin', $this->getJsConfig());
     }
 
     /**
      * Gets the JavaScript configuration array
      */
-    private function getJsConfig(): array {
+    private function getJsConfig(): array
+    {
         return [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('wpsc_ajax_nonce'),
@@ -116,7 +124,8 @@ final class AdminPanelManager {
     /**
      * Gets translated strings for JavaScript
      */
-    private function getJsStrings(): array {
+    private function getJsStrings(): array
+    {
         return [
             'confirm_clear_cache'      => __('Are you sure you want to clear all caches?', 'WPS-Cache'),
             'confirm_install_dropin'   => __('Are you sure you want to install the object cache drop-in?', 'WPS-Cache'),
@@ -137,7 +146,8 @@ final class AdminPanelManager {
     /**
      * Renders the main admin page
      */
-    public function renderAdminPage(): void {
+    public function renderAdminPage(): void
+    {
         if (!current_user_can('manage_options')) {
             return;
         }
@@ -145,8 +155,8 @@ final class AdminPanelManager {
         // Use TabManager's method to retrieve the active tab, which properly sanitizes
         // and verifies the nonce for the 'tab' query variable.
         $current_tab = $this->tab_manager->getCurrentTab();
-        ?>
-       <div class="wrap">
+?>
+        <div class="wrap">
             <h1><?php esc_html_e('WPS Cache', 'WPS-Cache'); ?></h1>
 
             <div class="wpsc-admin-container">
@@ -159,13 +169,14 @@ final class AdminPanelManager {
                 </div>
             </div>
         </div>
-        <?php
+<?php
     }
 
     /**
      * Renders the content for the current tab
      */
-    private function renderTabContent(string $current_tab): void {
+    private function renderTabContent(string $current_tab): void
+    {
         switch ($current_tab) {
             case 'analytics':
                 $this->analytics_manager->renderTab();

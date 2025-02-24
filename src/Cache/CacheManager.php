@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Cache;
@@ -9,7 +10,8 @@ use Throwable;
 /**
  * Cache management class handling multiple cache drivers
  */
-final class CacheManager {
+final class CacheManager
+{
     private const CACHE_CLEANUP_HOOKS = [
         'save_post',
         'comment_post',
@@ -31,14 +33,16 @@ final class CacheManager {
     /**
      * Adds a cache driver to the manager
      */
-    public function addDriver(CacheDriverInterface $driver): void {
+    public function addDriver(CacheDriverInterface $driver): void
+    {
         $this->drivers[] = $driver;
     }
 
     /**
      * Initializes all cache drivers and sets up hooks
      */
-    public function initializeCache(): void {
+    public function initializeCache(): void
+    {
         if ($this->initialized) {
             return;
         }
@@ -51,7 +55,8 @@ final class CacheManager {
     /**
      * Initializes individual cache drivers
      */
-    private function initializeDrivers(): void {
+    private function initializeDrivers(): void
+    {
         foreach ($this->drivers as $driver) {
             try {
                 $driver->initialize();
@@ -68,7 +73,8 @@ final class CacheManager {
     /**
      * Sets up WordPress cache cleanup hooks
      */
-    private function setupCacheHooks(): void {
+    private function setupCacheHooks(): void
+    {
         foreach (self::CACHE_CLEANUP_HOOKS as $hook) {
             add_action($hook, [$this, 'clearAllCaches']);
         }
@@ -77,7 +83,8 @@ final class CacheManager {
     /**
      * Clears all caches including drivers, WordPress core, and opcache
      */
-    public function clearAllCaches(): bool {
+    public function clearAllCaches(): bool
+    {
         $this->clearLog = [];
         $success = true;
 
@@ -104,7 +111,8 @@ final class CacheManager {
     /**
      * Clears all registered driver caches
      */
-    private function clearDriverCaches(): void {
+    private function clearDriverCaches(): void
+    {
         foreach ($this->drivers as $driver) {
             try {
                 $driver->clear();
@@ -119,7 +127,8 @@ final class CacheManager {
     /**
      * Clears WordPress core caches
      */
-    private function clearWordPressCaches(): void {
+    private function clearWordPressCaches(): void
+    {
         try {
             // Clear core cache
             wp_cache_flush();
@@ -138,7 +147,8 @@ final class CacheManager {
     /**
      * Clears PHP opcache if available
      */
-    private function clearOpCache(): void {
+    private function clearOpCache(): void
+    {
         if (function_exists('opcache_reset')) {
             try {
                 opcache_reset();
@@ -152,7 +162,8 @@ final class CacheManager {
     /**
      * Notifies extensions about cache clearing
      */
-    private function notifyExtensions(): void {
+    private function notifyExtensions(): void
+    {
         $cleared_drivers = array_filter(
             array_map(fn($driver) => get_class($driver), $this->drivers),
             fn($driver) => !isset($this->clearLog[$driver])
@@ -164,7 +175,8 @@ final class CacheManager {
     /**
      * Gets a specific cache driver by type
      */
-    public function getDriver(string $type): ?CacheDriverInterface {
+    public function getDriver(string $type): ?CacheDriverInterface
+    {
         $type_lower = strtolower($type);
         foreach ($this->drivers as $driver) {
             if (str_contains(strtolower(get_class($driver)), $type_lower)) {
@@ -177,7 +189,8 @@ final class CacheManager {
     /**
      * Clears the HTML cache
      */
-    public function clearHtmlCache(): bool {
+    public function clearHtmlCache(): bool
+    {
         try {
             $this->clearPageCache();
             return true;
@@ -190,21 +203,24 @@ final class CacheManager {
     /**
      * Clears the Redis cache
      */
-    public function clearRedisCache(): bool {
+    public function clearRedisCache(): bool
+    {
         return $this->clearSpecificCache('redis');
     }
 
     /**
      * Clears the Varnish cache
      */
-    public function clearVarnishCache(): bool {
+    public function clearVarnishCache(): bool
+    {
         return $this->clearSpecificCache('varnish');
     }
 
     /**
      * Clears a specific type of cache
      */
-    private function clearSpecificCache(string $type): bool {
+    private function clearSpecificCache(string $type): bool
+    {
         try {
             $driver = $this->getDriver($type);
             if ($driver) {
@@ -221,7 +237,8 @@ final class CacheManager {
     /**
      * Clears the page cache directory
      */
-    private function clearPageCache(): void {
+    private function clearPageCache(): void
+    {
         $cache_dir = WPSC_CACHE_DIR . 'html/';
         if (!is_dir($cache_dir)) {
             return;
@@ -238,14 +255,15 @@ final class CacheManager {
     /**
      * Clears WordPress transients
      */
-    private function clearTransients(): void {
+    private function clearTransients(): void
+    {
         global $wpdb;
-        
+
         foreach (self::TRANSIENT_PATTERNS as $pattern) {
             // Attempt to retrieve cached list of transient option names.
             $cache_key = 'wpsc_transients_' . md5($pattern);
             $transients = wp_cache_get($cache_key, 'wpsc');
-            
+
             if ($transients === false) {
                 // Retrieve matching option names from the database.
                 $transients = $wpdb->get_col($wpdb->prepare(
@@ -255,7 +273,7 @@ final class CacheManager {
                 // Cache the result for 5 minutes.
                 wp_cache_set($cache_key, $transients, 'wpsc', 300);
             }
-            
+
             if (!empty($transients)) {
                 foreach ($transients as $option_name) {
                     if (strpos($option_name, '_site_transient_') === 0) {
@@ -268,14 +286,15 @@ final class CacheManager {
                 }
             }
         }
-        
+
         wp_cache_flush();
     }
 
     /**
      * Safely deletes a file with error handling using wp_delete_file()
      */
-    private function safeDelete(string $file): void {
+    private function safeDelete(string $file): void
+    {
         try {
             if (!wp_delete_file($file)) {
                 $this->logError("Failed to delete file: $file");
@@ -288,7 +307,8 @@ final class CacheManager {
     /**
      * Logs an error message
      */
-    private function logError(string $message): void {
+    private function logError(string $message): void
+    {
         error_log('WPS Cache Error: ' . $message);
     }
 }

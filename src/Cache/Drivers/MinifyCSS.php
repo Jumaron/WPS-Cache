@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
@@ -6,7 +7,8 @@ namespace WPSCache\Cache\Drivers;
 /**
  * Enhanced CSS minification implementation
  */
-final class MinifyCSS extends AbstractCacheDriver {
+final class MinifyCSS extends AbstractCacheDriver
+{
     private const PRESERVE_PATTERNS = [
         'data_uris' => '/(url\(\s*[\'"]?)(data:[^;]+;base64,[^\'"]+)([\'"]?\s*\))/i',
         'calc'      => '/calc\(([^)]+)\)/',
@@ -31,21 +33,24 @@ final class MinifyCSS extends AbstractCacheDriver {
     private array $settings;
     private array $preserved = [];
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->cache_dir = WPSC_CACHE_DIR . 'css/';
         $this->settings = get_option('wpsc_settings', []);
         $this->ensureCacheDirectory($this->cache_dir);
     }
 
-    public function initialize(): void {
+    public function initialize(): void
+    {
         if (!$this->initialized && !is_admin() && ($this->settings['css_minify'] ?? false)) {
             add_action('wp_enqueue_scripts', [$this, 'processStyles'], 100);
             $this->initialized = true;
         }
     }
 
-    public function isConnected(): bool {
-        if ( ! function_exists('WP_Filesystem') ) {
+    public function isConnected(): bool
+    {
+        if (! function_exists('WP_Filesystem')) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
         }
         WP_Filesystem();
@@ -53,12 +58,14 @@ final class MinifyCSS extends AbstractCacheDriver {
         return $wp_filesystem->is_writable($this->cache_dir);
     }
 
-    public function get(string $key): mixed {
+    public function get(string $key): mixed
+    {
         $file = $this->getCacheFile($key);
         return is_readable($file) ? file_get_contents($file) : null;
     }
 
-    public function set(string $key, mixed $value, int $ttl = 3600): void {
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
         if (!is_string($value) || empty(trim($value))) {
             return;
         }
@@ -69,14 +76,16 @@ final class MinifyCSS extends AbstractCacheDriver {
         }
     }
 
-    public function delete(string $key): void {
+    public function delete(string $key): void
+    {
         $file = $this->getCacheFile($key);
         if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete CSS cache file: $file");
         }
     }
 
-    public function clear(): void {
+    public function clear(): void
+    {
         $files = glob($this->cache_dir . '*.css');
         if (!is_array($files)) {
             return;
@@ -89,9 +98,10 @@ final class MinifyCSS extends AbstractCacheDriver {
         }
     }
 
-    public function processStyles(): void {
+    public function processStyles(): void
+    {
         global $wp_styles;
-        
+
         if (empty($wp_styles->queue)) {
             return;
         }
@@ -107,14 +117,15 @@ final class MinifyCSS extends AbstractCacheDriver {
         }
     }
 
-    private function processStyle(string $handle, \WP_Styles $wp_styles, array $excluded_css): void {
+    private function processStyle(string $handle, \WP_Styles $wp_styles, array $excluded_css): void
+    {
         if (!isset($wp_styles->registered[$handle])) {
             return;
         }
 
         /** @var \WP_Dependencies|\WP_Dependency $style */
         $style = $wp_styles->registered[$handle];
-        
+
         // Skip if script should not be processed
         if (!$this->shouldProcessStyle($style, $handle, $excluded_css)) {
             return;
@@ -146,7 +157,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         $this->updateStyleRegistration($style, $cache_file);
     }
 
-    private function shouldProcessStyle($style, string $handle, array $excluded_css): bool {
+    private function shouldProcessStyle($style, string $handle, array $excluded_css): bool
+    {
         // First check if we have a src property
         if (!isset($style->src) || empty($style->src)) {
             return false;
@@ -160,13 +172,14 @@ final class MinifyCSS extends AbstractCacheDriver {
             && !$this->isExcluded($src, $excluded_css);
     }
 
-    private function getSourcePath($style): ?string {
+    private function getSourcePath($style): ?string
+    {
         if (!isset($style->src)) {
             return null;
         }
 
         $src = $style->src;
-        
+
         // Convert relative URL to absolute
         if (strpos($src, 'http') !== 0) {
             $src = site_url($src);
@@ -180,7 +193,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         );
     }
 
-    private function updateStyleRegistration($style, string $cache_file): void {
+    private function updateStyleRegistration($style, string $cache_file): void
+    {
         if (!isset($style->src)) {
             return;
         }
@@ -193,7 +207,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         $style->ver = filemtime($cache_file);
     }
 
-    private function minifyCSS(string $css): string {
+    private function minifyCSS(string $css): string
+    {
         try {
             // Reset preserved content
             $this->preserved = [];
@@ -214,22 +229,23 @@ final class MinifyCSS extends AbstractCacheDriver {
         }
     }
 
-    private function preserveContent(string $css): string {
+    private function preserveContent(string $css): string
+    {
         // Preserve data URIs
         $css = preg_replace_callback(
-            self::PRESERVE_PATTERNS['data_uris'], 
-            function($matches) {
+            self::PRESERVE_PATTERNS['data_uris'],
+            function ($matches) {
                 $key = '___URI_' . count($this->preserved) . '___';
                 $this->preserved[$key] = $matches[0];
                 return $key;
-            }, 
+            },
             $css
         );
 
         // Preserve calc() operations
         $css = preg_replace_callback(
             self::PRESERVE_PATTERNS['calc'],
-            function($matches) {
+            function ($matches) {
                 $key = '___CALC_' . count($this->preserved) . '___';
                 $calc = 'calc(' . preg_replace('/\s*([+\-*\/])\s*/', ' $1 ', $matches[1]) . ')';
                 $this->preserved[$key] = $calc;
@@ -242,7 +258,7 @@ final class MinifyCSS extends AbstractCacheDriver {
         foreach (['comments', 'strings'] as $type) {
             $css = preg_replace_callback(
                 self::PRESERVE_PATTERNS[$type],
-                function($matches) use ($type) {
+                function ($matches) use ($type) {
                     $key = '___' . strtoupper($type) . '_' . count($this->preserved) . '___';
                     $this->preserved[$key] = $matches[0];
                     return $key;
@@ -254,7 +270,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         return $css;
     }
 
-    private function applyMinification(string $css): string {
+    private function applyMinification(string $css): string
+    {
         // Remove comments
         $css = preg_replace(self::MINIFY_PATTERNS['comments'], '', $css);
 
@@ -271,11 +288,13 @@ final class MinifyCSS extends AbstractCacheDriver {
         return $css;
     }
 
-    private function restoreContent(string $css): string {
+    private function restoreContent(string $css): string
+    {
         return strtr($css, $this->preserved);
     }
 
-    private function isExcluded(string $url, array $excluded_patterns): bool {
+    private function isExcluded(string $url, array $excluded_patterns): bool
+    {
         foreach ($excluded_patterns as $pattern) {
             if (fnmatch($pattern, $url)) {
                 return true;
@@ -284,7 +303,8 @@ final class MinifyCSS extends AbstractCacheDriver {
         return false;
     }
 
-    private function getCacheFile(string $key): string {
+    private function getCacheFile(string $key): string
+    {
         return $this->cache_dir . $key . '.css';
     }
 }

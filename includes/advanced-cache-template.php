@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WPS Cache - Advanced Cache Drop-in
  * 
@@ -10,7 +11,8 @@ if (!defined('ABSPATH')) {
     exit('Direct access not allowed.');
 }
 
-class WPSAdvancedCache {
+class WPSAdvancedCache
+{
     private const CACHE_BYPASS_CONDITIONS = [
         'WP_CLI',
         'DOING_CRON',
@@ -33,7 +35,8 @@ class WPSAdvancedCache {
     private array $settings;
     private int $cache_lifetime;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->request_uri = $_SERVER['REQUEST_URI'] ?? '';
         $this->settings = $this->getSettings();
         $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
@@ -42,7 +45,8 @@ class WPSAdvancedCache {
     /**
      * Main execution method
      */
-    public function execute(): void {
+    public function execute(): void
+    {
         if ($this->shouldBypassCache()) {
             $this->setHeader('BYPASS');
             return;
@@ -60,7 +64,8 @@ class WPSAdvancedCache {
     /**
      * Checks if cache should be bypassed
      */
-    private function shouldBypassCache(): bool {
+    private function shouldBypassCache(): bool
+    {
         // Check PHP constants
         foreach (self::CACHE_BYPASS_CONDITIONS as $condition) {
             if (defined($condition) && constant($condition)) {
@@ -75,15 +80,16 @@ class WPSAdvancedCache {
             is_admin() ||
             (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') ||
             !empty($_GET) || // Query parameters bypass cache
-            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
-             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
+            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+                strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
         );
     }
 
     /**
      * Handles static asset caching (CSS/JS)
      */
-    private function handleStaticAsset(): bool {
+    private function handleStaticAsset(): bool
+    {
         if (!preg_match('/\.(?:css|js)\?.*ver=(\d+)$/', $this->request_uri, $matches)) {
             return false;
         }
@@ -107,7 +113,8 @@ class WPSAdvancedCache {
     /**
      * Handles HTML page caching
      */
-    private function handleHtmlCache(): void {
+    private function handleHtmlCache(): void
+    {
         $cache_key = md5($this->request_uri);
         $cache_file = WP_CONTENT_DIR . '/cache/wps-cache/html/' . $cache_key . '.html';
 
@@ -122,7 +129,8 @@ class WPSAdvancedCache {
     /**
      * Serves a cached file with appropriate headers
      */
-    private function serveCachedFile(string $file, string $content_type): bool {
+    private function serveCachedFile(string $file, string $content_type): bool
+    {
         // Instead of loading the file into a variable and echoing it,
         // we use readfile() to output the file directly.
         if (!file_exists($file)) {
@@ -153,21 +161,24 @@ class WPSAdvancedCache {
     /**
      * Checks if cache file is still valid
      */
-    private function isCacheValid(string $file): bool {
+    private function isCacheValid(string $file): bool
+    {
         return (time() - filemtime($file)) < $this->cache_lifetime;
     }
 
     /**
      * Sets WPS Cache header
      */
-    private function setHeader(string $status): void {
+    private function setHeader(string $status): void
+    {
         header('X-WPS-Cache: ' . $status);
     }
 
     /**
      * Gets cache settings from WordPress options
      */
-    private function getSettings(): array {
+    private function getSettings(): array
+    {
         if (!function_exists('get_option')) {
             return [];
         }
@@ -186,7 +197,7 @@ try {
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('WPS Cache Error: ' . $e->getMessage());
     }
-    
+
     // Continue normal WordPress execution
     header('X-WPS-Cache: ERROR');
 }

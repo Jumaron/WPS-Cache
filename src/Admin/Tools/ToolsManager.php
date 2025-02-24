@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Tools;
@@ -8,13 +9,15 @@ use WPSCache\Cache\CacheManager;
 /**
  * Manages cache tools and maintenance operations
  */
-class ToolsManager {
+class ToolsManager
+{
     private CacheManager $cache_manager;
     private CacheTools $cache_tools;
     private DiagnosticTools $diagnostic_tools;
     private ImportExportTools $import_export_tools;
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
         $this->initializeTools();
         $this->initializeHooks();
@@ -23,7 +26,8 @@ class ToolsManager {
     /**
      * Initializes tool components
      */
-    private function initializeTools(): void {
+    private function initializeTools(): void
+    {
         $this->cache_tools = new CacheTools($this->cache_manager);
         $this->diagnostic_tools = new DiagnosticTools();
         $this->import_export_tools = new ImportExportTools();
@@ -32,7 +36,8 @@ class ToolsManager {
     /**
      * Sets up WordPress hooks
      */
-    private function initializeHooks(): void {
+    private function initializeHooks(): void
+    {
         // Cache maintenance schedule
         if (!wp_next_scheduled('wpsc_cache_maintenance')) {
             wp_schedule_event(time(), 'daily', 'wpsc_cache_maintenance');
@@ -43,14 +48,15 @@ class ToolsManager {
     /**
      * Renders the tools tab content
      */
-    public function renderTab(): void {
+    public function renderTab(): void
+    {
         if (!current_user_can('manage_options')) {
             return;
         }
-        ?>
+?>
         <div class="wpsc-tools-container">
             <h2><?php esc_html_e('Cache Tools', 'WPS-Cache'); ?></h2>
-            
+
             <!-- Cache Management -->
             <div class="wpsc-tool-section">
                 <h3><?php esc_html_e('Cache Management', 'WPS-Cache'); ?></h3>
@@ -75,13 +81,14 @@ class ToolsManager {
                 <?php $this->diagnostic_tools->renderDiagnostics(); ?>
             </div>
         </div>
-        <?php
+<?php
     }
 
     /**
      * Handles cache clear request
      */
-    public function handleCacheClear(): void {
+    public function handleCacheClear(): void
+    {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
@@ -104,7 +111,8 @@ class ToolsManager {
     /**
      * Handles object cache installation
      */
-    public function handleInstallObjectCache(): void {
+    public function handleInstallObjectCache(): void
+    {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
@@ -127,7 +135,8 @@ class ToolsManager {
     /**
      * Handles object cache removal
      */
-    public function handleRemoveObjectCache(): void {
+    public function handleRemoveObjectCache(): void
+    {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
@@ -150,7 +159,8 @@ class ToolsManager {
     /**
      * Handles settings export
      */
-    public function handleExportSettings(): void {
+    public function handleExportSettings(): void
+    {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
@@ -162,7 +172,8 @@ class ToolsManager {
     /**
      * Handles settings import
      */
-    public function handleImportSettings(): void {
+    public function handleImportSettings(): void
+    {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Insufficient permissions', 'WPS-Cache'));
         }
@@ -171,7 +182,7 @@ class ToolsManager {
         $result = $this->import_export_tools->importSettings();
 
         wp_redirect(add_query_arg(
-            $result['status'] === 'success' 
+            $result['status'] === 'success'
                 ? ['settings_imported' => 'success']
                 : ['import_error' => $result['error']],
             wp_get_referer()
@@ -182,7 +193,8 @@ class ToolsManager {
     /**
      * Handles AJAX cache preload request
      */
-    public function handleAjaxPreloadCache(): void {
+    public function handleAjaxPreloadCache(): void
+    {
         check_ajax_referer('wpsc_ajax_nonce');
 
         if (!current_user_can('manage_options')) {
@@ -203,7 +215,8 @@ class ToolsManager {
     /**
      * Gets diagnostic information
      */
-    public function getDiagnosticInfo(): array {
+    public function getDiagnosticInfo(): array
+    {
         return $this->diagnostic_tools->getDiagnosticInfo();
     }
 }

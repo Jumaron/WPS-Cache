@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Tools;
@@ -6,12 +7,14 @@ namespace WPSCache\Admin\Tools;
 /**
  * Handles system diagnostics and debugging tools
  */
-class DiagnosticTools {
+class DiagnosticTools
+{
     /**
      * Renders the diagnostics interface
      */
-    public function renderDiagnostics(): void {
-        ?>
+    public function renderDiagnostics(): void
+    {
+?>
         <div class="wpsc-diagnostics-container">
             <p class="description">
                 <?php esc_html_e('System information and diagnostic details for troubleshooting.', 'WPS-Cache'); ?>
@@ -43,13 +46,14 @@ class DiagnosticTools {
                 <?php $this->renderDebugControls(); ?>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Gets diagnostic information
      */
-    public function getDiagnosticInfo(): array {
+    public function getDiagnosticInfo(): array
+    {
         return [
             'System'         => $this->getSystemInfo(),
             'WordPress'      => $this->getWordPressInfo(),
@@ -64,7 +68,8 @@ class DiagnosticTools {
     /**
      * Gets formatted diagnostic information
      */
-    private function getFormattedDiagnosticInfo(): string {
+    private function getFormattedDiagnosticInfo(): string
+    {
         $info   = $this->getDiagnosticInfo();
         $output = '';
 
@@ -82,7 +87,8 @@ class DiagnosticTools {
     /**
      * Gets system information
      */
-    private function getSystemInfo(): array {
+    private function getSystemInfo(): array
+    {
         return [
             'OS'                 => PHP_OS,
             'Architecture'       => PHP_INT_SIZE * 8 . 'bit',
@@ -100,9 +106,10 @@ class DiagnosticTools {
     /**
      * Gets WordPress information
      */
-    private function getWordPressInfo(): array {
+    private function getWordPressInfo(): array
+    {
         global $wp_version;
-        
+
         return [
             'Version'         => $wp_version,
             'Site URL'        => get_site_url(),
@@ -120,7 +127,8 @@ class DiagnosticTools {
     /**
      * Gets cache information
      */
-    private function getCacheInfo(): array {
+    private function getCacheInfo(): array
+    {
         // Load WP_Filesystem if not already available
         if (!function_exists('WP_Filesystem')) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
@@ -145,23 +153,24 @@ class DiagnosticTools {
     /**
      * Gets server information
      */
-    private function getServerInfo(): array {
+    private function getServerInfo(): array
+    {
         return [
-            'Server Software' => isset($_SERVER['SERVER_SOFTWARE']) 
+            'Server Software' => isset($_SERVER['SERVER_SOFTWARE'])
                 ? sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']))
                 : 'Unknown',
-            'Server Protocol' => isset($_SERVER['SERVER_PROTOCOL']) 
+            'Server Protocol' => isset($_SERVER['SERVER_PROTOCOL'])
                 ? sanitize_text_field(wp_unslash($_SERVER['SERVER_PROTOCOL']))
                 : 'Unknown',
             'SSL/TLS'         => is_ssl() ? 'Yes' : 'No',
             'HTTPS'           => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'Yes' : 'No',
-            'Server IP'       => isset($_SERVER['SERVER_ADDR']) 
+            'Server IP'       => isset($_SERVER['SERVER_ADDR'])
                 ? sanitize_text_field(wp_unslash($_SERVER['SERVER_ADDR']))
                 : 'Unknown',
-            'Server Port'     => isset($_SERVER['SERVER_PORT']) 
+            'Server Port'     => isset($_SERVER['SERVER_PORT'])
                 ? sanitize_text_field(wp_unslash($_SERVER['SERVER_PORT']))
                 : 'Unknown',
-            'Document Root'   => isset($_SERVER['DOCUMENT_ROOT']) 
+            'Document Root'   => isset($_SERVER['DOCUMENT_ROOT'])
                 ? sanitize_text_field(wp_unslash($_SERVER['DOCUMENT_ROOT']))
                 : 'Unknown',
             'Save Path'       => session_save_path(),
@@ -171,7 +180,8 @@ class DiagnosticTools {
     /**
      * Gets PHP information
      */
-    private function getPHPInfo(): array {
+    private function getPHPInfo(): array
+    {
         return [
             'Version'          => PHP_VERSION,
             'SAPI'             => php_sapi_name(),
@@ -189,16 +199,17 @@ class DiagnosticTools {
     /**
      * Gets database information
      */
-    private function getDatabaseInfo(): array {
+    private function getDatabaseInfo(): array
+    {
         global $wpdb;
-        
+
         // Cache the list of tables for one hour.
         $tables = wp_cache_get('wpsc_database_tables', 'diagnostic');
         if ($tables === false) {
             $tables = $wpdb->get_col("SHOW TABLES");
             wp_cache_set('wpsc_database_tables', $tables, 'diagnostic', 3600);
         }
-        
+
         // Cache the database version for one hour.
         $db_version = wp_cache_get('wpsc_db_version', 'diagnostic');
         if ($db_version === false) {
@@ -220,7 +231,8 @@ class DiagnosticTools {
     /**
      * Gets active plugins information
      */
-    private function getActivePlugins(): array {
+    private function getActivePlugins(): array
+    {
         $active_plugins = get_option('active_plugins');
         $plugin_info    = [];
 
@@ -237,7 +249,8 @@ class DiagnosticTools {
     /**
      * Gets error reporting level as string
      */
-    private function getErrorReportingLevel(): string {
+    private function getErrorReportingLevel(): string
+    {
         // To avoid full path disclosure, do not reveal error reporting settings
         return 'Hidden';
     }
@@ -245,8 +258,9 @@ class DiagnosticTools {
     /**
      * Renders cache test interface
      */
-    private function renderCacheTests(): void {
-        ?>
+    private function renderCacheTests(): void
+    {
+    ?>
         <div class="wpsc-cache-tests">
             <button type="button" class="button" id="wpsc-test-redis">
                 <?php esc_html_e('Test Redis Connection', 'WPS-Cache'); ?>
@@ -257,21 +271,22 @@ class DiagnosticTools {
             <button type="button" class="button" id="wpsc-test-permissions">
                 <?php esc_html_e('Test File Permissions', 'WPS-Cache'); ?>
             </button>
-            
+
             <div id="wpsc-test-results" class="wpsc-test-results" style="display: none;">
                 <h5><?php esc_html_e('Test Results', 'WPS-Cache'); ?></h5>
                 <pre class="wpsc-test-output"></pre>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders error log viewer
      */
-    private function renderErrorLog(): void {
+    private function renderErrorLog(): void
+    {
         $log_file = WP_CONTENT_DIR . '/wps-cache-debug.log';
-        ?>
+    ?>
         <div class="wpsc-error-log">
             <?php if (file_exists($log_file)): ?>
                 <textarea readonly class="large-text code" rows="10">
@@ -291,17 +306,18 @@ class DiagnosticTools {
                 </p>
             <?php endif; ?>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders debug control interface
      */
-    private function renderDebugControls(): void {
-        ?>
+    private function renderDebugControls(): void
+    {
+    ?>
         <div class="wpsc-debug-controls">
             <label>
-                <input type="checkbox" id="wpsc-enable-debug" 
+                <input type="checkbox" id="wpsc-enable-debug"
                     <?php checked(get_option('wpsc_debug_mode')); ?>>
                 <?php esc_html_e('Enable Debug Mode', 'WPS-Cache'); ?>
             </label>
@@ -316,6 +332,6 @@ class DiagnosticTools {
                 <?php esc_html_e('Creates a comprehensive debug report for support.', 'WPS-Cache'); ?>
             </p>
         </div>
-        <?php
+<?php
     }
 }

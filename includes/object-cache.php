@@ -1,4 +1,5 @@
-<?php 
+<?php
+
 /**
  * WordPress Redis Object Cache Backend
  *
@@ -470,7 +471,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             }
         }
 
-       /**
+        /**
          * Retrieves multiple values from the cache using pipelining.
          *
          * @param array $keys Array of cache keys.
@@ -489,12 +490,12 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             $derivedKeys = [];
             $missedIndexes = [];
             $missedKeys = [];
-            
+
             if (!$force) {
                 foreach ($keys as $index => $key) {
                     $derivedKey = $this->buildKey($key, $group);
                     $derivedKeys[$key] = $derivedKey;
-                    
+
                     // Use array_key_exists for better performance with null values
                     if (array_key_exists($derivedKey, $this->cache)) {
                         $value = $this->cache[$derivedKey];
@@ -520,23 +521,23 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
 
             try {
                 $startTime = microtime(true);
-                
+
                 $pipe = $this->redis->pipeline();
                 foreach ($missedKeys as $key) {
                     $pipe->get($derivedKeys[$key]);
                 }
-                
+
                 $pipelineResults = $pipe->exec();
-                
+
                 foreach ($missedKeys as $index => $key) {
                     $value = $pipelineResults[$index];
-                    
+
                     if ($value !== null && $value !== false) {
 
                         if (is_string($value) && strlen($value) > 4 && preg_match('/^[absiOCrdN]:[0-9]+/', $value)) {
                             $value = $this->maybeUnserialize($value);
                         }
-                        
+
                         $this->cache[$derivedKeys[$key]] = $value;
                         $results[$key] = is_object($value) ? clone $value : $value;
                         ++$this->cacheHits;
@@ -601,7 +602,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param int $expiration The expiration time in seconds.
          * @return array Array of results (true/false for each key).
          */
-        public function setMultiple(array $data, string $group = 'default', int $expiration = 0): array 
+        public function setMultiple(array $data, string $group = 'default', int $expiration = 0): array
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group) || empty($data)) {
                 return array_fill_keys(array_keys($data), false);
@@ -611,7 +612,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 $startTime = microtime(true);
                 $pipe = $this->redis->pipeline();
                 $expiration = $this->validateExpiration($expiration);
-                
+
                 // Pre-process all values
                 $processedData = [];
                 foreach ($data as $key => $value) {
@@ -621,21 +622,21 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                         'value' => $serializedValue,
                         'original' => $value
                     ];
-                    
+
                     if ($expiration > 0) {
                         $pipe->setex($derivedKey, $expiration, $serializedValue);
                     } else {
                         $pipe->set($derivedKey, $serializedValue);
                     }
                 }
-                
+
                 $pipe->exec();
-                
+
                 // Bulk update local cache
                 foreach ($processedData as $derivedKey => $item) {
                     $this->cache[$derivedKey] = $item['original'];
                 }
-                
+
                 return array_fill_keys(array_keys($data), true);
             } catch (Exception $e) {
                 $this->handleException($e);
@@ -794,29 +795,29 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param string $group The cache group.
          * @return array Array of results (true/false for each key).
          */
-        public function deleteMultiple(array $keys, string $group = 'default'): array 
+        public function deleteMultiple(array $keys, string $group = 'default'): array
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group) || empty($keys)) {
                 return array_fill_keys($keys, false);
             }
-        
+
             try {
                 $startTime = microtime(true);
                 $pipe = $this->redis->pipeline();
                 $derivedKeys = [];
-                
+
                 // Pre-process keys and update local cache
                 foreach ($keys as $key) {
                     $derivedKey = $this->buildKey($key, $group);
                     $derivedKeys[] = $derivedKey;
                     unset($this->cache[$derivedKey]);
                 }
-        
+
                 // Batch delete operation
                 if (!empty($derivedKeys)) {
                     $pipe->del(...$derivedKeys);
                 }
-        
+
                 $pipe->exec();
                 return array_fill_keys($keys, true);
             } catch (Exception $e) {
@@ -834,7 +835,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         public function flush(): bool
         {
-            $this->cache = []; 
+            $this->cache = [];
 
             if (!$this->redisConnected) {
                 return false;
@@ -911,20 +912,20 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param string $group The cache group.
          * @return int|false The incremented value on success, false on failure.
          */
-        public function increment(string $key, int $offset = 1, string $group = 'default'): int|false 
+        public function increment(string $key, int $offset = 1, string $group = 'default'): int|false
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
                 return false;
             }
-        
+
             try {
                 $startTime = microtime(true);
                 $derivedKey = $this->buildKey($key, $group);
-                
+
                 // Use INCRBY for atomic operation
                 $value = $this->redis->incrBy($derivedKey, $offset);
                 $this->cache[$derivedKey] = $value;
-                
+
                 return $value;
             } catch (Exception $e) {
                 $this->handleException($e);
@@ -942,7 +943,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param string $group The cache group.
          * @return int|false The decremented value on success, false on failure.
          */
-        public function decrement(string $key, int $offset = 1, string $group = 'default'): int|false 
+        public function decrement(string $key, int $offset = 1, string $group = 'default'): int|false
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
                 return false;
@@ -951,11 +952,11 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             try {
                 $startTime = microtime(true);
                 $derivedKey = $this->buildKey($key, $group);
-                
+
                 // Use DECRBY for atomic operation
                 $value = $this->redis->decrBy($derivedKey, $offset);
                 $this->cache[$derivedKey] = $value;
-                
+
                 return $value;
             } catch (Exception $e) {
                 $this->handleException($e);
@@ -972,14 +973,14 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          * @param string $group The cache group.
          * @return string The derived key.
          */
-        private function buildKey(string|int $key, string $group = 'default'): string 
+        private function buildKey(string|int $key, string $group = 'default'): string
         {
             $key = (string)$key;
             $group = (string)$group;
-            
+
             // Direct string concatenation is faster than sprintf
             $cacheKey = $group . ':' . $key;
-            
+
             // Use array_key_exists instead of isset for null values
             if (!array_key_exists($cacheKey, self::$keyCache)) {
                 if (count(self::$keyCache) >= self::MAX_KEY_CACHE_SIZE) {
@@ -987,7 +988,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 }
                 self::$keyCache[$cacheKey] = $this->generateKey($key, $group);
             }
-            
+
             return self::$keyCache[$cacheKey];
         }
 
@@ -1020,7 +1021,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function maybeSerialize(mixed $value): mixed
         {
-            return match(gettype($value)) {
+            return match (gettype($value)) {
                 'string', 'integer', 'double', 'boolean' => $value,
                 default => serialize($value)
             };
@@ -1037,13 +1038,13 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             if (!is_string($value) || strlen($value) < 4) {
                 return $value;
             }
-            
+
             // Static pattern for better performance
             static $pattern = '/^[absiOCrdN]:[0-9]+/';
             if (!preg_match($pattern, $value)) {
                 return $value;
             }
-        
+
             try {
                 $unserialized = @unserialize($value);
                 return ($unserialized !== false || $value === 'b:0;') ? $unserialized : $value;
@@ -1094,8 +1095,8 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
         {
             static $cache = [];
             if (!array_key_exists($group, $cache)) {
-                $cache[$group] = isset($this->groupTypes[$group]) && 
-                                $this->groupTypes[$group] === 'global';
+                $cache[$group] = isset($this->groupTypes[$group]) &&
+                    $this->groupTypes[$group] === 'global';
             }
             return $cache[$group];
         }
@@ -1229,7 +1230,6 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 // Get Redis info
                 $info = $this->redis->info();
                 $this->redisVersion = $info['redis_version'] ?? null;
-
             } catch (Exception $e) {
                 $this->handleException($e, 'connection');
             }

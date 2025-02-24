@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\UI;
@@ -6,7 +7,8 @@ namespace WPSCache\Admin\UI;
 /**
  * Manages admin notices and messages
  */
-class NoticeManager {
+class NoticeManager
+{
     /**
      * Transient key for storing notices
      */
@@ -22,14 +24,16 @@ class NoticeManager {
         'error'   => 'notice-error'
     ];
 
-    public function __construct() {
+    public function __construct()
+    {
         add_action('admin_notices', [$this, 'displayNotices']);
     }
 
     /**
      * Displays all queued admin notices
      */
-    public function displayNotices(): void {
+    public function displayNotices(): void
+    {
 
         $this->displayQueuedNotices();
         $this->displayStatusNotices();
@@ -68,7 +72,8 @@ class NoticeManager {
     /**
      * Displays queued notices and clears the queue
      */
-    private function displayQueuedNotices(): void {
+    private function displayQueuedNotices(): void
+    {
         $notices = get_transient(self::NOTICES_TRANSIENT);
         if (!is_array($notices)) {
             return;
@@ -89,7 +94,8 @@ class NoticeManager {
     /**
      * Displays status-based notices
      */
-    private function displayStatusNotices(): void {
+    private function displayStatusNotices(): void
+    {
         $this->displayCacheNotices();
         $this->displayObjectCacheNotices();
         $this->displaySettingsNotices();
@@ -99,7 +105,8 @@ class NoticeManager {
     /**
      * Displays system-related notices
      */
-    private function displaySystemNotices(): void {
+    private function displaySystemNotices(): void
+    {
         $this->displayCompatibilityNotices();
         $this->displayConfigurationWarnings();
         $this->displayPerformanceNotices();
@@ -108,7 +115,8 @@ class NoticeManager {
     /**
      * Displays cache-related notices
      */
-    private function displayCacheNotices(): void {
+    private function displayCacheNotices(): void
+    {
         if (isset($_GET['cache_cleared'])) {
             $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_cache_cleared')) {
@@ -132,7 +140,8 @@ class NoticeManager {
     /**
      * Displays object cache-related notices
      */
-    private function displayObjectCacheNotices(): void {
+    private function displayObjectCacheNotices(): void
+    {
         if (isset($_GET['object_cache_installed'])) {
             $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_dropin_installed')) {
@@ -187,7 +196,8 @@ class NoticeManager {
     /**
      * Displays settings-related notices
      */
-    private function displaySettingsNotices(): void {
+    private function displaySettingsNotices(): void
+    {
         if (isset($_GET['settings_updated'])) {
             $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_settings_update')) {
@@ -214,7 +224,8 @@ class NoticeManager {
     /**
      * Displays import/export-related notices
      */
-    private function displayImportExportNotices(): void {
+    private function displayImportExportNotices(): void
+    {
         if (isset($_GET['import_error'])) {
             $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
             if (!wp_verify_nonce($nonce, 'wpsc_import_export')) {
@@ -240,7 +251,8 @@ class NoticeManager {
         }
     }
 
-    private function displayCompatibilityNotices(): void {
+    private function displayCompatibilityNotices(): void
+    {
         // PHP version check
         if (version_compare(PHP_VERSION, '7.4', '<')) {
             /* translators: %s: current PHP version */
@@ -286,7 +298,8 @@ class NoticeManager {
     /**
      * Displays configuration warnings
      */
-    private function displayConfigurationWarnings(): void {
+    private function displayConfigurationWarnings(): void
+    {
         $settings = get_option('wpsc_settings', []);
 
         // Redis extension check
@@ -336,7 +349,8 @@ class NoticeManager {
     /**
      * Displays performance-related notices
      */
-    private function displayPerformanceNotices(): void {
+    private function displayPerformanceNotices(): void
+    {
         // OPcache check
         if (!function_exists('opcache_get_status')) {
             $this->renderNotice(
@@ -360,7 +374,8 @@ class NoticeManager {
     /**
      * Gets list of potentially conflicting plugins
      */
-    private function getConflictingPlugins(): array {
+    private function getConflictingPlugins(): array
+    {
         $conflicting_plugins = [];
         $known_conflicts = [
             'wp-super-cache/wp-cache.php'     => 'WP Super Cache',
@@ -388,38 +403,40 @@ class NoticeManager {
         array $args = []
     ): void {
         $classes = ['notice', self::NOTICE_TYPES[$type] ?? 'notice-info'];
-        
+
         if ($dismissible) {
             $classes[] = 'is-dismissible';
         }
-        ?>
+?>
         <div class="<?php echo esc_attr(implode(' ', $classes)); ?>">
             <p><?php echo wp_kses_post($message); ?></p>
-            
+
             <?php if (!empty($args['documentation_url'])): ?>
                 <p>
-                    <a href="<?php echo esc_url($args['documentation_url']); ?>" 
-                       target="_blank" 
-                       rel="noopener noreferrer">
+                    <a href="<?php echo esc_url($args['documentation_url']); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer">
                         <?php esc_html_e('Learn more', 'WPS-Cache'); ?> ›
                     </a>
                 </p>
             <?php endif; ?>
         </div>
-        <?php
+<?php
     }
 
     /**
      * Clears all notices
      */
-    public function clearNotices(): void {
+    public function clearNotices(): void
+    {
         delete_transient(self::NOTICES_TRANSIENT);
     }
 
     /**
      * Gets count of current notices
      */
-    public function getNoticeCount(): int {
+    public function getNoticeCount(): int
+    {
         $notices = get_transient(self::NOTICES_TRANSIENT);
         return is_array($notices) ? count($notices) : 0;
     }
@@ -427,14 +444,16 @@ class NoticeManager {
     /**
      * Checks if there are any notices
      */
-    public function hasNotices(): bool {
+    public function hasNotices(): bool
+    {
         return $this->getNoticeCount() > 0;
     }
 
     /**
      * Gets all current notices without displaying them
      */
-    public function getNotices(): array {
+    public function getNotices(): array
+    {
         return get_transient(self::NOTICES_TRANSIENT) ?: [];
     }
 }

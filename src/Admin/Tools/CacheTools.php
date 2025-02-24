@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Tools;
@@ -9,20 +10,23 @@ use WPSCache\Cache\Drivers\RedisCache;
 /**
  * Handles cache manipulation and management operations
  */
-class CacheTools {
+class CacheTools
+{
     private CacheManager $cache_manager;
     private const OBJECT_CACHE_TEMPLATE = 'object-cache.php';
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
     }
 
     /**
      * Renders cache management interface
      */
-    public function renderCacheManagement(): void {
+    public function renderCacheManagement(): void
+    {
         $object_cache_installed = file_exists(WP_CONTENT_DIR . '/object-cache.php');
-        ?>
+?>
         <div class="wpsc-cache-management">
             <!-- Clear Cache -->
             <div class="wpsc-tool-box">
@@ -73,15 +77,16 @@ class CacheTools {
                 <?php $this->renderCacheStatus(); ?>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders cache preloading tools
      */
-    public function renderPreloadingTools(): void {
+    public function renderPreloadingTools(): void
+    {
         $urls = $this->getPreloadUrls();
-        ?>
+    ?>
         <div class="wpsc-preload-tools">
             <p class="description">
                 <?php esc_html_e('Preload cache for your most important pages to ensure optimal performance.', 'WPS-Cache'); ?>
@@ -106,15 +111,16 @@ class CacheTools {
                 <span class="progress-text">0%</span>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders cache status information
      */
-    private function renderCacheStatus(): void {
+    private function renderCacheStatus(): void
+    {
         $stats = $this->getCacheStats();
-        ?>
+    ?>
         <table class="widefat striped">
             <tbody>
                 <tr>
@@ -181,15 +187,16 @@ class CacheTools {
                 </tr>
             </tbody>
         </table>
-        <?php
+<?php
     }
 
     /**
      * Gets cache statistics
      */
-    private function getCacheStats(): array {
+    private function getCacheStats(): array
+    {
         $settings = get_option('wpsc_settings');
-        
+
         return [
             'html'    => $this->getHtmlCacheStats($settings),
             'redis'   => $this->getRedisCacheStats($settings),
@@ -200,7 +207,8 @@ class CacheTools {
     /**
      * Gets HTML cache statistics
      */
-    private function getHtmlCacheStats(array $settings): array {
+    private function getHtmlCacheStats(array $settings): array
+    {
         $enabled = (bool)($settings['html_cache'] ?? false);
         if (!$enabled) {
             return ['enabled' => false];
@@ -230,20 +238,21 @@ class CacheTools {
     /**
      * Gets Redis cache statistics
      */
-    private function getRedisCacheStats(array $settings): array {
+    private function getRedisCacheStats(array $settings): array
+    {
         $enabled = (bool)($settings['redis_cache'] ?? false);
         if (!$enabled) {
             return ['enabled' => false];
         }
-    
-        try {           
+
+        try {
             $redis_driver = $this->cache_manager->getDriver('redis');
             if (!$redis_driver instanceof RedisCache) {
                 return null;
             }
-            
+
             $stats = $redis_driver->getStats();
-    
+
             return [
                 'enabled'           => true,
                 'memory_used'       => $stats['memory_used'] ?? 0,
@@ -262,7 +271,8 @@ class CacheTools {
     /**
      * Gets Varnish cache statistics
      */
-    private function getVarnishCacheStats(array $settings): array {
+    private function getVarnishCacheStats(array $settings): array
+    {
         $enabled = (bool)($settings['varnish_cache'] ?? false);
         if (!$enabled) {
             return ['enabled' => false];
@@ -293,7 +303,8 @@ class CacheTools {
     /**
      * Clears all caches
      */
-    public function clearAllCaches(): array {
+    public function clearAllCaches(): array
+    {
         $cleared = [];
         $success = true;
 
@@ -302,12 +313,12 @@ class CacheTools {
             if ($this->cache_manager->clearHtmlCache()) {
                 $cleared[] = 'HTML';
             }
-            
+
             // Clear Redis cache
             if ($this->cache_manager->clearRedisCache()) {
                 $cleared[] = 'Redis';
             }
-            
+
             // Clear Varnish cache
             if ($this->cache_manager->clearVarnishCache()) {
                 $cleared[] = 'Varnish';
@@ -315,7 +326,7 @@ class CacheTools {
 
             // Clear WordPress object cache
             wp_cache_flush();
-            
+
             // Clear PHP opcache if available
             if (function_exists('opcache_reset')) {
                 opcache_reset();
@@ -325,7 +336,6 @@ class CacheTools {
             do_action('wpsc_clear_all_caches');
 
             set_transient('wpsc_last_cache_clear', time());
-
         } catch (\Exception $e) {
             // Removed debug logging.
             $success = false;
@@ -340,7 +350,8 @@ class CacheTools {
     /**
      * Gets URLs for preloading
      */
-    public function getPreloadUrls(): array {
+    public function getPreloadUrls(): array
+    {
         $settings = get_option('wpsc_settings');
         $urls = $settings['preload_urls'] ?? [];
 
@@ -349,7 +360,7 @@ class CacheTools {
             $url_set = [];
 
             // Add all pages
-            $pages = get_pages(); 
+            $pages = get_pages();
             foreach ($pages as $page) {
                 $url_set[get_permalink($page)] = true;
             }
@@ -375,51 +386,51 @@ class CacheTools {
             foreach ($categories as $category) {
                 $url_set[get_category_link($category->term_id)] = true;
             }
-            
+
             $urls = array_keys($url_set);
         }
 
-        return $urls; 
+        return $urls;
     }
 
     /**
      * Preloads cache for specified URLs
      */
-    public function preloadCache(): array {
+    public function preloadCache(): array
+    {
         $urls = $this->getPreloadUrls();
         $total = count($urls);
         $results = [];
-        
+
         foreach ($urls as $index => $url) {
             try {
                 $response = wp_remote_get($url, [
                     'timeout'   => 30,
                     'sslverify' => false,
-                    'user-agent'=> 'WPSCache Preloader'
+                    'user-agent' => 'WPSCache Preloader'
                 ]);
-                
+
                 if (is_wp_error($response)) {
                     throw new \Exception($response->get_error_message());
                 }
-    
+
                 $status = wp_remote_retrieve_response_code($response);
                 $results[] = [
                     'url'     => $url,
                     'status'  => $status,
                     'success' => $status >= 200 && $status < 300
                 ];
-    
+
                 // Calculate progress
                 $processed = $index + 1;
                 $progress  = ($processed / $total) * 100;
-    
+
                 // Update progress transient
                 set_transient('wpsc_preload_progress', [
                     'total'     => $total,
                     'processed' => $processed,
                     'progress'  => $progress
                 ], HOUR_IN_SECONDS);
-    
             } catch (\Exception $e) {
                 $results[] = [
                     'url'     => $url,
@@ -428,11 +439,11 @@ class CacheTools {
                     'error'   => $e->getMessage()
                 ];
             }
-            
+
             // Small delay between URLs
             usleep(250000); // 0.25 second delay
         }
-    
+
         $final_progress = [
             'total'       => $total,
             'processed'   => $total,
@@ -440,17 +451,18 @@ class CacheTools {
             'results'     => $results,
             'is_complete' => true
         ];
-    
+
         // Clear progress transient
         delete_transient('wpsc_preload_progress');
-    
+
         return $final_progress;
     }
 
     /**
      * Performs scheduled cache maintenance
      */
-    public function performMaintenance(): void {
+    public function performMaintenance(): void
+    {
         try {
             // Clean expired HTML cache files
             $this->cleanExpiredHtmlCache();
@@ -459,7 +471,6 @@ class CacheTools {
             if ($this->isRedisEnabled()) {
                 $this->optimizeRedisCache();
             }
-
         } catch (\Exception $e) {
             // Removed debug logging.
         }
@@ -468,7 +479,8 @@ class CacheTools {
     /**
      * Cleans expired HTML cache files
      */
-    private function cleanExpiredHtmlCache(): void {
+    private function cleanExpiredHtmlCache(): void
+    {
         $settings = get_option('wpsc_settings');
         $lifetime = $settings['cache_lifetime'] ?? 3600;
         $cache_dir = WPSC_CACHE_DIR . 'html/';
@@ -491,13 +503,14 @@ class CacheTools {
     /**
      * Optimizes Redis cache
      */
-    private function optimizeRedisCache(): void {
+    private function optimizeRedisCache(): void
+    {
         try {
             $redis_driver = $this->cache_manager->getDriver('redis');
             if (!$redis_driver instanceof RedisCache) {
                 return;
             }
-            
+
             // Get current memory usage
             $info = $redis_driver->getStats();
             $memory_used = $info['used_memory'] ?? 0;
@@ -507,7 +520,6 @@ class CacheTools {
             if ($max_memory > 0 && ($memory_used / $max_memory) > 0.75) {
                 $redis_driver->deleteExpired();
             }
-
         } catch (\Exception $e) {
             // Removed debug logging.
         }
@@ -516,7 +528,8 @@ class CacheTools {
     /**
      * Installs object cache drop-in
      */
-    public function installObjectCache(): array {
+    public function installObjectCache(): array
+    {
         try {
             $source      = WPSC_PLUGIN_DIR . 'includes/' . self::OBJECT_CACHE_TEMPLATE;
             $destination = WP_CONTENT_DIR . '/object-cache.php';
@@ -543,7 +556,6 @@ class CacheTools {
                 'status'  => 'success',
                 'message' => esc_html__('Object cache drop-in installed successfully.', 'WPS-Cache')
             ];
-
         } catch (\Exception $e) {
             return [
                 'status'  => 'error_copy',
@@ -555,7 +567,8 @@ class CacheTools {
     /**
      * Removes object cache drop-in
      */
-    public function removeObjectCache(): array {
+    public function removeObjectCache(): array
+    {
         try {
             $object_cache_file = WP_CONTENT_DIR . '/object-cache.php';
 
@@ -577,7 +590,6 @@ class CacheTools {
                 'status'  => 'success',
                 'message' => esc_html__('Object cache drop-in removed successfully.', 'WPS-Cache')
             ];
-
         } catch (\Exception $e) {
             return [
                 'status'  => 'error_remove',
@@ -589,7 +601,8 @@ class CacheTools {
     /**
      * Checks if Redis is enabled
      */
-    private function isRedisEnabled(): bool {
+    private function isRedisEnabled(): bool
+    {
         $settings = get_option('wpsc_settings');
         return (bool)($settings['redis_cache'] ?? false);
     }

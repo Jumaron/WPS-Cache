@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Settings;
@@ -8,12 +9,14 @@ use WPSCache\Cache\CacheManager;
 /**
  * Manages the settings functionality for WPS Cache
  */
-class SettingsManager {
+class SettingsManager
+{
     private CacheManager $cache_manager;
     private SettingsValidator $validator;
     private SettingsRenderer $renderer;
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
         $this->validator = new SettingsValidator();
         $this->renderer = new SettingsRenderer();
@@ -23,14 +26,16 @@ class SettingsManager {
     /**
      * Initializes WordPress hooks for settings
      */
-    private function initializeHooks(): void {
+    private function initializeHooks(): void
+    {
         add_action('admin_init', [$this, 'registerSettings']);
     }
 
     /**
      * Registers all plugin settings with WordPress
      */
-    public function registerSettings(): void {
+    public function registerSettings(): void
+    {
         register_setting(
             'wpsc_settings',
             'wpsc_settings',
@@ -48,7 +53,8 @@ class SettingsManager {
     /**
      * Registers settings sections
      */
-    private function registerSettingsSections(): void {
+    private function registerSettingsSections(): void
+    {
         // Cache Settings Section
         add_settings_section(
             'wpsc_cache_settings',
@@ -85,7 +91,8 @@ class SettingsManager {
     /**
      * Registers individual settings fields
      */
-    private function registerSettingsFields(): void {
+    private function registerSettingsFields(): void
+    {
         // Cache Type Fields
         add_settings_field(
             'wpsc_html_cache',
@@ -324,11 +331,12 @@ class SettingsManager {
     /**
      * Renders the settings tab content
      */
-    public function renderTab(): void {
+    public function renderTab(): void
+    {
         if (!current_user_can('manage_options')) {
             return;
         }
-        
+
         $this->renderer->renderSettingsPage();
     }
 
@@ -337,7 +345,8 @@ class SettingsManager {
      *
      * @return array Default settings values
      */
-    public function getDefaultSettings(): array {
+    public function getDefaultSettings(): array
+    {
         return [
             'html_cache' => false,
             'redis_cache' => false,
@@ -376,16 +385,17 @@ class SettingsManager {
      * @param array $settings New settings array
      * @return bool Whether the update was successful
      */
-    public function updateSettings(array $settings): bool {
+    public function updateSettings(array $settings): bool
+    {
         $validated_settings = $this->validator->sanitizeSettings($settings);
-        
+
         $updated = update_option('wpsc_settings', $validated_settings);
-        
+
         if ($updated) {
             $this->cache_manager->clearAllCaches();
             do_action('wpsc_settings_updated', $validated_settings);
         }
-        
+
         return $updated;
     }
 
@@ -394,7 +404,8 @@ class SettingsManager {
      *
      * @return array Current settings
      */
-    public function getSettings(): array {
+    public function getSettings(): array
+    {
         return get_option('wpsc_settings', $this->getDefaultSettings());
     }
 
@@ -405,7 +416,8 @@ class SettingsManager {
      * @param mixed $default Default value if setting doesn't exist
      * @return mixed Setting value
      */
-    public function getSetting(string $key, mixed $default = null): mixed {
+    public function getSetting(string $key, mixed $default = null): mixed
+    {
         $settings = $this->getSettings();
         return $settings[$key] ?? $default;
     }

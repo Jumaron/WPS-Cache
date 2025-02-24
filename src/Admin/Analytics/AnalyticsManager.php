@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Analytics;
@@ -9,11 +10,13 @@ use WPSCache\Cache\Drivers\RedisCache;
 /**
  * Manages cache analytics and metrics functionality
  */
-class AnalyticsManager {
+class AnalyticsManager
+{
     private CacheManager $cache_manager;
     private MetricsCollector $metrics_collector;
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
         $this->metrics_collector = new MetricsCollector($cache_manager);
         $this->initializeHooks();
@@ -22,7 +25,8 @@ class AnalyticsManager {
     /**
      * Initializes WordPress hooks
      */
-    private function initializeHooks(): void {
+    private function initializeHooks(): void
+    {
         // Schedule metrics collection
         if (!wp_next_scheduled('wpsc_collect_metrics')) {
             wp_schedule_event(time(), 'hourly', 'wpsc_collect_metrics');
@@ -33,13 +37,14 @@ class AnalyticsManager {
     /**
      * Renders the analytics tab content
      */
-    public function renderTab(): void {
+    public function renderTab(): void
+    {
         if (!current_user_can('manage_options')) {
             return;
         }
 
         $redis_stats = $this->getRedisStats();
-        ?>
+?>
         <div class="wpsc-analytics-container">
             <!-- Cache Performance Overview -->
             <div class="wpsc-stats-grid">
@@ -51,13 +56,14 @@ class AnalyticsManager {
                 <?php $this->renderDetailedMetrics($redis_stats); ?>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Handles AJAX request for cache statistics
      */
-    public function handleAjaxGetCacheStats(): void {
+    public function handleAjaxGetCacheStats(): void
+    {
         check_ajax_referer('wpsc_ajax_nonce');
 
         if (!current_user_can('manage_options')) {
@@ -82,7 +88,8 @@ class AnalyticsManager {
     /**
      * Handles AJAX request for cache metrics
      */
-    public function handleAjaxGetCacheMetrics(): void {
+    public function handleAjaxGetCacheMetrics(): void
+    {
         check_ajax_referer('wpsc_ajax_nonce');
 
         if (!current_user_can('manage_options')) {
@@ -106,17 +113,18 @@ class AnalyticsManager {
     /**
      * Renders statistics cards
      */
-    private function renderStatCards(array $redis_stats): void {
+    private function renderStatCards(array $redis_stats): void
+    {
         $stats = [
             [
                 'title' => __('Cache Hit Ratio', 'WPS-Cache'),
-                'value' => isset($redis_stats['hit_ratio']) ? 
+                'value' => isset($redis_stats['hit_ratio']) ?
                     number_format_i18n($redis_stats['hit_ratio'], 2) . '%' : 'N/A',
                 'metric' => 'hit_ratio'
             ],
             [
                 'title' => __('Memory Usage', 'WPS-Cache'),
-                'value' => isset($redis_stats['memory_used']) ? 
+                'value' => isset($redis_stats['memory_used']) ?
                     size_format($redis_stats['memory_used']) : 'N/A',
                 'metric' => 'memory_used'
             ],
@@ -129,7 +137,7 @@ class AnalyticsManager {
             ],
             [
                 'title' => __('Server Uptime', 'WPS-Cache'),
-                'value' => isset($redis_stats['uptime']) ? 
+                'value' => isset($redis_stats['uptime']) ?
                     human_time_diff(time() - $redis_stats['uptime']) : 'N/A'
             ]
         ];
@@ -142,26 +150,28 @@ class AnalyticsManager {
     /**
      * Renders individual stat card
      */
-    private function renderStatCard(array $stat): void {
-        ?>
+    private function renderStatCard(array $stat): void
+    {
+    ?>
         <div class="wpsc-stat-card">
             <h3><?php echo esc_html($stat['title']); ?></h3>
-            <div class="wpsc-stat-value" id="<?php echo isset($stat['metric']) ? 
-                esc_attr($stat['metric']) : ''; ?>">
+            <div class="wpsc-stat-value" id="<?php echo isset($stat['metric']) ?
+                                                    esc_attr($stat['metric']) : ''; ?>">
                 <?php echo esc_html($stat['value']); ?>
             </div>
             <?php if (isset($stat['metric'])): ?>
                 <div class="wpsc-stat-trend" data-metric="<?php echo esc_attr($stat['metric']); ?>"></div>
             <?php endif; ?>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders detailed metrics table
      */
-    private function renderDetailedMetrics(array $redis_stats): void {
-        ?>
+    private function renderDetailedMetrics(array $redis_stats): void
+    {
+    ?>
         <h3><?php esc_html_e('Detailed Metrics', 'WPS-Cache'); ?></h3>
         <table class="widefat striped">
             <thead>
@@ -175,13 +185,14 @@ class AnalyticsManager {
                 <?php $this->renderMetricsTableRows($redis_stats); ?>
             </tbody>
         </table>
-        <?php
+    <?php
     }
 
     /**
      * Renders metrics table rows
      */
-    private function renderMetricsTableRows(array $stats): void {
+    private function renderMetricsTableRows(array $stats): void
+    {
         $metrics = [
             'hits' => __('Cache Hits', 'WPS-Cache'),
             'misses' => __('Cache Misses', 'WPS-Cache'),
@@ -206,28 +217,30 @@ class AnalyticsManager {
     /**
      * Renders individual metric row
      */
-    private function renderMetricRow(string $label, string $value, ?float $trend): void {
-        ?>
+    private function renderMetricRow(string $label, string $value, ?float $trend): void
+    {
+    ?>
         <tr>
             <td><?php echo esc_html($label); ?></td>
             <td><?php echo esc_html($value); ?></td>
             <td class="wpsc-trend <?php echo $trend > 0 ? 'positive' : ($trend < 0 ? 'negative' : ''); ?>">
                 <?php if ($trend !== null): ?>
-                    <span class="dashicons <?php echo $trend > 0 ? 
-                        'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'; ?>">
+                    <span class="dashicons <?php echo $trend > 0 ?
+                                                'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'; ?>">
                     </span>
                     <?php echo esc_html(number_format_i18n(abs($trend), 2)) . '%'; ?>
                 <?php endif; ?>
             </td>
         </tr>
-        <?php
+<?php
     }
 
     /**
      * Formats metric value based on type
      */
-    private function formatMetricValue(string $key, mixed $value): string {
-        return match($key) {
+    private function formatMetricValue(string $key, mixed $value): string
+    {
+        return match ($key) {
             'hit_ratio' => number_format_i18n($value, 2) . '%',
             'memory_used', 'memory_peak' => size_format($value),
             default => number_format_i18n($value)
@@ -237,42 +250,46 @@ class AnalyticsManager {
     /**
      * Gets Redis cache statistics
      */
-    private function getRedisStats(): array {
+    private function getRedisStats(): array
+    {
         $redis_driver = $this->cache_manager->getDriver('redis');
         if (!$redis_driver instanceof RedisCache) {
             return [];
         }
         return $redis_driver->getStats();
     }
-    
+
     /**
      * Gets HTML cache statistics
      */
-    private function getHtmlCacheStats(): array {
+    private function getHtmlCacheStats(): array
+    {
         return $this->metrics_collector->getHtmlCacheStats();
     }
 
     /**
      * Gets Varnish cache statistics
      */
-    private function getVarnishStats(): ?array {
+    private function getVarnishStats(): ?array
+    {
         return $this->metrics_collector->getVarnishStats();
     }
 
     /**
      * Gets system statistics
      */
-    private function getSystemStats(): array {
+    private function getSystemStats(): array
+    {
         return [
             'php_version' => PHP_VERSION,
             'wordpress_version' => get_bloginfo('version'),
             'plugin_version' => WPSC_VERSION,
             'memory_limit' => ini_get('memory_limit'),
             'max_execution_time' => ini_get('max_execution_time'),
-            'opcache_enabled' => function_exists('opcache_get_status') && 
+            'opcache_enabled' => function_exists('opcache_get_status') &&
                 opcache_get_status() !== false,
             'redis_extension' => extension_loaded('redis'),
-            'compression_available' => extension_loaded('zlib') || 
+            'compression_available' => extension_loaded('zlib') ||
                 extension_loaded('lz4') || extension_loaded('zstd'),
         ];
     }

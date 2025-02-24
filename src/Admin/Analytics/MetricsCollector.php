@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Analytics;
@@ -9,20 +10,23 @@ use WPSCache\Cache\Drivers\RedisCache;
 /**
  * Collects and processes cache metrics
  */
-class MetricsCollector {
+class MetricsCollector
+{
     private CacheManager $cache_manager;
     private const METRICS_RETENTION = 30; // Days to keep historical metrics
     private const METRICS_TRANSIENT = 'wpsc_metrics_data';
     private const HISTORICAL_OPTION = 'wpsc_historical_metrics';
 
-    public function __construct(CacheManager $cache_manager) {
+    public function __construct(CacheManager $cache_manager)
+    {
         $this->cache_manager = $cache_manager;
     }
 
     /**
      * Collects current metrics from all cache types
      */
-    public function collectMetrics(): void {
+    public function collectMetrics(): void
+    {
         try {
             $metrics = [
                 'timestamp' => current_time('timestamp'),
@@ -40,7 +44,6 @@ class MetricsCollector {
 
             // Cleanup old data
             $this->cleanupHistoricalMetrics();
-
         } catch (\Exception $e) {
             // Removed error_log() call for production.
         }
@@ -49,9 +52,10 @@ class MetricsCollector {
     /**
      * Gets current metrics data
      */
-    public function getCurrentMetrics(): array {
+    public function getCurrentMetrics(): array
+    {
         $metrics = get_transient(self::METRICS_TRANSIENT);
-        
+
         if (!$metrics) {
             $this->collectMetrics();
             $metrics = get_transient(self::METRICS_TRANSIENT);
@@ -63,7 +67,8 @@ class MetricsCollector {
     /**
      * Gets historical metrics data
      */
-    public function getHistoricalMetrics(): array {
+    public function getHistoricalMetrics(): array
+    {
         $historical = get_option(self::HISTORICAL_OPTION, []);
         $intervals = ['hourly', 'daily', 'weekly'];
         $aggregated = [];
@@ -78,7 +83,8 @@ class MetricsCollector {
     /**
      * Gets HTML cache statistics
      */
-    public function getHtmlCacheStats(): array {
+    public function getHtmlCacheStats(): array
+    {
         $cache_dir = WPSC_CACHE_DIR . 'html/';
         $files = glob($cache_dir . '*.html');
         $total_size = 0;
@@ -120,7 +126,8 @@ class MetricsCollector {
     /**
      * Gets Redis metrics
      */
-    private function getRedisMetrics(): ?array {
+    private function getRedisMetrics(): ?array
+    {
         $redis_driver = $this->cache_manager->getDriver('redis');
         if (!$redis_driver instanceof RedisCache) {
             return null;
@@ -129,7 +136,7 @@ class MetricsCollector {
         try {
             $info = $redis_driver->getStats();
             $stats = $this->processRedisStats($info);
-            
+
             // Calculate trends
             $previous_stats = get_transient('wpsc_previous_redis_stats');
             if ($previous_stats) {
@@ -147,7 +154,8 @@ class MetricsCollector {
     /**
      * Processes Redis statistics
      */
-    private function processRedisStats(array $info): array {
+    private function processRedisStats(array $info): array
+    {
         // Calculate hit ratio
         $hits = $info['keyspace_hits'] ?? 0;
         $misses = $info['keyspace_misses'] ?? 0;
@@ -175,7 +183,8 @@ class MetricsCollector {
     /**
      * Gets Varnish statistics
      */
-    public function getVarnishStats(): ?array {
+    public function getVarnishStats(): ?array
+    {
         $settings = get_option('wpsc_settings');
         if (!($settings['varnish_cache'] ?? false)) {
             return null;
@@ -223,7 +232,8 @@ class MetricsCollector {
     /**
      * Gets system metrics
      */
-    private function getSystemMetrics(): array {
+    private function getSystemMetrics(): array
+    {
         return [
             'memory_usage'  => memory_get_usage(true),
             'memory_peak'   => memory_get_peak_usage(true),
@@ -236,7 +246,8 @@ class MetricsCollector {
     /**
      * Gets OPcache statistics if available
      */
-    private function getOpcacheStats(): ?array {
+    private function getOpcacheStats(): ?array
+    {
         if (!function_exists('opcache_get_status')) {
             return null;
         }
@@ -258,20 +269,21 @@ class MetricsCollector {
     /**
      * Stores metrics in historical data
      */
-    private function storeHistoricalMetrics(array $metrics): void {
+    private function storeHistoricalMetrics(array $metrics): void
+    {
         if (!get_option('wpsc_settings')['enable_metrics']) {
             return;
         }
 
         $historical = get_option(self::HISTORICAL_OPTION, []);
         $timestamp = current_time('timestamp');
-        
+
         // Store essential metrics
         $historical[$timestamp] = [
             'hit_ratio'     => $metrics['redis']['hit_ratio'] ?? 0,
             'memory_used'   => $metrics['redis']['memory_used'] ?? 0,
-            'total_ops'     => ($metrics['redis']['hits'] ?? 0) + 
-                               ($metrics['redis']['misses'] ?? 0),
+            'total_ops'     => ($metrics['redis']['hits'] ?? 0) +
+                ($metrics['redis']['misses'] ?? 0),
             'system_memory' => $metrics['system']['memory_usage'] ?? 0,
         ];
 
@@ -281,7 +293,8 @@ class MetricsCollector {
     /**
      * Cleans up old historical metrics
      */
-    private function cleanupHistoricalMetrics(): void {
+    private function cleanupHistoricalMetrics(): void
+    {
         $historical = get_option(self::HISTORICAL_OPTION, []);
         $retention = self::METRICS_RETENTION * DAY_IN_SECONDS;
         $cutoff = current_time('timestamp') - $retention;
@@ -298,9 +311,10 @@ class MetricsCollector {
     /**
      * Aggregates metrics for different time intervals
      */
-    private function aggregateMetrics(array $metrics, string $interval): array {
+    private function aggregateMetrics(array $metrics, string $interval): array
+    {
         $now = current_time('timestamp');
-        $period = match($interval) {
+        $period = match ($interval) {
             'hourly' => HOUR_IN_SECONDS,
             'daily'  => DAY_IN_SECONDS,
             'weekly' => WEEK_IN_SECONDS,
@@ -317,7 +331,7 @@ class MetricsCollector {
                         'total' => array_fill_keys(array_keys($data), 0)
                     ];
                 }
-                
+
                 foreach ($data as $key => $value) {
                     $aggregated[$bucket]['total'][$key] += $value;
                 }
@@ -340,10 +354,17 @@ class MetricsCollector {
     /**
      * Calculates trends between current and previous metrics
      */
-    private function calculateMetricsTrends(array $current, array $previous): array {
+    private function calculateMetricsTrends(array $current, array $previous): array
+    {
         $trends = [];
-        $trend_metrics = ['hits', 'misses', 'memory_used', 'evicted_keys', 
-            'expired_keys', 'total_connections'];
+        $trend_metrics = [
+            'hits',
+            'misses',
+            'memory_used',
+            'evicted_keys',
+            'expired_keys',
+            'total_connections'
+        ];
 
         foreach ($trend_metrics as $metric) {
             if (isset($current[$metric], $previous[$metric]) && $previous[$metric] > 0) {

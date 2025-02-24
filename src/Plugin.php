@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache;
@@ -10,7 +11,8 @@ use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, Mini
 /**
  * Main plugin class handling initialization and lifecycle management
  */
-final class Plugin {
+final class Plugin
+{
     private const DEFAULT_SETTINGS = [
         'html_cache'     => true,
         'redis_cache'    => false,
@@ -46,7 +48,8 @@ final class Plugin {
     /**
      * Gets singleton instance
      */
-    public static function getInstance(): self {
+    public static function getInstance(): self
+    {
         return self::$instance ??= new self();
     }
 
@@ -56,7 +59,8 @@ final class Plugin {
     /**
      * Initializes the plugin
      */
-    public function initialize(): void {
+    public function initialize(): void
+    {
         $this->setupConstants();
         $this->initializeCacheManager();
         $this->setupHooks();
@@ -71,7 +75,8 @@ final class Plugin {
     /**
      * Sets up required constants
      */
-    private function setupConstants(): void {
+    private function setupConstants(): void
+    {
         $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
         $constants = [
             'WPSC_VERSION'      => '0.0.3',
@@ -91,7 +96,8 @@ final class Plugin {
     /**
      * Initializes cache manager and drivers
      */
-    private function initializeCacheManager(): void {
+    private function initializeCacheManager(): void
+    {
         $this->cache_manager = new CacheManager();
         $settings = get_option('wpsc_settings', self::DEFAULT_SETTINGS);
 
@@ -101,7 +107,8 @@ final class Plugin {
     /**
      * Initializes individual cache drivers based on settings
      */
-    private function initializeCacheDrivers(array $settings): void {
+    private function initializeCacheDrivers(array $settings): void
+    {
         // HTML Cache
         if ($settings['html_cache']) {
             $this->cache_manager->addDriver(new HTMLCache());
@@ -143,7 +150,8 @@ final class Plugin {
     /**
      * Sets up WordPress hooks
      */
-    private function setupHooks(): void {
+    private function setupHooks(): void
+    {
         // Cache clearing hooks
         $clear_cache_hooks = [
             'wpsc_clear_cache',
@@ -166,28 +174,31 @@ final class Plugin {
     /**
      * Initializes admin panel
      */
-    private function initializeAdmin(): void {
+    private function initializeAdmin(): void
+    {
         $this->admin_panel_manager = new AdminPanelManager($this->cache_manager);
     }
 
     /**
      * Activates the plugin
      */
-    public function activate(): void {
+    public function activate(): void
+    {
         $this->createRequiredDirectories();
         $this->createHtaccessFile();
         $this->enableWPCache();
         $this->copyAdvancedCache();
         $this->setupDefaultSettings();
         $this->scheduleCacheCleanup();
-        
+
         flush_rewrite_rules();
     }
 
     /**
      * Creates required directories using the WP_Filesystem API
      */
-    private function createRequiredDirectories(): void {
+    private function createRequiredDirectories(): void
+    {
         require_once ABSPATH . 'wp-admin/includes/file.php';
         global $wp_filesystem;
         if (empty($wp_filesystem)) {
@@ -204,7 +215,8 @@ final class Plugin {
     /**
      * Creates .htaccess file for security
      */
-    private function createHtaccessFile(): void {
+    private function createHtaccessFile(): void
+    {
         $htaccess_file = WPSC_CACHE_DIR . '.htaccess';
         if (!file_exists($htaccess_file)) {
             @file_put_contents($htaccess_file, self::HTACCESS_CONTENT);
@@ -214,7 +226,8 @@ final class Plugin {
     /**
      * Enables WP_CACHE constant in wp-config.php
      */
-    private function enableWPCache(): void {
+    private function enableWPCache(): void
+    {
         if (!$this->setWPCache(true)) {
             error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
         }
@@ -223,10 +236,11 @@ final class Plugin {
     /**
      * Copies advanced-cache.php template
      */
-    private function copyAdvancedCache(): void {
+    private function copyAdvancedCache(): void
+    {
         $template_file = WPSC_PLUGIN_DIR . 'includes/advanced-cache-template.php';
         $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
-        
+
         if (!@copy($template_file, $target_file)) {
             error_log('WPS Cache Warning: Failed to create advanced-cache.php');
         }
@@ -235,7 +249,8 @@ final class Plugin {
     /**
      * Sets up default settings
      */
-    private function setupDefaultSettings(): void {
+    private function setupDefaultSettings(): void
+    {
         if (!get_option('wpsc_settings')) {
             update_option('wpsc_settings', self::DEFAULT_SETTINGS);
         }
@@ -244,7 +259,8 @@ final class Plugin {
     /**
      * Schedules cache cleanup
      */
-    private function scheduleCacheCleanup(): void {
+    private function scheduleCacheCleanup(): void
+    {
         if (!wp_next_scheduled(self::CACHE_CLEANUP_HOOK)) {
             wp_schedule_event(time(), 'daily', self::CACHE_CLEANUP_HOOK);
         }
@@ -253,7 +269,8 @@ final class Plugin {
     /**
      * Deactivates the plugin
      */
-    public function deactivate(): void {
+    public function deactivate(): void
+    {
         $this->disableWPCache();
         $this->clearAllCaches();
         $this->removeDropIns();
@@ -263,9 +280,10 @@ final class Plugin {
     /**
      * Manages WP_CACHE constant in wp-config.php
      */
-    private function setWPCache(bool $enabled): bool {
+    private function setWPCache(bool $enabled): bool
+    {
         $config_file = ABSPATH . 'wp-config.php';
-        
+
         if (!$this->isConfigFileAccessible($config_file)) {
             return false;
         }
@@ -283,7 +301,8 @@ final class Plugin {
     /**
      * Checks if wp-config.php is accessible
      */
-    private function isConfigFileAccessible(string $file): bool {
+    private function isConfigFileAccessible(string $file): bool
+    {
         if (!file_exists($file)) {
             error_log('WPS Cache Error: wp-config.php not found');
             return false;
@@ -294,7 +313,8 @@ final class Plugin {
     /**
      * Updates WP_CACHE definition in config content
      */
-    private function updateWPCacheDefinition(string $content, bool $enabled): string {
+    private function updateWPCacheDefinition(string $content, bool $enabled): string
+    {
         $pattern = "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;/i";
         $wp_cache_defined = preg_match($pattern, $content);
 
@@ -315,7 +335,8 @@ final class Plugin {
     /**
      * Writes updated wp-config.php with backup
      */
-    private function writeConfigFile(string $file, string $content): bool {
+    private function writeConfigFile(string $file, string $content): bool
+    {
         // Create backup
         $backup_file = $file . '.backup-' . time();
         if (!@copy($file, $backup_file)) {
@@ -336,7 +357,8 @@ final class Plugin {
     /**
      * Disables WP_CACHE constant
      */
-    private function disableWPCache(): void {
+    private function disableWPCache(): void
+    {
         if (!$this->setWPCache(false)) {
             error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
         }
@@ -345,14 +367,16 @@ final class Plugin {
     /**
      * Clears all caches
      */
-    private function clearAllCaches(): void {
+    private function clearAllCaches(): void
+    {
         $this->cache_manager->clearAllCaches();
     }
 
     /**
      * Removes cache-related drop-ins
      */
-    private function removeDropIns(): void {
+    private function removeDropIns(): void
+    {
         $this->removeObjectCache();
         $this->removeAdvancedCache();
     }
@@ -360,7 +384,8 @@ final class Plugin {
     /**
      * Removes object cache drop-in
      */
-    private function removeObjectCache(): void {
+    private function removeObjectCache(): void
+    {
         $file = WP_CONTENT_DIR . '/object-cache.php';
         $signature = 'WPS Cache - Redis Object Cache Drop-in';
         $this->removeDropIn($file, $signature);
@@ -369,7 +394,8 @@ final class Plugin {
     /**
      * Removes advanced cache drop-in
      */
-    private function removeAdvancedCache(): void {
+    private function removeAdvancedCache(): void
+    {
         $file = WP_CONTENT_DIR . '/advanced-cache.php';
         $signature = 'WPS Cache - Advanced Cache Drop-in';
         $this->removeDropIn($file, $signature);
@@ -378,7 +404,8 @@ final class Plugin {
     /**
      * Removes a drop-in file if it matches our signature using wp_delete_file()
      */
-    private function removeDropIn(string $file, string $signature): void {
+    private function removeDropIn(string $file, string $signature): void
+    {
         if (file_exists($file)) {
             $contents = file_get_contents($file);
             if ($contents && strpos($contents, $signature) !== false) {
@@ -390,14 +417,16 @@ final class Plugin {
     /**
      * Clears scheduled events
      */
-    private function clearScheduledEvents(): void {
+    private function clearScheduledEvents(): void
+    {
         wp_clear_scheduled_hook(self::CACHE_CLEANUP_HOOK);
     }
 
     /**
      * Gets cache manager instance
      */
-    public function getCacheManager(): CacheManager {
+    public function getCacheManager(): CacheManager
+    {
         return $this->cache_manager;
     }
 }

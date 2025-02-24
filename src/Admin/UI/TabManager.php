@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\UI;
@@ -6,7 +7,8 @@ namespace WPSCache\Admin\UI;
 /**
  * Manages admin interface navigation tabs
  */
-class TabManager {
+class TabManager
+{
     /**
      * Available admin tabs
      *
@@ -14,14 +16,16 @@ class TabManager {
      */
     private array $tabs;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->initializeTabs();
     }
 
     /**
      * Initializes available tabs and their properties
      */
-    private function initializeTabs(): void {
+    private function initializeTabs(): void
+    {
         $this->tabs = [
             'settings' => [
                 'label'      => __('Settings', 'WPS-Cache'),
@@ -49,19 +53,20 @@ class TabManager {
      *
      * @param string $current_tab Currently active tab
      */
-    public function renderTabs(string $current_tab = 'settings'): void {
+    public function renderTabs(string $current_tab = 'settings'): void
+    {
         $tabs = $this->getAccessibleTabs();
 
         if (empty($tabs)) {
             return;
         }
-        ?>
+?>
         <div class="nav-tab-wrapper wp-clearfix">
             <?php foreach ($tabs as $tab_id => $tab): ?>
                 <?php $this->renderTab($tab_id, $tab, $current_tab === $tab_id); ?>
             <?php endforeach; ?>
         </div>
-        <?php
+    <?php
     }
 
     /**
@@ -69,13 +74,14 @@ class TabManager {
      *
      * @return array Accessible tabs
      */
-    public function getAccessibleTabs(): array {
-        $accessible_tabs = array_filter($this->tabs, function($tab) {
+    public function getAccessibleTabs(): array
+    {
+        $accessible_tabs = array_filter($this->tabs, function ($tab) {
             return current_user_can($tab['capability']);
         });
 
         // Sort tabs by order
-        uasort($accessible_tabs, function($a, $b) {
+        uasort($accessible_tabs, function ($a, $b) {
             return $a['order'] <=> $b['order'];
         });
 
@@ -89,7 +95,8 @@ class TabManager {
      * @param array $tab Tab configuration
      * @param bool $is_active Whether tab is currently active
      */
-    private function renderTab(string $tab_id, array $tab, bool $is_active): void {
+    private function renderTab(string $tab_id, array $tab, bool $is_active): void
+    {
         $classes = ['nav-tab'];
         if ($is_active) {
             $classes[] = 'nav-tab-active';
@@ -99,17 +106,16 @@ class TabManager {
             'page'     => 'wps-cache',
             'tab'      => $tab_id
         ], admin_url('admin.php'));
-        ?>
-        <a href="<?php echo esc_url($url); ?>" 
-           class="<?php echo esc_attr(implode(' ', $classes)); ?>"
-           id="wpsc-tab-<?php echo esc_attr($tab_id); ?>"
-        >
+    ?>
+        <a href="<?php echo esc_url($url); ?>"
+            class="<?php echo esc_attr(implode(' ', $classes)); ?>"
+            id="wpsc-tab-<?php echo esc_attr($tab_id); ?>">
             <?php if (!empty($tab['icon'])): ?>
                 <span class="dashicons <?php echo esc_attr($tab['icon']); ?>"></span>
             <?php endif; ?>
             <?php echo esc_html($tab['label']); ?>
         </a>
-        <?php
+<?php
     }
 
     /**
@@ -118,7 +124,8 @@ class TabManager {
      * @param string $tab_id Tab identifier
      * @return array|null Tab configuration or null if not found
      */
-    public function getTab(string $tab_id): ?array {
+    public function getTab(string $tab_id): ?array
+    {
         return $this->tabs[$tab_id] ?? null;
     }
 
@@ -127,7 +134,8 @@ class TabManager {
      *
      * @return array All registered tabs
      */
-    public function getAllTabs(): array {
+    public function getAllTabs(): array
+    {
         return $this->tabs;
     }
 
@@ -137,7 +145,8 @@ class TabManager {
      * @param string $tab_id Tab identifier
      * @return bool Whether tab exists
      */
-    public function hasTab(string $tab_id): bool {
+    public function hasTab(string $tab_id): bool
+    {
         return isset($this->tabs[$tab_id]);
     }
 
@@ -147,7 +156,8 @@ class TabManager {
      * @param string $tab_id Tab identifier
      * @return bool Whether tab is accessible
      */
-    public function isTabAccessible(string $tab_id): bool {
+    public function isTabAccessible(string $tab_id): bool
+    {
         if (!$this->hasTab($tab_id)) {
             return false;
         }
@@ -192,7 +202,8 @@ class TabManager {
      * @param string $tab_id Tab identifier
      * @return bool Whether tab was unregistered
      */
-    public function unregisterTab(string $tab_id): bool {
+    public function unregisterTab(string $tab_id): bool
+    {
         if (!$this->hasTab($tab_id)) {
             return false;
         }
@@ -208,7 +219,8 @@ class TabManager {
      * @param array $args Additional query arguments
      * @return string Tab URL
      */
-    public function getTabUrl(string $tab_id, array $args = []): string {
+    public function getTabUrl(string $tab_id, array $args = []): string
+    {
         $default_args = [
             'page' => 'wps-cache',
             'tab'  => $tab_id
@@ -225,9 +237,10 @@ class TabManager {
      *
      * @return string Active tab ID
      */
-    public function getCurrentTab(): string {
-        $current_tab = isset($_GET['tab']) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'settings';
-       
+    public function getCurrentTab(): string
+    {
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'settings';
+
         if (!$this->isTabAccessible($current_tab)) {
             return 'settings';
         }

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
@@ -6,21 +7,24 @@ namespace WPSCache\Cache\Drivers;
 /**
  * Optimized HTML cache implementation
  */
-final class HTMLCache extends AbstractCacheDriver {
+final class HTMLCache extends AbstractCacheDriver
+{
     private const COMPRESSION_PATTERN = '/<(?<script>script).*?<\/script\s*>|<(?<style>style).*?<\/style\s*>|<!(?<comment>--).*?-->|<(?<tag>[\/\w.:-]*)(?:".*?"|\'.*?\'|[^\'">]+)*>|(?<text>((<[^!\/\w.:-])?[^<]*)+)|/si';
     private string $cache_dir;
     private array $settings;
     private bool $compress_css = true;
     private bool $compress_js = true;
     private bool $remove_comments = true;
-    
-    public function __construct() {
+
+    public function __construct()
+    {
         $this->cache_dir = WPSC_CACHE_DIR . 'html/';
         $this->settings = get_option('wpsc_settings', []);
         $this->ensureCacheDirectory($this->cache_dir);
     }
 
-    public function initialize(): void {
+    public function initialize(): void
+    {
         if (!$this->initialized && $this->shouldCache()) {
             add_action('template_redirect', [$this, 'startOutputBuffering']);
             add_action('shutdown', [$this, 'closeOutputBuffering']);
@@ -28,8 +32,9 @@ final class HTMLCache extends AbstractCacheDriver {
         }
     }
 
-    public function isConnected(): bool {
-        if ( ! function_exists('WP_Filesystem') ) {
+    public function isConnected(): bool
+    {
+        if (! function_exists('WP_Filesystem')) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
         }
         WP_Filesystem();
@@ -37,7 +42,8 @@ final class HTMLCache extends AbstractCacheDriver {
         return $wp_filesystem->is_writable($this->cache_dir);
     }
 
-    public function get(string $key): mixed {
+    public function get(string $key): mixed
+    {
         $file = $this->getCacheFile($key);
         if (!is_readable($file)) {
             return null;
@@ -54,7 +60,8 @@ final class HTMLCache extends AbstractCacheDriver {
         return ($content !== false) ? $content : null;
     }
 
-    public function set(string $key, mixed $value, int $ttl = 3600): void {
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
         if (!is_string($value) || empty(trim($value))) {
             return;
         }
@@ -65,19 +72,21 @@ final class HTMLCache extends AbstractCacheDriver {
         }
     }
 
-    public function delete(string $key): void {
+    public function delete(string $key): void
+    {
         $file = $this->getCacheFile($key);
         if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete cache file: $file");
         }
     }
 
-    public function clear(): void {
+    public function clear(): void
+    {
         $files = glob($this->cache_dir . '*.html');
         if (!is_array($files)) {
             return;
         }
-        
+
         foreach ($files as $file) {
             if (is_file($file) && !wp_delete_file($file)) {
                 $this->logError("Failed to delete cache file during clear: $file");
@@ -85,38 +94,41 @@ final class HTMLCache extends AbstractCacheDriver {
         }
     }
 
-    public function startOutputBuffering(): void {
+    public function startOutputBuffering(): void
+    {
         ob_start([$this, 'processOutput']);
     }
 
-    public function closeOutputBuffering(): void {
+    public function closeOutputBuffering(): void
+    {
         if (ob_get_level() > 0) {
             ob_end_flush();
         }
     }
 
-    public function processOutput(string $content): string {
+    public function processOutput(string $content): string
+    {
         if (empty($content)) {
             return $content;
         }
 
         try {
             $minified = $this->minifyHTML($content);
-            
+
             if ($minified === false) {
                 return $content;
             }
 
             // Add cache metadata
             $minified .= $this->getCacheComment($content, $minified);
-            
+
             // Sanitize the REQUEST_URI before generating the cache key
             $request_uri = isset($_SERVER['REQUEST_URI'])
                 ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
                 : '';
             $key = $this->generateCacheKey($request_uri);
             $this->set($key, $minified);
-            
+
             return $minified;
         } catch (\Throwable $e) {
             $this->logError('HTML processing failed', $e);
@@ -124,7 +136,8 @@ final class HTMLCache extends AbstractCacheDriver {
         }
     }
 
-    private function minifyHTML(string $html): string|false {
+    private function minifyHTML(string $html): string|false
+    {
         if (empty($html)) {
             return false;
         }
@@ -181,7 +194,8 @@ final class HTMLCache extends AbstractCacheDriver {
         return $compressed;
     }
 
-    private function removeWhitespace(string $str): string {
+    private function removeWhitespace(string $str): string
+    {
         $str = str_replace("\t", ' ', $str);
         $str = str_replace("\n", '', $str);
         $str = str_replace("\r", '', $str);
@@ -191,11 +205,12 @@ final class HTMLCache extends AbstractCacheDriver {
         return trim($str);
     }
 
-    private function getCacheComment(string $raw, string $compressed): string {
+    private function getCacheComment(string $raw, string $compressed): string
+    {
         $raw_size = strlen($raw);
         $compressed_size = strlen($compressed);
         $savings = ($raw_size - $compressed_size) / $raw_size * 100;
-        
+
         return sprintf(
             "\n<!-- Page cached by WPS-Cache on %s. Size saved %.2f%%. From %d bytes to %d bytes -->",
             gmdate('Y-m-d H:i:s'),
@@ -211,7 +226,8 @@ final class HTMLCache extends AbstractCacheDriver {
      * To address the warning about processing form data without nonce verification,
      * we now explicitly sanitize GET data using filter_input_array().
      */
-    private function shouldCache(): bool {
+    private function shouldCache(): bool
+    {
         $get_data = filter_input_array(INPUT_GET, FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: [];
         if (is_admin() || is_user_logged_in() || !empty($get_data)) {
             return false;
@@ -222,26 +238,29 @@ final class HTMLCache extends AbstractCacheDriver {
         return !$this->isPageCached() && !$this->isExcludedUrl();
     }
 
-    private function isExcludedUrl(): bool {
+    private function isExcludedUrl(): bool
+    {
         $current_url = isset($_SERVER['REQUEST_URI'])
             ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
             : '';
         $excluded_urls = $this->settings['excluded_urls'] ?? [];
-        
+
         foreach ($excluded_urls as $pattern) {
             if (fnmatch($pattern, $current_url)) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
-    private function getCacheFile(string $key): string {
+    private function getCacheFile(string $key): string
+    {
         return $this->cache_dir . $key . '.html';
     }
 
-    private function isPageCached(): bool {
+    private function isPageCached(): bool
+    {
         return isset($_SERVER['HTTP_X_WPS_CACHE']) && $_SERVER['HTTP_X_WPS_CACHE'] === 'HIT';
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Settings;
@@ -6,16 +7,18 @@ namespace WPSCache\Admin\Settings;
 /**
  * Renders the settings interface for WPS Cache
  */
-class SettingsRenderer {
+class SettingsRenderer
+{
     /**
      * Renders the main settings page
      */
-    public function renderSettingsPage(): void {
+    public function renderSettingsPage(): void
+    {
         $settings = get_option('wpsc_settings');
-        ?>
+?>
         <form method="post" action="options.php" class="wpsc-settings-form">
             <?php settings_fields('wpsc_settings'); ?>
-    
+
             <!-- Cache Types Section -->
             <div class="wpsc-section">
                 <h2><?php esc_html_e('Cache Types', 'WPS-Cache'); ?></h2>
@@ -23,16 +26,16 @@ class SettingsRenderer {
                     <?php $this->renderCacheTypeCards($settings); ?>
                 </div>
             </div>
-    
+
             <!-- Redis Settings -->
-            <div id="redis-settings" class="wpsc-section" 
-                 style="<?php echo (!($settings['redis_cache'] ?? false)) ? 'display: none;' : ''; ?>">
+            <div id="redis-settings" class="wpsc-section"
+                style="<?php echo (!($settings['redis_cache'] ?? false)) ? 'display: none;' : ''; ?>">
                 <h2><?php esc_html_e('Redis Configuration', 'WPS-Cache'); ?></h2>
                 <table class="form-table">
                     <?php $this->renderRedisSettings($settings); ?>
                 </table>
             </div>
-    
+
             <!-- Advanced Settings -->
             <div class="wpsc-section">
                 <h2><?php esc_html_e('Advanced Settings', 'WPS-Cache'); ?></h2>
@@ -40,16 +43,17 @@ class SettingsRenderer {
                     <?php $this->renderAdvancedSettings($settings); ?>
                 </table>
             </div>
-    
+
             <?php submit_button(__('Save Settings', 'WPS-Cache')); ?>
         </form>
-        <?php
+    <?php
     }
 
     /**
      * Renders cache type selection cards
      */
-    private function renderCacheTypeCards(array $settings): void {
+    private function renderCacheTypeCards(array $settings): void
+    {
         $cache_types = [
             'html_cache' => [
                 'label'       => __('Static HTML Cache', 'WPS-Cache'),
@@ -81,29 +85,31 @@ class SettingsRenderer {
     /**
      * Renders individual cache type card
      */
-    private function renderCacheTypeCard(string $type, array $info, bool $enabled): void {
-        ?>
+    private function renderCacheTypeCard(string $type, array $info, bool $enabled): void
+    {
+    ?>
         <div class="wpsc-cache-type-card">
             <label>
                 <input type="checkbox"
-                       name="wpsc_settings[<?php echo esc_attr($type); ?>]"
-                       value="1"
-                       <?php checked($enabled); ?>
-                       class="wpsc-toggle-settings"
-                       data-target="<?php echo esc_attr(str_replace('_', '-', $type)); ?>-settings">
+                    name="wpsc_settings[<?php echo esc_attr($type); ?>]"
+                    value="1"
+                    <?php checked($enabled); ?>
+                    class="wpsc-toggle-settings"
+                    data-target="<?php echo esc_attr(str_replace('_', '-', $type)); ?>-settings">
                 <?php echo esc_html($info['label']); ?>
             </label>
             <p class="description">
                 <?php echo esc_html($info['description']); ?>
             </p>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Renders Redis settings fields
      */
-    private function renderRedisSettings(array $settings): void {
+    private function renderRedisSettings(array $settings): void
+    {
         $redis_fields = [
             'redis_host' => [
                 'label'       => __('Redis Host', 'WPS-Cache'),
@@ -147,7 +153,7 @@ class SettingsRenderer {
             $settings['redis_persistent'] ?? false,
             __('Maintains persistent connections to Redis between requests', 'WPS-Cache')
         );
-        
+
         $this->renderCheckboxField(
             'redis_compression',
             __('Enable Compression', 'WPS-Cache'),
@@ -159,9 +165,10 @@ class SettingsRenderer {
     /**
      * Renders advanced settings fields
      */
-    private function renderAdvancedSettings(array $settings): void {
+    private function renderAdvancedSettings(array $settings): void
+    {
         $advanced = $settings['advanced_settings'] ?? [];
-        
+
         // Cache Lifetime
         $this->renderSettingField(
             'cache_lifetime',
@@ -190,7 +197,7 @@ class SettingsRenderer {
 
         // Excluded URLs
         $this->renderTextareaField(
-            'excluded_urls', 
+            'excluded_urls',
             __('Excluded URLs', 'WPS-Cache'),
             $settings['excluded_urls'] ?? [],
             __('Enter one URL per line', 'WPS-Cache')
@@ -208,8 +215,9 @@ class SettingsRenderer {
     /**
      * Renders a generic setting field
      */
-    private function renderSettingField(string $key, array $field, mixed $value): void {
-        ?>
+    private function renderSettingField(string $key, array $field, mixed $value): void
+    {
+    ?>
         <tr>
             <th scope="row">
                 <label for="wpsc_<?php echo esc_attr($key); ?>">
@@ -218,45 +226,47 @@ class SettingsRenderer {
             </th>
             <td>
                 <input type="<?php echo esc_attr($field['type']); ?>"
-                       id="wpsc_<?php echo esc_attr($key); ?>"
-                       name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                       value="<?php echo esc_attr($value); ?>"
-                       class="regular-text"
-                       <?php if (isset($field['min'])) echo 'min="' . esc_attr($field['min']) . '"'; ?>
-                       <?php if (isset($field['max'])) echo 'max="' . esc_attr($field['max']) . '"'; ?>>
+                    id="wpsc_<?php echo esc_attr($key); ?>"
+                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                    value="<?php echo esc_attr($value); ?>"
+                    class="regular-text"
+                    <?php if (isset($field['min'])) echo 'min="' . esc_attr($field['min']) . '"'; ?>
+                    <?php if (isset($field['max'])) echo 'max="' . esc_attr($field['max']) . '"'; ?>>
                 <p class="description">
                     <?php echo esc_html($field['description']); ?>
                 </p>
             </td>
         </tr>
-        <?php
+    <?php
     }
 
     /**
      * Renders a checkbox field
      */
-    private function renderCheckboxField(string $key, string $label, bool $checked, string $description): void {
-        ?>
+    private function renderCheckboxField(string $key, string $label, bool $checked, string $description): void
+    {
+    ?>
         <tr>
             <th scope="row"><?php echo esc_html($label); ?></th>
             <td>
                 <label>
                     <input type="checkbox"
-                           name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                           value="1"
-                           <?php checked($checked); ?>>
+                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                        value="1"
+                        <?php checked($checked); ?>>
                     <?php echo esc_html($description); ?>
                 </label>
             </td>
         </tr>
-        <?php
+    <?php
     }
 
     /**
      * Renders a textarea field
      */
-    private function renderTextareaField(string $key, string $label, array $values, string $description): void {
-        ?>
+    private function renderTextareaField(string $key, string $label, array $values, string $description): void
+    {
+    ?>
         <tr>
             <th scope="row">
                 <label for="wpsc_<?php echo esc_attr($key); ?>">
@@ -265,58 +275,62 @@ class SettingsRenderer {
             </th>
             <td>
                 <textarea id="wpsc_<?php echo esc_attr($key); ?>"
-                          name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                          rows="5"
-                          class="large-text code"><?php echo esc_textarea(implode("\n", $values)); ?></textarea>
+                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                    rows="5"
+                    class="large-text code"><?php echo esc_textarea(implode("\n", $values)); ?></textarea>
                 <p class="description">
                     <?php echo esc_html($description); ?>
                 </p>
             </td>
         </tr>
-        <?php
+    <?php
     }
 
     /**
      * Renders settings section information
      */
-    public function renderCacheSettingsInfo(): void {
-        ?>
+    public function renderCacheSettingsInfo(): void
+    {
+    ?>
         <p>
             <?php esc_html_e('Configure which types of caching you want to enable and their basic settings.', 'WPS-Cache'); ?>
         </p>
-        <?php
+    <?php
     }
 
     /**
      * Renders Redis settings section information
      */
-    public function renderRedisSettingsInfo(): void {
-        ?>
+    public function renderRedisSettingsInfo(): void
+    {
+    ?>
         <p>
             <?php esc_html_e('Configure your Redis server connection settings. Redis provides powerful object caching capabilities.', 'WPS-Cache'); ?>
         </p>
-        <?php
+    <?php
     }
 
     /**
      * Renders Varnish settings section information
      */
-    public function renderVarnishSettingsInfo(): void {
-        ?>
+    public function renderVarnishSettingsInfo(): void
+    {
+    ?>
         <p>
             <?php esc_html_e('Configure Varnish cache settings if you are using Varnish as a reverse proxy cache.', 'WPS-Cache'); ?>
         </p>
-        <?php
+    <?php
     }
 
     /**
      * Renders advanced settings section information
      */
-    public function renderAdvancedSettingsInfo(): void {
-        ?>
+    public function renderAdvancedSettingsInfo(): void
+    {
+    ?>
         <p>
             <?php esc_html_e('Advanced settings for fine-tuning cache behavior. Change these only if you know what you\'re doing.', 'WPS-Cache'); ?>
         </p>
-        <?php
+<?php
     }
 }

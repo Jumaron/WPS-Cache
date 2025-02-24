@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
@@ -6,7 +7,8 @@ namespace WPSCache\Cache\Drivers;
 /**
  * Enhanced JavaScript minification implementation
  */
-final class MinifyJS extends AbstractCacheDriver {
+final class MinifyJS extends AbstractCacheDriver
+{
     private const MAX_FILE_SIZE = 500000; // 500KB
     private const MIN_FILE_SIZE = 500;    // 500B
 
@@ -21,20 +23,23 @@ final class MinifyJS extends AbstractCacheDriver {
     private array $settings;
     private array $preserved = [];
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
         $this->settings = get_option('wpsc_settings', []);
         $this->ensureCacheDirectory($this->cache_dir);
     }
 
-    public function initialize(): void {
+    public function initialize(): void
+    {
         if (!$this->initialized && !is_admin() && ($this->settings['js_minify'] ?? false)) {
             add_action('wp_enqueue_scripts', [$this, 'processScripts'], 100);
             $this->initialized = true;
         }
     }
 
-    public function isConnected(): bool {
+    public function isConnected(): bool
+    {
         global $wp_filesystem;
         if (empty($wp_filesystem)) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -43,12 +48,14 @@ final class MinifyJS extends AbstractCacheDriver {
         return $wp_filesystem->is_writable($this->cache_dir);
     }
 
-    public function get(string $key): mixed {
+    public function get(string $key): mixed
+    {
         $file = $this->getCacheFile($key);
         return is_readable($file) ? file_get_contents($file) : null;
     }
 
-    public function set(string $key, mixed $value, int $ttl = 3600): void {
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
         if (!is_string($value) || empty(trim($value))) {
             return;
         }
@@ -59,14 +66,16 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    public function delete(string $key): void {
+    public function delete(string $key): void
+    {
         $file = $this->getCacheFile($key);
         if (file_exists($file) && !wp_delete_file($file)) {
             $this->logError("Failed to delete JS cache file: $file");
         }
     }
 
-    public function clear(): void {
+    public function clear(): void
+    {
         $files = glob($this->cache_dir . '*.js');
         if (!is_array($files)) {
             return;
@@ -79,7 +88,8 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    private function minifyJS(string $js): string|false {
+    private function minifyJS(string $js): string|false
+    {
         if (empty($js)) {
             return false;
         }
@@ -136,21 +146,22 @@ final class MinifyJS extends AbstractCacheDriver {
             $js = trim($js);
 
             return empty($js) ? false : $js;
-
         } catch (\Throwable $e) {
             $this->logError("JS minification failed", $e);
             return false;
         }
     }
 
-    private function preserveContent(string $js): string {
+    private function preserveContent(string $js): string
+    {
         if (empty($js)) {
             return '';
         }
-        
+
         foreach (self::PRESERVE_PATTERNS as $type => $pattern) {
-            $js = (string)preg_replace_callback($pattern,
-                function($matches) use ($type) {
+            $js = (string)preg_replace_callback(
+                $pattern,
+                function ($matches) use ($type) {
                     if (!isset($matches[0])) {
                         return '';
                     }
@@ -165,13 +176,14 @@ final class MinifyJS extends AbstractCacheDriver {
         return $js;
     }
 
-    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void {
+    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void
+    {
         if (!isset($wp_scripts->registered[$handle])) {
             return;
         }
 
         $script = $wp_scripts->registered[$handle];
-        
+
         // Skip if script should not be processed
         if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
             return;
@@ -207,9 +219,10 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    public function processScripts(): void {
+    public function processScripts(): void
+    {
         global $wp_scripts;
-        
+
         if (empty($wp_scripts->queue)) {
             return;
         }
@@ -225,7 +238,8 @@ final class MinifyJS extends AbstractCacheDriver {
         }
     }
 
-    private function shouldProcessScript($script, string $handle, array $excluded_js): bool {
+    private function shouldProcessScript($script, string $handle, array $excluded_js): bool
+    {
         if (!isset($script->src) || empty($script->src)) {
             return false;
         }
@@ -238,13 +252,14 @@ final class MinifyJS extends AbstractCacheDriver {
             && !$this->isExcluded($src, $excluded_js);
     }
 
-    private function getSourcePath($script): ?string {
+    private function getSourcePath($script): ?string
+    {
         if (!isset($script->src)) {
             return null;
         }
 
         $src = $script->src;
-        
+
         // Convert relative URL to absolute
         if (strpos($src, 'http') !== 0) {
             $src = site_url($src);
@@ -258,13 +273,15 @@ final class MinifyJS extends AbstractCacheDriver {
         );
     }
 
-    private function isValidSource(?string $source): bool {
-        return $source 
-            && is_readable($source) 
+    private function isValidSource(?string $source): bool
+    {
+        return $source
+            && is_readable($source)
             && filesize($source) <= self::MAX_FILE_SIZE;
     }
 
-    private function updateScriptRegistration($script, string $cache_file): void {
+    private function updateScriptRegistration($script, string $cache_file): void
+    {
         if (!isset($script->src)) {
             return;
         }
@@ -277,11 +294,13 @@ final class MinifyJS extends AbstractCacheDriver {
         $script->ver = filemtime($cache_file);
     }
 
-    private function getCacheFile(string $key): string {
+    private function getCacheFile(string $key): string
+    {
         return $this->cache_dir . $key . '.js';
     }
 
-    private function isExcluded(string $url, array $excluded_patterns): bool {
+    private function isExcluded(string $url, array $excluded_patterns): bool
+    {
         foreach ($excluded_patterns as $pattern) {
             if (fnmatch($pattern, $url)) {
                 return true;

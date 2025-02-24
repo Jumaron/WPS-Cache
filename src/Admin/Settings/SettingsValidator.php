@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Settings;
@@ -6,14 +7,16 @@ namespace WPSCache\Admin\Settings;
 /**
  * Validates and sanitizes settings for WPS Cache
  */
-class SettingsValidator {
-     /**
+class SettingsValidator
+{
+    /**
      * Sanitizes the entire settings array
      *
      * @param array $input Raw settings array
      * @return array Sanitized settings
      */
-    public function sanitizeSettings($input): array {
+    public function sanitizeSettings($input): array
+    {
         // If input is not an array, initialize it
         if (!is_array($input)) {
             $input = [];
@@ -30,12 +33,12 @@ class SettingsValidator {
             'css_minify' => (bool)($settings['css_minify'] ?? false),
             'js_minify' => (bool)($settings['js_minify'] ?? false),
             'cache_lifetime' => $this->sanitizeCacheLifetime($settings['cache_lifetime'] ?? 3600),
-            
+
             // URL and CSS settings
             'excluded_urls' => $this->sanitizeUrls($settings['excluded_urls'] ?? []),
             'excluded_css' => $this->sanitizeCssSelectors($settings['excluded_css'] ?? []),
             'excluded_js' => $this->sanitizeJsSelectors($settings['excluded_js'] ?? []),
-            
+
             // Redis settings
             'redis_host' => $this->sanitizeHost($settings['redis_host'] ?? '127.0.0.1'),
             'redis_port' => $this->sanitizePort($settings['redis_port'] ?? 6379),
@@ -44,19 +47,19 @@ class SettingsValidator {
             'redis_prefix' => $this->sanitizeRedisPrefix($settings['redis_prefix'] ?? 'wpsc:'),
             'redis_persistent' => (bool)($settings['redis_persistent'] ?? false),
             'redis_compression' => (bool)($settings['redis_compression'] ?? true),
-            
+
             // Varnish settings
             'varnish_host' => $this->sanitizeHost($settings['varnish_host'] ?? '127.0.0.1'),
             'varnish_port' => $this->sanitizePort($settings['varnish_port'] ?? 6081),
-            
+
             // Preload settings
             'preload_urls' => $this->sanitizeUrls($settings['preload_urls'] ?? []),
             'preload_interval' => $this->sanitizeInterval($settings['preload_interval'] ?? 'daily'),
-            
+
             // Metrics settings
             'enable_metrics' => (bool)($settings['enable_metrics'] ?? true),
             'metrics_retention' => $this->sanitizeMetricsRetention($settings['metrics_retention'] ?? 30),
-            
+
             // Advanced settings
             'advanced_settings' => $this->sanitizeAdvancedSettings($settings['advanced_settings'] ?? [])
         ];
@@ -65,7 +68,8 @@ class SettingsValidator {
     /**
      * Sanitizes cache lifetime value
      */
-    private function sanitizeCacheLifetime(mixed $lifetime): int {
+    private function sanitizeCacheLifetime(mixed $lifetime): int
+    {
         $lifetime = (int)$lifetime;
         return max(60, min(2592000, $lifetime)); // Between 1 minute and 30 days
     }
@@ -73,12 +77,13 @@ class SettingsValidator {
     /**
      * Sanitizes URLs array or string
      */
-    private function sanitizeUrls(array|string $urls): array {
+    private function sanitizeUrls(array|string $urls): array
+    {
         if (is_string($urls)) {
             $urls = explode("\n", $urls);
         }
-        
-        return array_filter(array_map(function($url) {
+
+        return array_filter(array_map(function ($url) {
             $url = trim($url);
             return filter_var($url, FILTER_VALIDATE_URL) ? esc_url_raw($url) : '';
         }, $urls));
@@ -87,12 +92,13 @@ class SettingsValidator {
     /**
      * Sanitizes CSS selectors
      */
-    private function sanitizeCssSelectors(array|string $selectors): array {
+    private function sanitizeCssSelectors(array|string $selectors): array
+    {
         if (is_string($selectors)) {
             $selectors = explode("\n", $selectors);
         }
-        
-        return array_filter(array_map(function($selector) {
+
+        return array_filter(array_map(function ($selector) {
             return sanitize_text_field(trim($selector));
         }, $selectors));
     }
@@ -100,12 +106,13 @@ class SettingsValidator {
     /**
      *  Sanitizes JS selectors
      */
-    private function sanitizeJsSelectors(array|string $selectors): array {
+    private function sanitizeJsSelectors(array|string $selectors): array
+    {
         if (is_string($selectors)) {
             $selectors = explode("\n", $selectors);
         }
-        
-        return array_filter(array_map(function($selector) {
+
+        return array_filter(array_map(function ($selector) {
             return sanitize_text_field(trim($selector));
         }, $selectors));
     }
@@ -113,26 +120,28 @@ class SettingsValidator {
     /**
      * Sanitizes host address
      */
-    private function sanitizeHost(string $host): string {
+    private function sanitizeHost(string $host): string
+    {
         $host = trim($host);
-        
+
         // Allow localhost
         if ($host === 'localhost') {
             return $host;
         }
-        
+
         // Validate IP address or hostname
         if (filter_var($host, FILTER_VALIDATE_IP) || filter_var($host, FILTER_VALIDATE_DOMAIN)) {
             return $host;
         }
-        
+
         return '127.0.0.1';
     }
 
     /**
      * Sanitizes port number
      */
-    private function sanitizePort(mixed $port): int {
+    private function sanitizePort(mixed $port): int
+    {
         $port = (int)$port;
         return max(1, min(65535, $port));
     }
@@ -140,7 +149,8 @@ class SettingsValidator {
     /**
      * Sanitizes Redis database index
      */
-    private function sanitizeRedisDb(mixed $db): int {
+    private function sanitizeRedisDb(mixed $db): int
+    {
         $db = (int)$db;
         return max(0, min(15, $db)); // Redis typically supports 16 databases (0-15)
     }
@@ -148,7 +158,8 @@ class SettingsValidator {
     /**
      * Sanitizes Redis password
      */
-    private function sanitizeRedisPassword(array $settings): string {
+    private function sanitizeRedisPassword(array $settings): string
+    {
         // Handle password updates
         if (isset($settings['redis_password'])) {
             if ($settings['redis_password'] === '••••••••') {
@@ -164,7 +175,8 @@ class SettingsValidator {
     /**
      * Sanitizes Redis prefix
      */
-    private function sanitizeRedisPrefix(string $prefix): string {
+    private function sanitizeRedisPrefix(string $prefix): string
+    {
         $prefix = sanitize_text_field($prefix);
         return empty($prefix) ? 'wpsc:' : $prefix;
     }
@@ -172,14 +184,16 @@ class SettingsValidator {
     /**
      * Sanitizes preload interval
      */
-    private function sanitizeInterval(string $interval): string {
+    private function sanitizeInterval(string $interval): string
+    {
         return in_array($interval, ['hourly', 'daily', 'weekly']) ? $interval : 'daily';
     }
 
     /**
      * Sanitizes metrics retention period
      */
-    private function sanitizeMetricsRetention(mixed $days): int {
+    private function sanitizeMetricsRetention(mixed $days): int
+    {
         $days = (int)$days;
         return max(1, min(90, $days)); // Between 1 and 90 days
     }
@@ -187,7 +201,8 @@ class SettingsValidator {
     /**
      * Sanitizes advanced settings
      */
-    private function sanitizeAdvancedSettings(array $settings): array {
+    private function sanitizeAdvancedSettings(array $settings): array
+    {
         return [
             'object_cache_alloptions_limit' => $this->sanitizeAllOptionsLimit($settings['object_cache_alloptions_limit'] ?? 1000),
             'max_ttl' => $this->sanitizeMaxTTL($settings['max_ttl'] ?? 86400),
@@ -199,7 +214,8 @@ class SettingsValidator {
     /**
      * Sanitizes alloptions limit
      */
-    private function sanitizeAllOptionsLimit(mixed $limit): int {
+    private function sanitizeAllOptionsLimit(mixed $limit): int
+    {
         $limit = (int)$limit;
         return max(100, min(5000, $limit));
     }
@@ -207,7 +223,8 @@ class SettingsValidator {
     /**
      * Sanitizes maximum TTL
      */
-    private function sanitizeMaxTTL(mixed $ttl): int {
+    private function sanitizeMaxTTL(mixed $ttl): int
+    {
         $ttl = (int)$ttl;
         return max(3600, min(2592000, $ttl)); // Between 1 hour and 30 days
     }
@@ -215,8 +232,9 @@ class SettingsValidator {
     /**
      * Sanitizes cache groups array
      */
-    private function sanitizeCacheGroups(array $groups): array {
-        return array_filter(array_map(function($group) {
+    private function sanitizeCacheGroups(array $groups): array
+    {
+        return array_filter(array_map(function ($group) {
             return sanitize_text_field(trim($group));
         }, $groups));
     }

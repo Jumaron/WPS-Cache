@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
@@ -9,12 +10,13 @@ use RedisException;
 /**
  * Enhanced Redis cache driver with metrics and connection management
  */
-final class RedisCache extends AbstractCacheDriver {
+final class RedisCache extends AbstractCacheDriver
+{
     private const DEFAULT_HOST = '127.0.0.1';
     private const DEFAULT_PORT = 6379;
     private const DEFAULT_TIMEOUT = 1.0;
     private const DEFAULT_PREFIX = 'wpsc:';
-    
+
     private ?Redis $redis = null;
     private bool $is_connected = false;
     private array $metrics = [
@@ -34,9 +36,9 @@ final class RedisCache extends AbstractCacheDriver {
     private bool $persistent;
 
     public function __construct(
-        string $host = self::DEFAULT_HOST, 
-        int $port = self::DEFAULT_PORT, 
-        int $db = 0, 
+        string $host = self::DEFAULT_HOST,
+        int $port = self::DEFAULT_PORT,
+        int $db = 0,
         float $timeout = self::DEFAULT_TIMEOUT,
         float $read_timeout = self::DEFAULT_TIMEOUT,
         ?string $password = null,
@@ -53,7 +55,8 @@ final class RedisCache extends AbstractCacheDriver {
         $this->persistent = $persistent;
     }
 
-    public function initialize(): void {
+    public function initialize(): void
+    {
         if ($this->initialized || $this->is_connected) {
             return;
         }
@@ -69,9 +72,10 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    private function setupRedisConnection(): void {
+    private function setupRedisConnection(): void
+    {
         $this->redis = new Redis();
-        
+
         // Use persistent connections when possible
         $connect_method = $this->persistent ? 'pconnect' : 'connect';
         $connected = @$this->redis->$connect_method($this->host, $this->port, $this->timeout);
@@ -95,7 +99,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    private function optimizeRedisSettings(): void {
+    private function optimizeRedisSettings(): void
+    {
         if (!$this->redis) {
             return;
         }
@@ -104,7 +109,7 @@ final class RedisCache extends AbstractCacheDriver {
         $this->redis->setOption(Redis::OPT_PREFIX, $this->prefix);
         $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
         $this->redis->setOption(Redis::OPT_READ_TIMEOUT, $this->read_timeout);
-        
+
         // Enable compression if available
         if (defined('Redis::COMPRESSION_LZ4') && extension_loaded('lz4')) {
             $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_LZ4);
@@ -113,11 +118,13 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function isConnected(): bool {
+    public function isConnected(): bool
+    {
         return $this->is_connected && $this->redis !== null;
     }
 
-    public function get(string $key): mixed {
+    public function get(string $key): mixed
+    {
         if (!$this->ensureConnection()) {
             $this->metrics['misses']++;
             return null;
@@ -137,7 +144,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function getMultiple(array $keys): array {
+    public function getMultiple(array $keys): array
+    {
         if (!$this->ensureConnection()) {
             return array_fill_keys($keys, null);
         }
@@ -148,7 +156,7 @@ final class RedisCache extends AbstractCacheDriver {
                 $pipe->get($key);
             }
             $results = $pipe->exec();
-            
+
             $output = [];
             foreach ($keys as $i => $key) {
                 if ($results[$i] === false) {
@@ -166,7 +174,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function set(string $key, mixed $value, int $ttl = 3600): void {
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
         if (!$this->ensureConnection()) {
             return;
         }
@@ -183,7 +192,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function setMultiple(array $values, int $ttl = 3600): void {
+    public function setMultiple(array $values, int $ttl = 3600): void
+    {
         if (!$this->ensureConnection()) {
             return;
         }
@@ -204,7 +214,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function delete(string $key): void {
+    public function delete(string $key): void
+    {
         if (!$this->ensureConnection()) {
             return;
         }
@@ -217,7 +228,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function clear(): void {
+    public function clear(): void
+    {
         if (!$this->ensureConnection()) {
             return;
         }
@@ -226,7 +238,7 @@ final class RedisCache extends AbstractCacheDriver {
             // Use SCAN instead of KEYS for better performance
             $iterator = null;
             $pattern = $this->prefix . '*';
-            
+
             while ($keys = $this->redis->scan($iterator, $pattern, 100)) {
                 if (!empty($keys)) {
                     $this->redis->del(...$keys);
@@ -237,7 +249,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function getStats(): array {
+    public function getStats(): array
+    {
         if (!$this->ensureConnection()) {
             return [
                 'connected' => false,
@@ -257,7 +270,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    public function optimizeRedisCache(): bool {
+    public function optimizeRedisCache(): bool
+    {
         if (!$this->ensureConnection()) {
             return false;
         }
@@ -275,15 +289,16 @@ final class RedisCache extends AbstractCacheDriver {
     /**
      * Deletes expired keys from Redis
      */
-    public function deleteExpired(): void {
+    public function deleteExpired(): void
+    {
         if (!$this->ensureConnection()) {
             return;
         }
-    
+
         try {
             $iterator = null;
             $pattern = $this->prefix . '*';
-            
+
             while ($keys = $this->redis->scan($iterator, $pattern, 100)) {
                 foreach ($keys as $key) {
                     $ttl = $this->redis->ttl($key);
@@ -298,7 +313,8 @@ final class RedisCache extends AbstractCacheDriver {
         }
     }
 
-    private function buildStatsArray(array $info): array {
+    private function buildStatsArray(array $info): array
+    {
         $total_hits = $this->metrics['hits'] + ($info['keyspace_hits'] ?? 0);
         $total_misses = $this->metrics['misses'] + ($info['keyspace_misses'] ?? 0);
         $total_ops = $total_hits + $total_misses;
@@ -324,11 +340,12 @@ final class RedisCache extends AbstractCacheDriver {
         ];
     }
 
-    private function ensureConnection(): bool {
+    private function ensureConnection(): bool
+    {
         if (!$this->is_connected || !$this->redis) {
             $this->initialize();
         }
-        
+
         if ($this->is_connected && $this->redis) {
             try {
                 $this->redis->ping();
@@ -338,17 +355,19 @@ final class RedisCache extends AbstractCacheDriver {
                 return false;
             }
         }
-        
+
         return false;
     }
 
-    private function handleConnectionError(RedisException $e): void {
+    private function handleConnectionError(RedisException $e): void
+    {
         $this->is_connected = false;
         $this->redis = null;
         $this->initialized = false;
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         if ($this->redis && $this->is_connected && !$this->persistent) {
             try {
                 $this->redis->close();
