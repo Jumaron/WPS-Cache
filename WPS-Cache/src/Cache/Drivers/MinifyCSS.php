@@ -11,9 +11,9 @@ namespace WPSCache\Cache\Drivers;
  * Features:
  * - Context-aware `calc()` support (preserves required operator spacing).
  * - Safe Zero-unit stripping (preserves time/angle units).
- * - Hex color compression (#aabbcc -> #abc).
- * - Single-pass processing for high performance.
- * - Memory efficient generators.
+ * - Hex color compression (6-digit and 8-digit Alpha support).
+ * - Semicolon removal before closing braces.
+ * - Single-pass processing with memory-efficient generators.
  */
 final class MinifyCSS extends AbstractCacheDriver
 {
@@ -153,7 +153,6 @@ final class MinifyCSS extends AbstractCacheDriver
                 $minified = $this->minifyCSS($content);
                 $this->set($cache_key, $minified);
             } catch (\Throwable $e) {
-                // Fail safe: If minification errors, do not cache broken file
                 $this->logError("CSS Minification failed for $handle", $e);
                 return;
             }
@@ -174,6 +173,7 @@ final class MinifyCSS extends AbstractCacheDriver
 
         $prevToken = null;
         $calcDepth = 0; // Tracks if we are inside calc(), clamp(), var(), etc.
+        $pendingSemicolon = false; // Deferred write buffer
 
         foreach ($this->tokenize($css) as $token) {
 
@@ -181,31 +181,42 @@ final class MinifyCSS extends AbstractCacheDriver
             if ($token['type'] === self::T_COMMENT) {
                 // Preserve license comments (/*! ... */)
                 if (str_starts_with($token['value'], '/*!')) {
+                    // Flush pending semicolon before comment
+                    if ($pendingSemicolon) {
+                        fwrite($output, ';');
+                        $pendingSemicolon = false;
+                    }
                     fwrite($output, $token['value']);
                     $prevToken = ['type' => self::T_WHITESPACE]; // Treat as break
                 }
+                // Skip normal comments completely (don't update prevToken)
                 continue;
             }
 
             // 2. Whitespace
             if ($token['type'] === self::T_WHITESPACE) {
-                // Inside calc(), whitespace is significant around + and -
-                if ($calcDepth > 0 && $prevToken) {
-                    // We only preserve the space if it might be needed next. 
-                    // We'll handle the insertion in the next loop iteration (Operator logic)
-                    // or simply convert to a single space here for safety.
-                    // But actually, the safest logic is: Insert space if needsSpace returns true.
-                    // We handle this below.
+                continue; // We handle space insertion logic based on tokens, not input whitespace
+            }
+
+            // 3. Handle Pending Semicolon
+            // If we have a semicolon waiting, check if we need to write it.
+            // If the current token is '}', we DROP the semicolon.
+            if ($pendingSemicolon) {
+                if ($token['type'] !== self::T_CLOSE) {
+                    fwrite($output, ';');
                 }
+                $pendingSemicolon = false;
+            }
+
+            // 4. Semicolon Buffering
+            if ($token['type'] === self::T_SEMICOLON) {
+                $pendingSemicolon = true;
                 continue;
             }
 
-            // 3. Calc Context Tracking
-            if ($token['type'] === self::T_WORD && preg_match('/^(calc|clamp|min|max|var)$/i', $token['value'])) {
-                // The next token will be '(', which increments depth
-                // We don't increment here, we wait for the paren.
-            }
+            // 5. Calc Context Tracking
             if ($token['type'] === self::T_PAREN_OPEN) {
+                // Check if previous token was a function name
                 if ($prevToken && $prevToken['type'] === self::T_WORD && preg_match('/^(calc|clamp|min|max|var)$/i', $prevToken['value'])) {
                     $calcDepth++;
                 } elseif ($calcDepth > 0) {
@@ -216,31 +227,29 @@ final class MinifyCSS extends AbstractCacheDriver
                 $calcDepth--;
             }
 
-            // 4. Optimization: Zero Units
-            // Transform '0px', '0em' -> '0'. But NOT '0s', '0deg', or inside calc()
+            // 6. Optimization: Zero Units
+            // Transform '0px' -> '0'. But NOT '0s', '0deg', or inside calc()
             if ($token['type'] === self::T_WORD && $calcDepth === 0) {
                 $token['value'] = $this->optimizeZeroUnits($token['value']);
             }
 
-            // 5. Optimization: Hex Colors
-            // Transform #AABBCC -> #abc
+            // 7. Optimization: Hex Colors
             if ($token['type'] === self::T_WORD) {
                 $token['value'] = $this->compressHex($token['value']);
             }
 
-            // 6. Optimization: Semicolon removal
-            // We handle this by buffering. For simplicity in streaming:
-            // If we have a stored semicolon from previous loop, and current is '}', we drop it.
-            // (Implemented via direct write, so we can't look back easily without buffer. 
-            // Instead, we just write the semicolon. Browsers handle ';}' fine, saving 1 byte isn't worth complex logic here).
-
-            // 7. Insert Space Logic
+            // 8. Insert Space Logic
             if ($prevToken && $this->needsSpace($prevToken, $token, $calcDepth > 0)) {
                 fwrite($output, ' ');
             }
 
             fwrite($output, $token['value']);
             $prevToken = $token;
+        }
+
+        // Write trailing semicolon if exists (rare, usually EOF or })
+        if ($pendingSemicolon) {
+            fwrite($output, ';');
         }
 
         rewind($output);
@@ -267,7 +276,7 @@ final class MinifyCSS extends AbstractCacheDriver
                 while ($i < $len && ctype_space($css[$i])) {
                     $i++;
                 }
-                yield ['type' => self::T_WHITESPACE, 'value' => ' ']; // Normalize to single space
+                yield ['type' => self::T_WHITESPACE, 'value' => ' '];
                 continue;
             }
 
@@ -342,20 +351,18 @@ final class MinifyCSS extends AbstractCacheDriver
             }
 
             // Operators (Comma, > + ~)
-            // Note: In CSS, + and - can be part of a number (-10px) or an operator (calc(10px + 20px))
-            // The tokenizer is simple: treat + and - as WORD parts if followed by digit, or OPERATOR if not?
-            // Safer strategy: Treat + and - as Operators if they are standalone.
-            // If it's part of a word like -webkit-, the WORD logic below handles it.
             if ($char === ',' || $char === '>' || $char === '~') {
                 yield ['type' => self::T_OPERATOR, 'value' => $char];
                 $i++;
                 continue;
             }
 
-            // + and - are ambiguous. In Tokenizer, we try to consume "words" (identifiers/numbers) greedily.
-
-            // Words / Identifiers / Numbers / Hex / Dimensions
-            // Allowed: a-z, A-Z, 0-9, -, _, ., %, #, @, !, + (in calc), * (in hack)
+            // Words / Identifiers / Numbers / Hex / Dimensions / Values
+            // We consume greedily until we hit a delimiter.
+            // Note: + and - are context dependent, but we can treat them as part of the word
+            // if they are inside (e.g. -webkit or -10px).
+            // However, + as a combinator is separate.
+            // Logic: Scan until whitespace or special char.
             $start = $i;
             while ($i < $len) {
                 $c = $css[$i];
@@ -366,14 +373,14 @@ final class MinifyCSS extends AbstractCacheDriver
                 if ($c === '>' || $c === '~') {
                     break;
                 }
-                // Edge case: + should break if it's potentially an operator in calc
-                // But it can also be part of exponential notation 1e+10 (rare in CSS)
                 $i++;
             }
 
             $val = substr($css, $start, $i - $start);
 
-            // Refine token type if it's just an operator
+            // Refine token type if it's just an operator like +
+            // Note: - is usually part of a word (-moz, -10px) unless it's strictly " - ".
+            // Tokenizer consumes " - " as " " "-" " ".
             if ($val === '+' || $val === '*') {
                 yield ['type' => self::T_OPERATOR, 'value' => $val];
             } else {
@@ -387,30 +394,36 @@ final class MinifyCSS extends AbstractCacheDriver
      */
     private function needsSpace(array $prev, array $curr, bool $inCalc): bool
     {
-        // Inside calc(), spaces are REQUIRED around + and -
+        // 1. Inside calc(), spaces are REQUIRED around + and - operators
         if ($inCalc) {
-            // "10px + 20px"
+            // "10px + 20px" or "var(--a) - 10px"
+            // Note: $curr['value'] could be "-" (Operator/Word)
             if ($curr['value'] === '+' || $curr['value'] === '-') return true;
             if ($prev['value'] === '+' || $prev['value'] === '-') return true;
         }
 
-        // Logic for Standard CSS
         $t1 = $prev['type'];
         $t2 = $curr['type'];
 
-        // Word + Word needs space (margin: 10px 20px; .class .child)
+        // 2. Word + Word needs space (margin: 10px 20px; .class .child)
         if ($t1 === self::T_WORD && $t2 === self::T_WORD) {
             return true;
         }
 
-        // Operator interactions
-        // .class > .child (No space needed: .class>.child)
-        // .class + .child (No space needed: .class+.child)
-        // EXCEPT: "and (" in media queries needs space
+        // 3. Media Query Conjunctions
+        // @media (min-width: 600px) and (max-width: 800px)
+        // Previous logic missed spaces around parenthesis in keywords
+
+        // "and ("
         if ($t1 === self::T_WORD && $t2 === self::T_PAREN_OPEN) {
-            if (strtolower($prev['value']) === 'and') return true; // @media ... and (
-            if (strtolower($prev['value']) === 'or') return true;
-            if (strtolower($prev['value']) === 'not') return true;
+            $kw = strtolower($prev['value']);
+            if ($kw === 'and' || $kw === 'or' || $kw === 'not') return true;
+        }
+
+        // ") and"
+        if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
+            $kw = strtolower($curr['value']);
+            if ($kw === 'and' || $kw === 'or' || $kw === 'not') return true;
         }
 
         return false;
@@ -427,12 +440,10 @@ final class MinifyCSS extends AbstractCacheDriver
         }
 
         // Check if it matches 0 + unit pattern
-        // Regex: ^0([a-z%]+)$ case insensitive
         if (preg_match('/^0([a-z%]+)$/i', $val, $matches)) {
             $unit = strtolower($matches[1]);
 
-            // Protected units (Time, Angle, Frequency) - Browsers require these
-            // Also viewport units often behave weirdly if 0 is unitless in some contexts
+            // Protected units (Time, Angle, Frequency)
             $protected = ['s', 'ms', 'deg', 'rad', 'grad', 'turn', 'hz', 'khz'];
 
             if (in_array($unit, $protected, true)) {
@@ -446,18 +457,34 @@ final class MinifyCSS extends AbstractCacheDriver
     }
 
     /**
-     * Compresses Hex Colors (#AABBCC -> #abc).
+     * Compresses Hex Colors (#AABBCC -> #abc) and (#RRGGBBAA -> #RGBA).
      */
     private function compressHex(string $val): string
     {
-        if ($val[0] !== '#' || strlen($val) !== 7) {
+        // Check for empty string or non-hash
+        if (empty($val) || $val[0] !== '#') {
+            return $val;
+        }
+
+        $len = strlen($val);
+        // Only optimize 7 chars (#RRGGBB) or 9 chars (#RRGGBBAA)
+        if ($len !== 7 && $len !== 9) {
             return $val;
         }
 
         $val = strtolower($val);
-        // Check pattern #aabbcc
-        if ($val[1] === $val[2] && $val[3] === $val[4] && $val[5] === $val[6]) {
-            return '#' . $val[1] . $val[3] . $val[5];
+
+        // 6-digit Hex
+        if ($len === 7) {
+            if ($val[1] === $val[2] && $val[3] === $val[4] && $val[5] === $val[6]) {
+                return '#' . $val[1] . $val[3] . $val[5];
+            }
+        }
+        // 8-digit Hex (Alpha)
+        elseif ($len === 9) {
+            if ($val[1] === $val[2] && $val[3] === $val[4] && $val[5] === $val[6] && $val[7] === $val[8]) {
+                return '#' . $val[1] . $val[3] . $val[5] . $val[7];
+            }
         }
 
         return $val;
