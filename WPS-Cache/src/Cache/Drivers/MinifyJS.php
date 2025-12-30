@@ -378,6 +378,14 @@ final class MinifyJS extends AbstractCacheDriver
             $start = $i;
             while ($i < $len) {
                 $c = $js[$i];
+
+                // FIX: Treat decimals (e.g. 1.4) as part of the word/number
+                // If it is a dot, and it is surrounded by digits, consume it.
+                if ($c === '.' && $i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
+                    $i++;
+                    continue;
+                }
+
                 if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) {
                     break;
                 }
@@ -512,7 +520,8 @@ final class MinifyJS extends AbstractCacheDriver
         if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
             $val = $next['value'];
             if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {
-                // If previous token was NOT a clear terminator, keep newline to be safe
+                // If previous token was a clear terminator, we might be safe, but ASI is complex.
+                // The safest terminators are ; } :
                 $safeTerminators = [';', '}', ':'];
                 if (!in_array($prev['value'], $safeTerminators, true)) {
                     return true;
