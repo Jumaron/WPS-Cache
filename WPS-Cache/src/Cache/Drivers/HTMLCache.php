@@ -5,16 +5,22 @@ declare(strict_types=1);
 namespace WPSCache\Cache\Drivers;
 
 /**
- * Optimized HTML cache implementation
+ * State-of-the-Art HTML Cache & Minification.
+ * 
+ * Uses an "Extract & Restore" pattern to safely minify HTML.
+ * Features:
+ * - Atomic Writes for concurrency safety.
+ * - Memory-efficient Iterator for cache clearing.
+ * - Robust protection for <pre>, <script>, <style>, and <textarea>.
+ * - Smart whitespace collapsing (prevents "HelloWorld" rendering bugs).
  */
 final class HTMLCache extends AbstractCacheDriver
 {
-    private const COMPRESSION_PATTERN = '/<(?<script>script).*?<\/script\s*>|<(?<style>style).*?<\/style\s*>|<!(?<comment>--).*?-->|<(?<tag>[\/\w.:-]*)(?:".*?"|\'.*?\'|[^\'">]+)*>|(?<text>((<[^!\/\w.:-])?[^<]*)+)|/si';
     private string $cache_dir;
     private array $settings;
-    private bool $compress_css = true;
-    private bool $compress_js = true;
-    private bool $remove_comments = true;
+
+    // protected blocks storage
+    private array $placeholders = [];
 
     public function __construct()
     {
@@ -34,7 +40,7 @@ final class HTMLCache extends AbstractCacheDriver
 
     public function isConnected(): bool
     {
-        if (! function_exists('WP_Filesystem')) {
+        if (!function_exists('WP_Filesystem')) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
         }
         WP_Filesystem();
@@ -68,7 +74,7 @@ final class HTMLCache extends AbstractCacheDriver
 
         $file = $this->getCacheFile($key);
 
-        // Use atomic write to prevent race conditions during high traffic
+        // Use atomic write to prevent race conditions (implemented in AbstractCacheDriver)
         if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write cache file: $file");
         }
@@ -84,20 +90,28 @@ final class HTMLCache extends AbstractCacheDriver
 
     public function clear(): void
     {
-        $files = glob($this->cache_dir . '*.html');
-        if (!is_array($files)) {
+        // SOTA: Use FilesystemIterator to avoid loading all filenames into memory
+        if (!is_dir($this->cache_dir)) {
             return;
         }
 
-        foreach ($files as $file) {
-            if (is_file($file) && !wp_delete_file($file)) {
-                $this->logError("Failed to delete cache file during clear: $file");
+        try {
+            $iterator = new \FilesystemIterator($this->cache_dir, \FilesystemIterator::SKIP_DOTS);
+            foreach ($iterator as $fileInfo) {
+                if ($fileInfo->isFile() && $fileInfo->getExtension() === 'html') {
+                    if (!@unlink($fileInfo->getPathname())) {
+                        $this->logError("Failed to delete cache file: " . $fileInfo->getFilename());
+                    }
+                }
             }
+        } catch (\Throwable $e) {
+            $this->logError("Error clearing HTML cache: " . $e->getMessage());
         }
     }
 
     public function startOutputBuffering(): void
     {
+        // Start buffer with callback
         ob_start([$this, 'processOutput']);
     }
 
@@ -115,30 +129,82 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         try {
+            // 1. Minify
             $minified = $this->minifyHTML($content);
 
-            if ($minified === false) {
-                return $content;
-            }
-
-            // Add cache metadata
+            // 2. Add Footer Signature
             $minified .= $this->getCacheComment($content, $minified);
 
-            // Sanitize and Normalize URI (Sort Params) matches advanced-cache.php
+            // 3. Generate Key
             $request_uri = $this->getNormalizedRequestUri();
-
             $key = $this->generateCacheKey($request_uri);
+
+            // 4. Save
             $this->set($key, $minified);
 
             return $minified;
         } catch (\Throwable $e) {
+            // Fail-safe: If minification crashes, return original content
             $this->logError('HTML processing failed', $e);
             return $content;
         }
     }
 
     /**
+     * SOTA HTML Minification
+     * Pattern: Extract Protected -> Minify Safe -> Restore Protected
+     */
+    private function minifyHTML(string $html): string
+    {
+        $this->placeholders = []; // Reset
+
+        // 1. Extract protected blocks (Script, Style, Pre, Textarea, Comments with conditions)
+        // We use specific regexes for tag pairs to ensure we capture the full content.
+        // Note: We extract <script> and <style> to prevent our whitespace logic from breaking code.
+        $html = $this->extractBlock('/<(script|style|pre|textarea|code)(?:[ >].*?)?<\/\1>/si', $html);
+
+        // Extract IE Conditionals and preserved comments <!--! ... -->
+        $html = $this->extractBlock('/<!--\[if.+?<!\[endif\]-->/si', $html);
+        $html = $this->extractBlock('/<!--!.+?-->/s', $html);
+        $html = $this->extractBlock('/<!\[CDATA\[.*?\]\]>/s', $html);
+
+        // 2. Minify the "Safe" HTML
+
+        // Remove standard HTML comments
+        $html = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $html);
+
+        // Collapse Whitespace: Replace sequence of whitespace with single space
+        // This is safer than removing it entirely, preventing "HelloWorld" joining.
+        $html = preg_replace('/\s+/', ' ', $html);
+
+        // Optional: Remove spaces between tags where safe (e.g. > < to ><)
+        // Only do this if you are sure. > < usually implies inline-block spacing issues.
+        // For absolute safety, we just collapse to single space above.
+        // However, we CAN remove spaces around the placeholder keys safely later if we wanted to.
+
+        // 3. Restore protected blocks
+        if (!empty($this->placeholders)) {
+            $html = strtr($html, $this->placeholders);
+        }
+
+        return trim($html);
+    }
+
+    /**
+     * Helper to extract regex matches and replace with placeholders
+     */
+    private function extractBlock(string $pattern, string $content): string
+    {
+        return preg_replace_callback($pattern, function ($matches) {
+            $key = '___WPSC_RAW_' . count($this->placeholders) . '___';
+            $this->placeholders[$key] = $matches[0];
+            return $key;
+        }, $content) ?? $content;
+    }
+
+    /**
      * Gets and normalizes the Request URI (Sorts query params)
+     * Matches logic in advanced-cache.php
      */
     private function getNormalizedRequestUri(): string
     {
@@ -164,80 +230,11 @@ final class HTMLCache extends AbstractCacheDriver
         return $query ? $path . '?' . $query : $path;
     }
 
-    private function minifyHTML(string $html): string|false
-    {
-        if (empty($html)) {
-            return false;
-        }
-
-        $matches = [];
-        if (!preg_match_all(self::COMPRESSION_PATTERN, $html, $matches, PREG_SET_ORDER)) {
-            return false;
-        }
-
-        $overriding = false;  // For no compression blocks
-        $raw_tag = false;     // For pre/textarea tags
-        $compressed = '';
-
-        foreach ($matches as $token) {
-            $tag = (isset($token['tag'])) ? strtolower($token['tag']) : null;
-            $content = $token[0];
-
-            if (is_null($tag)) {
-                if (!empty($token['script'])) {
-                    $strip = $this->compress_js;
-                } elseif (!empty($token['style'])) {
-                    $strip = $this->compress_css;
-                } elseif ($content == '<!--wp-html-compression no compression-->') {
-                    $overriding = !$overriding;
-                    continue;
-                } elseif ($this->remove_comments) {
-                    if (!$overriding && $raw_tag != 'textarea') {
-                        // Remove HTML comments except MSIE conditional comments
-                        $content = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $content);
-                    }
-                }
-            } else {
-                if ($tag == 'pre' || $tag == 'textarea') {
-                    $raw_tag = $tag;
-                } elseif ($tag == '/pre' || $tag == '/textarea') {
-                    $raw_tag = false;
-                } else {
-                    if (!$raw_tag && !$overriding) {
-                        // Remove empty attributes, except: action, alt, content, src
-                        $content = preg_replace('/(\s+)(\w++(?<!\baction|\balt|\bcontent|\bsrc)="")/', '$1', $content);
-                        // Remove space before self-closing XHTML tags
-                        $content = str_replace(' />', '/>', $content);
-                    }
-                }
-            }
-
-            if (!$raw_tag && !$overriding) {
-                $content = $this->removeWhitespace($content);
-            }
-
-            $compressed .= $content;
-        }
-
-        return $compressed;
-    }
-
-    private function removeWhitespace(string $str): string
-    {
-        $str = str_replace("\t", ' ', $str);
-        $str = str_replace("\n", '', $str);
-        $str = str_replace("\r", '', $str);
-        while (strpos($str, '  ') !== false) {
-            $str = str_replace('  ', ' ', $str);
-        }
-        return trim($str);
-    }
-
     private function getCacheComment(string $raw, string $compressed): string
     {
         $raw_size = strlen($raw);
         $compressed_size = strlen($compressed);
-        $savings = ($raw_size - $compressed_size) / $raw_size * 100;
+        $savings = $raw_size > 0 ? ($raw_size - $compressed_size) / $raw_size * 100 : 0;
 
         return sprintf(
             "\n<!-- Page cached by WPS-Cache on %s. Size saved %.2f%%. From %d bytes to %d bytes -->",
@@ -248,21 +245,19 @@ final class HTMLCache extends AbstractCacheDriver
         );
     }
 
-    /**
-     * Determines if the current page should be cached.
-     *
-     * To address the warning about processing form data without nonce verification,
-     * we now explicitly sanitize GET data using filter_input_array().
-     */
     private function shouldCache(): bool
     {
+        // Nonce check warning is irrelevant here as we are reading, not processing actions
         $get_data = filter_input_array(INPUT_GET, FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: [];
+
         if (is_admin() || is_user_logged_in() || !empty($get_data)) {
             return false;
         }
+
         if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'GET') {
             return false;
         }
+
         return !$this->isPageCached() && !$this->isExcludedUrl();
     }
 
