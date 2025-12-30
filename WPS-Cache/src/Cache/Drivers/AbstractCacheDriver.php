@@ -39,26 +39,37 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
     }
 
     /**
-     * Ensure cache directory exists and is writable using WP_Filesystem.
+     * Ensure cache directory exists and is writable.
+     * 
+     * FIX: Switched from WP_Filesystem to native PHP/WP functions.
+     * The cache folder is strictly a runtime folder that the PHP process 
+     * (www-data/nginx) must have write access to naturally. 
+     * WP_Filesystem is overkill here and often causes "not writable" false negatives
+     * if FS_METHOD is not direct.
      */
     protected function ensureCacheDirectory(string $dir): bool
     {
-        if (!function_exists('WP_Filesystem')) {
-            require_once(ABSPATH . 'wp-admin/includes/file.php');
-        }
-        WP_Filesystem();
-        global $wp_filesystem;
-
-        if (!$wp_filesystem->is_dir($dir)) {
-            if (!$wp_filesystem->mkdir($dir, 0755)) {
-                $this->logError("Failed to create cache directory: $dir");
-                return false;
+        // 1. Check if directory exists, if not create it recursively
+        if (!is_dir($dir)) {
+            // wp_mkdir_p uses native php mkdir recursively and respects umask
+            if (!wp_mkdir_p($dir)) {
+                // If it fails, try one last force attempt with 0755
+                if (!@mkdir($dir, 0755, true) && !is_dir($dir)) {
+                    $this->logError("Failed to create cache directory: $dir");
+                    return false;
+                }
             }
         }
 
-        if (!$wp_filesystem->is_writable($dir)) {
-            $this->logError("Cache directory is not writable: $dir");
+        // 2. Check strict writability
+        if (!is_writable($dir)) {
+            $this->logError("Cache directory exists but is not writable: $dir");
             return false;
+        }
+
+        // 3. Create index.php silence file if missing
+        if (!file_exists($dir . '/index.php')) {
+            @file_put_contents($dir . '/index.php', '<?php // Silence is golden');
         }
 
         return true;
@@ -71,13 +82,21 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
     protected function atomicWrite(string $file, string $content): bool
     {
         $dir = dirname($file);
+
+        // Ensure dir exists before writing (just in case)
+        if (!is_dir($dir)) {
+            if (!$this->ensureCacheDirectory($dir)) {
+                return false;
+            }
+        }
+
         $temp_file = $dir . '/' . uniqid('wpsc_tmp_', true) . '.tmp';
 
         if (@file_put_contents($temp_file, $content) === false) {
             return false;
         }
 
-        // Set permissions before rename
+        // Set permissions before rename (standard file permissions)
         @chmod($temp_file, 0644);
 
         // Atomic rename
