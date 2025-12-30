@@ -7,6 +7,7 @@ namespace WPSCache;
 use WPSCache\Cache\CacheManager;
 use WPSCache\Admin\AdminPanelManager;
 use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, MinifyJS};
+use WPSCache\Server\ServerConfigManager;
 
 /**
  * Main plugin class handling initialization and lifecycle management
@@ -43,6 +44,7 @@ final class Plugin
 
     private static ?self $instance = null;
     private CacheManager $cache_manager;
+    private ServerConfigManager $server_manager;
     private ?AdminPanelManager $admin_panel_manager = null;
 
     /**
@@ -62,7 +64,13 @@ final class Plugin
     public function initialize(): void
     {
         $this->setupConstants();
-        $this->initializeCacheManager();
+
+        $this->cache_manager = new CacheManager();
+        $this->server_manager = new ServerConfigManager();
+
+        $settings = get_option('wpsc_settings', self::DEFAULT_SETTINGS);
+
+        $this->initializeCacheDrivers($settings);
         $this->setupHooks();
 
         if (is_admin()) {
@@ -70,6 +78,9 @@ final class Plugin
         }
 
         add_action('plugins_loaded', [$this->cache_manager, 'initializeCache'], 5);
+
+        // Hook for settings update to refresh server config (.htaccess/nginx)
+        add_action('wpscac_settings_updated', [$this, 'refreshServerConfig']);
     }
 
     /**
@@ -78,31 +89,25 @@ final class Plugin
     private function setupConstants(): void
     {
         $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
-        $constants = [
-            'WPSC_VERSION'      => '0.0.3',
-            'WPSC_PLUGIN_FILE'  => $plugin_file,
-            'WPSC_PLUGIN_DIR'   => plugin_dir_path($plugin_file),
-            'WPSC_PLUGIN_URL'   => plugin_dir_url($plugin_file),
-            'WPSC_CACHE_DIR'    => WP_CONTENT_DIR . '/cache/wps-cache/',
-        ];
 
-        foreach ($constants as $name => $value) {
-            if (!defined($name)) {
-                define($name, $value);
-            }
+        if (!defined('WPSC_VERSION')) {
+            define('WPSC_VERSION', '0.0.3');
+        }
+        if (!defined('WPSC_PLUGIN_FILE')) {
+            define('WPSC_PLUGIN_FILE', $plugin_file);
+        }
+        if (!defined('WPSC_PLUGIN_DIR')) {
+            define('WPSC_PLUGIN_DIR', plugin_dir_path($plugin_file));
+        }
+        if (!defined('WPSC_PLUGIN_URL')) {
+            define('WPSC_PLUGIN_URL', plugin_dir_url($plugin_file));
+        }
+        if (!defined('WPSC_CACHE_DIR')) {
+            define('WPSC_CACHE_DIR', WP_CONTENT_DIR . '/cache/wps-cache/');
         }
     }
 
-    /**
-     * Initializes cache manager and drivers
-     */
-    private function initializeCacheManager(): void
-    {
-        $this->cache_manager = new CacheManager();
-        $settings = get_option('wpsc_settings', self::DEFAULT_SETTINGS);
 
-        $this->initializeCacheDrivers($settings);
-    }
 
     /**
      * Initializes individual cache drivers based on settings
@@ -185,13 +190,28 @@ final class Plugin
     public function activate(): void
     {
         $this->createRequiredDirectories();
-        $this->createHtaccessFile();
+        $this->createHtaccessFile(); // Directory protection
         $this->enableWPCache();
         $this->copyAdvancedCache();
         $this->setupDefaultSettings();
         $this->scheduleCacheCleanup();
 
+        // Apply Server-Level Caching Rules (Apache/LiteSpeed)
+        $this->server_manager->applyConfiguration();
+
         flush_rewrite_rules();
+    }
+
+    /**
+     * Refreshes server configuration when settings are updated
+     */
+    public function refreshServerConfig(array $settings): void
+    {
+        if ($settings['html_cache'] ?? false) {
+            $this->server_manager->applyConfiguration();
+        } else {
+            $this->server_manager->removeConfiguration();
+        }
     }
 
     /**
@@ -213,7 +233,7 @@ final class Plugin
     }
 
     /**
-     * Creates .htaccess file for security
+     * Creates .htaccess file for cache directory security
      */
     private function createHtaccessFile(): void
     {
@@ -275,10 +295,13 @@ final class Plugin
         $this->clearAllCaches();
         $this->removeDropIns();
         $this->clearScheduledEvents();
+
+        // Remove Server-Level Caching Rules
+        $this->server_manager->removeConfiguration();
     }
 
     /**
-     * Manages WP_CACHE constant in wp-config.php
+     * Manages WP_CACHE constant in wp-config.php with atomic locking
      */
     private function setWPCache(bool $enabled): bool
     {
@@ -360,31 +383,6 @@ final class Plugin
     }
 
     /**
-     * Writes updated wp-config.php with backup
-     */
-    private function writeConfigFile(string $file, string $content): bool
-    {
-        // This method is now superseded by the safer locking mechanism in setWPCache, 
-        // but kept for reference if direct file writing is needed elsewhere.
-
-        // Create backup
-        $backup_file = $file . '.backup-' . time();
-        if (!@copy($file, $backup_file)) {
-            error_log('WPS Cache Error: Unable to create wp-config.php backup');
-            return false;
-        }
-
-        // Write updated content
-        if (@file_put_contents($file, $content) === false) {
-            @copy($backup_file, $file); // Restore backup if write fails
-            error_log('WPS Cache Error: Unable to update wp-config.php');
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
      * Disables WP_CACHE constant
      */
     private function disableWPCache(): void
@@ -397,7 +395,7 @@ final class Plugin
     /**
      * Clears all caches
      */
-    private function clearAllCaches(): void
+    public function clearAllCaches(): void
     {
         $this->cache_manager->clearAllCaches();
     }
@@ -458,5 +456,13 @@ final class Plugin
     public function getCacheManager(): CacheManager
     {
         return $this->cache_manager;
+    }
+
+    /**
+     * Gets server manager instance
+     */
+    public function getServerManager(): ServerConfigManager
+    {
+        return $this->server_manager;
     }
 }
