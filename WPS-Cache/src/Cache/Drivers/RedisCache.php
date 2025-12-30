@@ -107,7 +107,17 @@ final class RedisCache extends AbstractCacheDriver
 
         // Basic settings
         $this->redis->setOption(Redis::OPT_PREFIX, $this->prefix);
-        $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
+
+        // Security Fix: Use JSON or IGBINARY instead of PHP serialization to prevent Object Injection
+        if (defined('Redis::SERIALIZER_IGBINARY') && extension_loaded('igbinary')) {
+            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_IGBINARY);
+        } elseif (defined('Redis::SERIALIZER_JSON')) {
+            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_JSON);
+        } else {
+            // Fallback if neither is available, but JSON is strongly recommended
+            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
+        }
+
         $this->redis->setOption(Redis::OPT_READ_TIMEOUT, $this->read_timeout);
 
         // Enable compression if available

@@ -11,6 +11,12 @@ if (!defined('ABSPATH')) {
     exit('Direct access not allowed.');
 }
 
+// Safety check: Ensure the plugin is actually active/present to avoid fatal errors
+// if the folder was deleted but this file remains.
+if (!defined('WPSC_PLUGIN_DIR') && !file_exists(WP_CONTENT_DIR . '/plugins/wps-cache/wps-cache.php')) {
+    return;
+}
+
 class WPSAdvancedCache
 {
     private const CACHE_BYPASS_CONDITIONS = [
@@ -37,11 +43,36 @@ class WPSAdvancedCache
 
     public function __construct()
     {
-        $this->request_uri = isset($_SERVER['REQUEST_URI'])
-            ? filter_var($_SERVER['REQUEST_URI'], FILTER_SANITIZE_URL)
-            : '';
+        $this->request_uri = $this->getNormalizedRequestUri();
         $this->settings = $this->getSettings();
         $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
+    }
+
+    /**
+     * Gets and normalizes the Request URI (Sorts query params)
+     */
+    private function getNormalizedRequestUri(): string
+    {
+        if (!isset($_SERVER['REQUEST_URI'])) {
+            return '';
+        }
+
+        $uri = filter_var($_SERVER['REQUEST_URI'], FILTER_SANITIZE_URL);
+
+        // Parse the URL
+        $parts = parse_url($uri);
+        if (!isset($parts['query'])) {
+            return $uri;
+        }
+
+        // Sort query parameters to avoid duplicate cache files for same params in diff order
+        parse_str($parts['query'], $params);
+        ksort($params);
+
+        $path = $parts['path'] ?? '';
+        $query = http_build_query($params);
+
+        return $query ? $path . '?' . $query : $path;
     }
 
     /**
@@ -81,7 +112,7 @@ class WPSAdvancedCache
             !empty($_POST) ||
             is_admin() ||
             (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') ||
-            !empty($_GET) || // Query parameters bypass cache
+            // !empty($_GET) || // Commented out: We want to cache params now that they are sorted
             (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                 strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
         );

@@ -67,7 +67,9 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         $file = $this->getCacheFile($key);
-        if (@file_put_contents($file, $value) === false) {
+
+        // Use atomic write to prevent race conditions during high traffic
+        if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write cache file: $file");
         }
     }
@@ -122,10 +124,9 @@ final class HTMLCache extends AbstractCacheDriver
             // Add cache metadata
             $minified .= $this->getCacheComment($content, $minified);
 
-            // Sanitize the REQUEST_URI before generating the cache key
-            $request_uri = isset($_SERVER['REQUEST_URI'])
-                ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']))
-                : '';
+            // Sanitize and Normalize URI (Sort Params) matches advanced-cache.php
+            $request_uri = $this->getNormalizedRequestUri();
+
             $key = $this->generateCacheKey($request_uri);
             $this->set($key, $minified);
 
@@ -134,6 +135,33 @@ final class HTMLCache extends AbstractCacheDriver
             $this->logError('HTML processing failed', $e);
             return $content;
         }
+    }
+
+    /**
+     * Gets and normalizes the Request URI (Sorts query params)
+     */
+    private function getNormalizedRequestUri(): string
+    {
+        if (!isset($_SERVER['REQUEST_URI'])) {
+            return '';
+        }
+
+        $uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+
+        // Parse the URL
+        $parts = parse_url($uri);
+        if (!isset($parts['query'])) {
+            return $uri;
+        }
+
+        // Sort query parameters to avoid duplicate cache files
+        parse_str($parts['query'], $params);
+        ksort($params);
+
+        $path = $parts['path'] ?? '';
+        $query = http_build_query($params);
+
+        return $query ? $path . '?' . $query : $path;
     }
 
     private function minifyHTML(string $html): string|false

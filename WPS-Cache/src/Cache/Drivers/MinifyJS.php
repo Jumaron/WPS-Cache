@@ -61,7 +61,9 @@ final class MinifyJS extends AbstractCacheDriver
         }
 
         $file = $this->getCacheFile($key);
-        if (@file_put_contents($file, $value) === false) {
+
+        // Use atomic write to prevent race conditions
+        if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write JS cache file: $file");
         }
     }

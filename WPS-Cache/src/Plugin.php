@@ -288,14 +288,37 @@ final class Plugin
             return false;
         }
 
-        $config_content = file_get_contents($config_file);
+        // Add a lock to prevent concurrent writes corrupting wp-config.php
+        $fp = fopen($config_file, 'r+');
+        if (!flock($fp, LOCK_EX)) {
+            fclose($fp);
+            return false;
+        }
+
+        $config_content = fread($fp, filesize($config_file));
         if ($config_content === false) {
+            flock($fp, LOCK_UN);
+            fclose($fp);
             error_log('WPS Cache Error: Unable to read wp-config.php');
             return false;
         }
 
         $updated_content = $this->updateWPCacheDefinition($config_content, $enabled);
-        return $this->writeConfigFile($config_file, $updated_content);
+
+        // Rewind and write
+        ftruncate($fp, 0);
+        rewind($fp);
+        if (fwrite($fp, $updated_content) === false) {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            error_log('WPS Cache Error: Unable to update wp-config.php');
+            return false;
+        }
+
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return true;
     }
 
     /**
@@ -305,6 +328,10 @@ final class Plugin
     {
         if (!file_exists($file)) {
             error_log('WPS Cache Error: wp-config.php not found');
+            return false;
+        }
+        if (!is_writable($file)) {
+            error_log('WPS Cache Error: wp-config.php is not writable');
             return false;
         }
         return true;
@@ -337,6 +364,9 @@ final class Plugin
      */
     private function writeConfigFile(string $file, string $content): bool
     {
+        // This method is now superseded by the safer locking mechanism in setWPCache, 
+        // but kept for reference if direct file writing is needed elsewhere.
+
         // Create backup
         $backup_file = $file . '.backup-' . time();
         if (!@copy($file, $backup_file)) {

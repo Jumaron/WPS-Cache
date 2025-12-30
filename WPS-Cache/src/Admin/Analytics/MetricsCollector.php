@@ -86,23 +86,31 @@ class MetricsCollector
     public function getHtmlCacheStats(): array
     {
         $cache_dir = WPSC_CACHE_DIR . 'html/';
-        $files = glob($cache_dir . '*.html');
         $total_size = 0;
         $file_count = 0;
         $expired_count = 0;
 
         $settings = get_option('wpsc_settings');
         $lifetime = isset($settings['cache_lifetime']) ? absint($settings['cache_lifetime']) : 3600;
+        $now = time();
 
-        if (is_array($files)) {
-            $file_count = count($files);
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    $total_size += filesize($file);
-                    if ((time() - filemtime($file)) >= $lifetime) {
-                        $expired_count++;
+        // Performance Fix: Use FilesystemIterator instead of glob() to avoid memory issues with large file counts
+        if (is_dir($cache_dir)) {
+            try {
+                $iterator = new \FilesystemIterator($cache_dir, \FilesystemIterator::SKIP_DOTS);
+                foreach ($iterator as $fileInfo) {
+                    if ($fileInfo->isFile() && $fileInfo->getExtension() === 'html') {
+                        $file_count++;
+                        $total_size += $fileInfo->getSize();
+
+                        if (($now - $fileInfo->getMTime()) >= $lifetime) {
+                            $expired_count++;
+                        }
                     }
                 }
+            } catch (\Exception $e) {
+                // Handle permission or filesystem errors gracefully
+                $file_count = 0;
             }
         }
 

@@ -63,4 +63,30 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
 
         return true;
     }
+
+    /**
+     * Writes content to a file atomically to prevent race conditions.
+     * Writes to a temp file first, then renames.
+     */
+    protected function atomicWrite(string $file, string $content): bool
+    {
+        $dir = dirname($file);
+        $temp_file = $dir . '/' . uniqid('wpsc_tmp_', true) . '.tmp';
+
+        if (@file_put_contents($temp_file, $content) === false) {
+            return false;
+        }
+
+        // Set permissions before rename
+        @chmod($temp_file, 0644);
+
+        // Atomic rename
+        if (@rename($temp_file, $file)) {
+            return true;
+        }
+
+        // Cleanup on failure
+        @unlink($temp_file);
+        return false;
+    }
 }
