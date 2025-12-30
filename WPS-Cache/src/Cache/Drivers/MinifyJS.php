@@ -66,7 +66,7 @@ final class MinifyJS extends AbstractCacheDriver
 
         $file = $this->getCacheFile($key);
 
-        // Use atomic write (from AbstractCacheDriver) to prevent race conditions
+        // Use atomic write to prevent race conditions
         if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write JS cache file: $file");
         }
@@ -135,7 +135,7 @@ final class MinifyJS extends AbstractCacheDriver
             return;
         }
 
-        // Generate cache key based on content hash
+        // Generate cache key
         $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
         $cache_file = $this->getCacheFile($cache_key);
 
@@ -144,7 +144,7 @@ final class MinifyJS extends AbstractCacheDriver
                 $minified = $this->minifyJS($content);
                 $this->set($cache_key, $minified);
             } catch (\Throwable $e) {
-                // If minification fails, log error but don't crash; the site will use original
+                // Fail safe: If minification errors, do not cache broken file
                 $this->logError("JS Minification failed for $handle", $e);
                 return;
             }
@@ -158,57 +158,65 @@ final class MinifyJS extends AbstractCacheDriver
 
     /**
      * Core Minification Logic using Lexical Analysis.
-     * Uses a memory stream and generators for high performance and low memory footprint.
      */
     private function minifyJS(string $js): string
     {
         $output = fopen('php://memory', 'r+');
         $prevToken = null;
 
-        foreach ($this->tokenize($js) as $token) {
+        // We need to look ahead one token to handle ASI (Automatic Semicolon Insertion)
+        // logic safely. We allow the tokenizer to yield, but we buffer one token.
+        $iterator = $this->tokenize($js);
+        $currToken = $iterator->current();
+
+        while ($currToken !== null) {
+            $iterator->next();
+            $nextToken = $iterator->valid() ? $iterator->current() : null;
+
             // 1. Handle Comments: Skip them
-            if ($token['type'] === self::T_COMMENT) {
+            if ($currToken['type'] === self::T_COMMENT) {
                 // Optional: Preserve license comments (/*! ... */)
-                if (str_starts_with($token['value'], '/*!')) {
-                    fwrite($output, $token['value'] . "\n");
-                    // Treat preserved comment as a break to prevent combining words incorrectly
+                if (str_starts_with($currToken['value'], '/*!')) {
+                    fwrite($output, $currToken['value'] . "\n");
+                    // Treat preserved comment as a whitespace break
                     $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
                 }
+                // Update current to next loop
+                $currToken = $nextToken;
                 continue;
             }
 
             // 2. Handle Whitespace
-            if ($token['type'] === self::T_WHITESPACE) {
-                // Safety: If the whitespace contains a newline, we might need to preserve it
-                // to support Automatic Semicolon Insertion (ASI).
-                // Example: return \n x  --> return x (changes meaning!).
-                if ($prevToken && $this->needsNewlineProtection($prevToken, $token['value'])) {
-                    // It's safer to keep the newline if we aren't building a full AST
+            if ($currToken['type'] === self::T_WHITESPACE) {
+                // ASI Safety Check
+                if ($prevToken && $nextToken && $this->needsNewlineProtection($prevToken, $nextToken, $currToken['value'])) {
                     fwrite($output, "\n");
                     $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
                 }
+
+                $currToken = $nextToken;
                 continue;
             }
 
-            // 3. Handle Insertion of necessary spaces
-            if ($prevToken && $this->needsSpace($prevToken, $token)) {
+            // 3. Handle Insertion of necessary spaces (e.g. "var x")
+            if ($prevToken && $this->needsSpace($prevToken, $currToken)) {
                 fwrite($output, ' ');
             }
 
-            fwrite($output, $token['value']);
-            $prevToken = $token;
+            fwrite($output, $currToken['value']);
+            $prevToken = $currToken;
+            $currToken = $nextToken;
         }
 
         rewind($output);
         $result = stream_get_contents($output);
         fclose($output);
 
-        return $result ?: $js; // Fallback to original if empty
+        return $result ?: $js;
     }
 
     /**
      * Generator that yields tokens from the raw JS string.
-     * This avoids loading an array of 100k tokens into memory.
      */
     private function tokenize(string $js): \Generator
     {
@@ -260,8 +268,6 @@ final class MinifyJS extends AbstractCacheDriver
                 }
 
                 // Regex Literal vs Division Operator
-                // This is the specific logic that fixes "Unexpected token *" errors.
-                // If the previous token was an operator or keyword, this / starts a Regex.
                 if ($this->isRegexStart($lastMeaningfulToken)) {
                     $start = $i;
                     $i++; // Consume opening /
@@ -291,7 +297,7 @@ final class MinifyJS extends AbstractCacheDriver
                             break;
                         }
 
-                        // Safety break for unclosed regex at newline (invalid JS)
+                        // Safety break for unclosed regex at newline
                         if ($c === "\n" || $c === "\r") {
                             break;
                         }
@@ -304,7 +310,7 @@ final class MinifyJS extends AbstractCacheDriver
                     continue;
                 }
 
-                // If not comment or regex, it's the Division operator
+                // Division Operator
                 yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => '/'];
                 $i++;
                 continue;
@@ -325,8 +331,7 @@ final class MinifyJS extends AbstractCacheDriver
                         break;
                     }
                     if ($js[$i] === "\n" || $js[$i] === "\r") {
-                        // Unclosed string at EOL - bail out or let JS engine error later
-                        break;
+                        break; // Unclosed string
                     }
                     $i++;
                 }
@@ -347,7 +352,6 @@ final class MinifyJS extends AbstractCacheDriver
                         $i++;
                         break;
                     }
-                    // Templates CAN span newlines, so we don't break on \n
                     $i++;
                 }
                 yield $lastMeaningfulToken = ['type' => self::T_TEMPLATE, 'value' => substr($js, $start, $i - $start)];
@@ -355,14 +359,12 @@ final class MinifyJS extends AbstractCacheDriver
             }
 
             // --- 5. Operators & Punctuation ---
-            // Group 1: Single chars that separate words
             if (str_contains('{}()[],:;?^~', $char)) {
                 yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => $char];
                 $i++;
                 continue;
             }
 
-            // Group 2: Operators that might be multi-char (>=, ===, &&, etc)
             if (str_contains('.!<>=+-*%&|', $char)) {
                 $start = $i;
                 while ($i < $len && str_contains('.!<>=+-*%&|', $js[$i])) {
@@ -373,7 +375,6 @@ final class MinifyJS extends AbstractCacheDriver
             }
 
             // --- 6. Words (Identifiers, Keywords, Numbers) ---
-            // Consumes anything that isn't special char or whitespace
             $start = $i;
             while ($i < $len) {
                 $c = $js[$i];
@@ -387,8 +388,7 @@ final class MinifyJS extends AbstractCacheDriver
     }
 
     /**
-     * Determines if a forward slash '/' should be treated as a Regex Literal.
-     * This logic mimics the standard JS parsing rules.
+     * Correctly determines if a forward slash '/' should be treated as a Regex Literal.
      */
     private function isRegexStart(?array $lastToken): bool
     {
@@ -396,16 +396,16 @@ final class MinifyJS extends AbstractCacheDriver
             return true; // Start of file
         }
 
-        if ($lastToken['type'] !== self::T_WORD && $lastToken['type'] !== self::T_OPERATOR) {
-            return false; // Regex can't follow a string, regex, or template
-        }
-
         $val = $lastToken['value'];
 
-        // If it's an operator, regex is usually expected next
-        // e.g. x = /foo/, return /foo/, ( /foo/ )
+        // Fix: Division can follow closing parenthesis or brackets
+        // e.g. (a + b) / 2  or  list[0] / 5
+        if ($val === ')' || $val === ']') {
+            return false;
+        }
+
         if ($lastToken['type'] === self::T_OPERATOR) {
-            // Edge case: ++ and -- are operators but act like suffix, so / following them is division
+            // Fix: ++ and -- are operators, but treated as suffixes, so / is division
             // e.g. x++ / y
             if ($val === '++' || $val === '--') {
                 return false;
@@ -413,7 +413,12 @@ final class MinifyJS extends AbstractCacheDriver
             return true;
         }
 
-        // If it's a Keyword, regex is expected
+        if ($lastToken['type'] !== self::T_WORD) {
+            return false;
+        }
+
+        // Expanded Keyword list that expects a value/regex next
+        // Fixes the issue where keywords like 'if', 'while', 'in' were missed
         $keywords = [
             'case',
             'else',
@@ -424,7 +429,13 @@ final class MinifyJS extends AbstractCacheDriver
             'delete',
             'do',
             'await',
-            'yield'
+            'yield',
+            'if',
+            'while',
+            'for',
+            'in',
+            'instanceof',
+            'new'
         ];
 
         return in_array($val, $keywords, true);
@@ -432,17 +443,22 @@ final class MinifyJS extends AbstractCacheDriver
 
     /**
      * Determines if a space is required between two tokens.
-     * e.g. "var x" needs space. "x=y" does not.
      */
     private function needsSpace(array $prev, array $curr): bool
     {
-        // Word + Word needs space (var x, typeof a, return 1, 10 in)
+        // Word + Word needs space (var x, return 1, in foo)
         if ($prev['type'] === self::T_WORD && $curr['type'] === self::T_WORD) {
             return true;
         }
 
-        // + + needs space (a + +b vs a++b)
-        // - - needs space
+        // Fix: Number + Dot needs space to prevent syntax error
+        // 10 .toString() (valid) vs 10.toString() (invalid float)
+        // If prev starts with digit and curr is dot
+        if ($prev['type'] === self::T_WORD && is_numeric($prev['value'][0]) && $curr['value'] === '.') {
+            return true;
+        }
+
+        // Operator spacing for + + and - - 
         if ($prev['type'] === self::T_OPERATOR && $curr['type'] === self::T_OPERATOR) {
             if (($prev['value'] === '+' && str_starts_with($curr['value'], '+')) ||
                 ($prev['value'] === '-' && str_starts_with($curr['value'], '-'))
@@ -455,27 +471,42 @@ final class MinifyJS extends AbstractCacheDriver
     }
 
     /**
-     * Checks if a newline must be preserved for ASI.
-     * Mainly prevents "return \n x" -> "return x".
+     * Checks if a newline must be preserved for ASI (Automatic Semicolon Insertion).
      */
-    private function needsNewlineProtection(array $prev, string $whitespace): bool
+    private function needsNewlineProtection(array $prev, array $next, string $whitespace): bool
     {
-        // If the whitespace doesn't even contain a newline, we don't care
+        // If whitespace has no newline, we are safe
         if (!str_contains($whitespace, "\n") && !str_contains($whitespace, "\r")) {
             return false;
         }
 
+        // 1. Restricted Productions (return, throw, etc) cannot have newline after them
         if ($prev['type'] === self::T_WORD) {
-            $keywords = ['return', 'throw', 'break', 'continue', 'yield'];
-            if (in_array($prev['value'], $keywords, true)) {
+            $restricted = ['return', 'throw', 'break', 'continue', 'yield'];
+            if (in_array($prev['value'], $restricted, true)) {
                 return true;
+            }
+        }
+
+        // 2. Ambiguous Starts: [ ( ` + - /
+        // If the previous line didn't end clearly (semicolon or block), and the next
+        // line starts with one of these, JS tries to combine them.
+        // e.g. a = b \n [1].map(...) -> a = b[1].map(...)
+        if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
+            $val = $next['value'];
+            if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {
+                // If previous token was NOT a clear terminator, keep newline to be safe
+                $safeTerminators = [';', '}', ':'];
+                if (!in_array($prev['value'], $safeTerminators, true)) {
+                    return true;
+                }
             }
         }
 
         return false;
     }
 
-    // --- Standard Helper Methods ---
+    // --- Helpers ---
 
     private function shouldProcessScript($script, string $handle, array $excluded_js): bool
     {
