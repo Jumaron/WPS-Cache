@@ -12,14 +12,15 @@ namespace WPSCache\Cache\Drivers;
  * - Atomic Writes for concurrency safety.
  * - Memory-efficient Iterator for cache clearing.
  * - Robust protection for <pre>, <script>, <style>, and <textarea>.
- * - Smart whitespace collapsing (prevents "HelloWorld" rendering bugs).
+ * - Smart whitespace collapsing.
+ * - XHTML/Self-closing tag optimization.
  */
 final class HTMLCache extends AbstractCacheDriver
 {
     private string $cache_dir;
     private array $settings;
 
-    // protected blocks storage
+    // Protected blocks storage
     private array $placeholders = [];
 
     public function __construct()
@@ -74,7 +75,7 @@ final class HTMLCache extends AbstractCacheDriver
 
         $file = $this->getCacheFile($key);
 
-        // Use atomic write to prevent race conditions (implemented in AbstractCacheDriver)
+        // Use atomic write to prevent race conditions
         if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write cache file: $file");
         }
@@ -111,7 +112,6 @@ final class HTMLCache extends AbstractCacheDriver
 
     public function startOutputBuffering(): void
     {
-        // Start buffer with callback
         ob_start([$this, 'processOutput']);
     }
 
@@ -158,10 +158,11 @@ final class HTMLCache extends AbstractCacheDriver
     {
         $this->placeholders = []; // Reset
 
-        // 1. Extract protected blocks (Script, Style, Pre, Textarea, Comments with conditions)
-        // We use specific regexes for tag pairs to ensure we capture the full content.
-        // Note: We extract <script> and <style> to prevent our whitespace logic from breaking code.
-        $html = $this->extractBlock('/<(script|style|pre|textarea|code)(?:[ >].*?)?<\/\1>/si', $html);
+        // 1. Extract protected blocks
+        // We capture <script>, <style>, <pre>, <textarea>, and <code> blocks.
+        // The regex uses \b to ensure we don't match <style-custom> and lazy .*? to capture content.
+        // It robustly handles attributes containing '>' by relying on the closing tag structure.
+        $html = $this->extractBlock('/<(script|style|pre|textarea|code)\b(?:[^>]*)?>(.*?)<\/\1>/si', $html);
 
         // Extract IE Conditionals and preserved comments <!--! ... -->
         $html = $this->extractBlock('/<!--\[if.+?<!\[endif\]-->/si', $html);
@@ -174,15 +175,14 @@ final class HTMLCache extends AbstractCacheDriver
         $html = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $html);
 
         // Collapse Whitespace: Replace sequence of whitespace with single space
-        // This is safer than removing it entirely, preventing "HelloWorld" joining.
         $html = preg_replace('/\s+/', ' ', $html);
 
-        // Optional: Remove spaces between tags where safe (e.g. > < to ><)
-        // Only do this if you are sure. > < usually implies inline-block spacing issues.
-        // For absolute safety, we just collapse to single space above.
-        // However, we CAN remove spaces around the placeholder keys safely later if we wanted to.
+        // 3. Optimization: Self-Closing Tags
+        // Remove space before self-closing slash: <br /> -> <br/>
+        // This saves bytes and remains valid HTML5/XHTML.
+        $html = str_replace(' />', '/>', $html);
 
-        // 3. Restore protected blocks
+        // 4. Restore protected blocks
         if (!empty($this->placeholders)) {
             $html = strtr($html, $this->placeholders);
         }
