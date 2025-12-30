@@ -410,10 +410,13 @@ final class MinifyCSS extends AbstractCacheDriver
             return true;
         }
 
-        // 3. Media Query Conjunctions
-        // @media (min-width: 600px) and (max-width: 800px)
-        // Previous logic missed spaces around parenthesis in keywords
+        // 3. Variable/Function fusion fix: e.g. var(--a) var(--b) or var(--a) 10px
+        // Without this, )var becomes )var which is an invalid property value.
+        if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
+            return true;
+        }
 
+        // 4. Media Query Conjunctions and Function Spacing
         // "and ("
         if ($t1 === self::T_WORD && $t2 === self::T_PAREN_OPEN) {
             $kw = strtolower($prev['value']);
