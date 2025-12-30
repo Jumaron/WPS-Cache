@@ -175,20 +175,20 @@ final class MinifyJS extends AbstractCacheDriver
 
             // 1. Handle Comments: Skip them
             if ($currToken['type'] === self::T_COMMENT) {
-                // Optional: Preserve license comments (/*! ... */)
+                // Preserve license comments (/*! ... */)
                 if (str_starts_with($currToken['value'], '/*!')) {
                     fwrite($output, $currToken['value'] . "\n");
                     // Treat preserved comment as a whitespace break
                     $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
                 }
-                // Update current to next loop
                 $currToken = $nextToken;
                 continue;
             }
 
             // 2. Handle Whitespace
             if ($currToken['type'] === self::T_WHITESPACE) {
-                // ASI Safety Check
+                // ASI Safety Check: Preserve newline if next token implies a new statement
+                // e.g. return \n a  or  a = b \n [1]
                 if ($prevToken && $nextToken && $this->needsNewlineProtection($prevToken, $nextToken, $currToken['value'])) {
                     fwrite($output, "\n");
                     $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
@@ -198,7 +198,7 @@ final class MinifyJS extends AbstractCacheDriver
                 continue;
             }
 
-            // 3. Handle Insertion of necessary spaces (e.g. "var x")
+            // 3. Handle Insertion of necessary spaces (e.g. "var x", "10 .toString")
             if ($prevToken && $this->needsSpace($prevToken, $currToken)) {
                 fwrite($output, ' ');
             }
@@ -222,7 +222,7 @@ final class MinifyJS extends AbstractCacheDriver
     {
         $len = strlen($js);
         $i = 0;
-        $lastMeaningfulToken = null; // Used to decide between Regex vs Division
+        $lastMeaningfulToken = null;
 
         while ($i < $len) {
             $char = $js[$i];
@@ -383,7 +383,19 @@ final class MinifyJS extends AbstractCacheDriver
                 }
                 $i++;
             }
-            yield $lastMeaningfulToken = ['type' => self::T_WORD, 'value' => substr($js, $start, $i - $start)];
+
+            // Fix: Property Access Bug
+            // If previous token was a DOT, mark this WORD as a Property so it doesn't trigger Regex logic
+            $isProperty = false;
+            if ($lastMeaningfulToken !== null && $lastMeaningfulToken['type'] === self::T_OPERATOR && $lastMeaningfulToken['value'] === '.') {
+                $isProperty = true;
+            }
+
+            yield $lastMeaningfulToken = [
+                'type' => self::T_WORD,
+                'value' => substr($js, $start, $i - $start),
+                'is_property' => $isProperty
+            ];
         }
     }
 
@@ -398,14 +410,14 @@ final class MinifyJS extends AbstractCacheDriver
 
         $val = $lastToken['value'];
 
-        // Fix: Division can follow closing parenthesis or brackets
+        // Fix 1: Division can follow closing parenthesis or brackets
         // e.g. (a + b) / 2  or  list[0] / 5
         if ($val === ')' || $val === ']') {
             return false;
         }
 
         if ($lastToken['type'] === self::T_OPERATOR) {
-            // Fix: ++ and -- are operators, but treated as suffixes, so / is division
+            // Fix 2: ++ and -- are operators, but treated as suffixes, so / is division
             // e.g. x++ / y
             if ($val === '++' || $val === '--') {
                 return false;
@@ -417,8 +429,14 @@ final class MinifyJS extends AbstractCacheDriver
             return false;
         }
 
-        // Expanded Keyword list that expects a value/regex next
-        // Fixes the issue where keywords like 'if', 'while', 'in' were missed
+        // Fix 3: Property Access Bug (obj.return / 5)
+        // If the token is marked as a property, it cannot start a regex.
+        if (!empty($lastToken['is_property'])) {
+            return false;
+        }
+
+        // Fix 4: Comprehensive Keyword list
+        // These keywords typically expect an expression (which could be a regex) to follow
         $keywords = [
             'case',
             'else',
@@ -451,7 +469,7 @@ final class MinifyJS extends AbstractCacheDriver
             return true;
         }
 
-        // Fix: Number + Dot needs space to prevent syntax error
+        // Fix 5: Number + Dot needs space to prevent syntax error
         // 10 .toString() (valid) vs 10.toString() (invalid float)
         // If prev starts with digit and curr is dot
         if ($prev['type'] === self::T_WORD && is_numeric($prev['value'][0]) && $curr['value'] === '.') {
@@ -491,7 +509,6 @@ final class MinifyJS extends AbstractCacheDriver
         // 2. Ambiguous Starts: [ ( ` + - /
         // If the previous line didn't end clearly (semicolon or block), and the next
         // line starts with one of these, JS tries to combine them.
-        // e.g. a = b \n [1].map(...) -> a = b[1].map(...)
         if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
             $val = $next['value'];
             if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {
