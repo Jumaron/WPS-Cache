@@ -94,7 +94,22 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function writeCacheFile(string $content): void
     {
-        $host = preg_replace('/[^a-zA-Z0-9\-\.]/', '', $_SERVER['HTTP_HOST'] ?? 'unknown');
+        $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
+
+        // Sentinel Fix: Prevent Directory Traversal via Host Header
+        // 1. Remove port
+        $host = explode(':', $host)[0];
+        // 2. Strict whitelist (alphanumeric, dot, dash)
+        $host = preg_replace('/[^a-z0-9\-\.]/i', '', $host);
+        // 3. Remove consecutive dots (..) to prevent traversal
+        $host = preg_replace('/\.+/', '.', $host);
+        // 4. Trim leading/trailing dots
+        $host = trim($host, '.');
+
+        if (empty($host)) {
+            $host = 'unknown';
+        }
+
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
 
         // Sentinel: Prevent path traversal by sanitizing the path
