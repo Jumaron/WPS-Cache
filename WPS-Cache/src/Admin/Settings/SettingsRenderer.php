@@ -33,10 +33,6 @@ class SettingsRenderer
 
     /**
      * Renders a styled modern card wrapper
-     *
-     * @param string   $title            Card title
-     * @param string   $description      Card description (optional)
-     * @param callable $content_callback Function to output the card body
      */
     public function renderCard(string $title, string $description, callable $content_callback): void
     {
@@ -59,11 +55,7 @@ class SettingsRenderer
 
     /**
      * Renders an iOS-style Toggle Switch Row
-     *
-     * @param string $key         Setting key
-     * @param string $label       Setting label
-     * @param string $description Setting description
-     * @param array  $settings    Current settings array
+     * FIX: Added hidden input to handle unchecked state vs missing state
      */
     public function renderToggleRow(string $key, string $label, string $description, array $settings): void
     {
@@ -77,6 +69,8 @@ class SettingsRenderer
                 <p class="wpsc-setting-desc"><?php echo esc_html($description); ?></p>
             </div>
             <div class="wpsc-setting-control">
+                <input type="hidden" name="wpsc_settings[<?php echo esc_attr($key); ?>]" value="0">
+
                 <label class="wpsc-switch">
                     <input type="checkbox"
                         id="wpsc_<?php echo esc_attr($key); ?>"
@@ -92,13 +86,6 @@ class SettingsRenderer
 
     /**
      * Renders a standard Input Row (Text, Number, Password, Textarea, Select)
-     *
-     * @param string $key         Setting key
-     * @param string $label       Setting label
-     * @param string $description Setting description
-     * @param array  $settings    Current settings array
-     * @param string $type        Input type (text, number, password, textarea, select)
-     * @param array  $attrs       Additional attributes or options for select
      */
     public function renderInputRow(string $key, string $label, string $description, array $settings, string $type = 'text', array $attrs = []): void
     {

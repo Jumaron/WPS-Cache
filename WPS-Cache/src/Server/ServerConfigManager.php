@@ -74,31 +74,4 @@ RewriteRule ^(.*)$ {$this->cache_path_rel}%{HTTP_HOST}/$1/index.html [L]
 # END WPS Cache
 EOT;
     }
-
-    /**
-     * FrankenPHP / Caddy Snippet
-     * Ensure this matches the regex hostname sanitization logic ({host} in caddy maps to HTTP_HOST)
-     */
-    public function getFrankenPhpConfig(): string
-    {
-        return <<<EOT
-# WPS Cache - Caddy/FrankenPHP Configuration
-# Place this in your Caddyfile
-
-@wps_cache {
-    method GET
-    not header_regexp Cookie "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_no_cache|wordpress_logged_in"
-    not path_regexp "^/(wp-admin|xmlrpc.php|wp-(app|cron|login|register|mail).php|wp-.*.php)"
-    query ""
-}
-
-handle @wps_cache {
-    # {host} matches the hostname. We rely on Caddy to match the folder structure created by PHP.
-    # Note: If your PHP code strips ports (localhost:8000 -> localhost8000), 
-    # Caddy {host} might include the port if not careful. 
-    # Standard Caddy {host} is usually hostname only (without port).
-    try_files {$this->cache_path_rel}{host}{path}/index.html {path} {path}/ /index.php?{query}
-}
-EOT;
-    }
 }
