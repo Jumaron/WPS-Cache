@@ -42,7 +42,12 @@ class SettingsValidator
             // If it is on a different tab, the key will be missing.
 
             if (array_key_exists($key, $input)) {
-                $clean[$key] = $this->sanitizeValue($key, $input[$key], $defaultValue);
+                // Sentinel Fix: Don't overwrite sensitive fields with empty strings (prevents accidental clearing when masked)
+                if ($key === 'redis_password' && empty($input[$key])) {
+                    $clean[$key] = $current[$key];
+                } else {
+                    $clean[$key] = $this->sanitizeValue($key, $input[$key], $defaultValue);
+                }
             } else {
                 $clean[$key] = $current[$key];
             }

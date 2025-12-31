@@ -144,7 +144,7 @@ class SettingsManager
         $this->renderer->renderCard('Redis Details', 'Connection settings.', function () use ($settings) {
             $this->renderer->renderInput('redis_host', 'Host', 'e.g., 127.0.0.1', $settings);
             $this->renderer->renderInput('redis_port', 'Port', 'Default: 6379', $settings, 'number');
-            $this->renderer->renderInput('redis_password', 'Password', 'Hidden for security.', $settings, 'password');
+            $this->renderer->renderInput('redis_password', 'Password', 'Leave empty to keep unchanged.', $settings, 'password');
             $this->renderer->renderInput('redis_db', 'Database ID', 'Default: 0', $settings, 'number');
             $this->renderer->renderInput('redis_prefix', 'Prefix', 'Key prefix.', $settings);
         });
