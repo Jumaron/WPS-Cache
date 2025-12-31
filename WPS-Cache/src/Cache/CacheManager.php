@@ -14,14 +14,6 @@ use Throwable;
  */
 final class CacheManager
 {
-    private const CACHE_CLEANUP_HOOKS = [
-        'save_post',
-        'comment_post',
-        'switched_theme',
-        'activated_plugin',
-        'deactivated_plugin'
-    ];
-
     /** @var array<CacheDriverInterface> */
     private array $drivers = [];
 
@@ -59,9 +51,42 @@ final class CacheManager
 
     private function setupCacheHooks(): void
     {
-        foreach (self::CACHE_CLEANUP_HOOKS as $hook) {
-            add_action($hook, [$this, 'clearAllCaches']);
+        // Content updates: Clear data caches only (No OpCache reset)
+        add_action('save_post', [$this, 'clearContentCaches']);
+        add_action('comment_post', [$this, 'clearContentCaches']);
+
+        // System updates: Clear everything including OpCache
+        add_action('switched_theme', [$this, 'clearAllCaches']);
+        add_action('activated_plugin', [$this, 'clearAllCaches']);
+        add_action('deactivated_plugin', [$this, 'clearAllCaches']);
+    }
+
+    /**
+     * Clears content-related caches (Drivers + WP Internals) but preserves OpCache.
+     * This prevents performance degradation on frequent content updates.
+     */
+    public function clearContentCaches(): bool
+    {
+        $this->errorLog = [];
+        $success = true;
+
+        // 1. Clear Drivers (HTML, Redis, Minified Assets)
+        foreach ($this->drivers as $driver) {
+            try {
+                $driver->clear();
+            } catch (Throwable $e) {
+                $this->errorLog[] = get_class($driver) . ': ' . $e->getMessage();
+                $success = false;
+            }
         }
+
+        // 2. Clear WordPress Internals (Object Cache & Transients)
+        $this->clearWordPressInternals();
+
+        // 3. Fire Signal
+        do_action('wpsc_cache_cleared', $success, $this->errorLog);
+
+        return $success && empty($this->errorLog);
     }
 
     /**
