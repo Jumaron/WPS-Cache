@@ -422,8 +422,11 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             } elseif (defined('NONCE_KEY')) {
                 $this->salt = NONCE_KEY;
             } else {
-                // Last resort: uniqid makes cache invalid on every request (safe but slow)
-                $this->salt = uniqid('wpsc_salt_', true);
+                // Sentinel Fix: Use DB credentials for consistent salt when keys are missing.
+                $secret  = (defined('DB_NAME') ? DB_NAME : '');
+                $secret .= (defined('DB_USER') ? DB_USER : '');
+                $secret .= (defined('DB_PASSWORD') ? DB_PASSWORD : '');
+                $this->salt = hash('sha256', $secret ?: uniqid('wpsc_', true));
             }
 
             // Pre-compute key prefixes
