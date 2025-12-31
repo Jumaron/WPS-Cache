@@ -49,9 +49,7 @@ final class AdminPanelManager
 
     public function registerAdminBarNode(\WP_Admin_Bar $wp_admin_bar): void
     {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
+        if (!current_user_can('manage_options')) return;
 
         $wp_admin_bar->add_node([
             'id'    => 'wpsc-toolbar',
@@ -71,28 +69,11 @@ final class AdminPanelManager
 
     public function enqueueAssets(string $hook): void
     {
-        // Strictly only load on our page
-        if ($hook !== 'toplevel_page_wps-cache') {
-            return;
-        }
+        if ($hook !== 'toplevel_page_wps-cache') return;
 
-        // Cache busting using version
-        wp_enqueue_style(
-            'wpsc-admin-css',
-            WPSC_PLUGIN_URL . 'assets/css/admin.css',
-            [],
-            WPSC_VERSION
-        );
+        wp_enqueue_style('wpsc-admin-css', WPSC_PLUGIN_URL . 'assets/css/admin.css', [], WPSC_VERSION);
+        wp_enqueue_script('wpsc-admin-js', WPSC_PLUGIN_URL . 'assets/js/admin.js', [], WPSC_VERSION, true);
 
-        wp_enqueue_script(
-            'wpsc-admin-js',
-            WPSC_PLUGIN_URL . 'assets/js/admin.js',
-            [],
-            WPSC_VERSION,
-            true
-        );
-
-        // Localize vars for JS
         wp_localize_script('wpsc-admin-js', 'wpsc_admin', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce'    => wp_create_nonce('wpsc_ajax_nonce'),
@@ -110,26 +91,26 @@ final class AdminPanelManager
 
         $this->cacheManager->clearAllCaches();
 
-        // Use our NoticeManager for flash message
+        // Add flash message
         $this->noticeManager->add('All caches have been purged successfully.', 'success');
 
+        // Redirect back
         wp_redirect(remove_query_arg('wpsc_cleared', wp_get_referer()));
         exit;
     }
 
-    /**
-     * Renders the Main Admin Interface matching admin.css structure
-     */
     public function renderAdminPage(): void
     {
         if (!current_user_can('manage_options')) return;
 
+        // CRITICAL FIX: Remove standard WP notices so they don't appear above our header
+        remove_all_actions('admin_notices');
+
         $current_tab = $this->tabManager->getCurrentTab();
 ?>
-        <!-- Main Wrapper -->
         <div class="wpsc-wrap">
 
-            <!-- Header -->
+            <!-- Custom Header -->
             <div class="wpsc-header">
                 <div class="wpsc-logo">
                     <h1>
@@ -143,21 +124,20 @@ final class AdminPanelManager
                 </div>
             </div>
 
-            <!-- Layout: Sidebar + Content -->
+            <!-- Layout -->
             <div class="wpsc-layout">
 
-                <!-- Sidebar -->
                 <div class="wpsc-sidebar">
                     <?php $this->tabManager->renderSidebar($current_tab); ?>
                 </div>
 
-                <!-- Main Content -->
                 <div class="wpsc-content">
-                    <!-- Flash Notices -->
-                    <?php settings_errors('wpsc_settings'); ?>
-                    <?php $this->noticeManager->renderNotices(); ?>
+                    <!-- CRITICAL FIX: Render Notices HERE, under the header, inside the content area -->
+                    <div class="wpsc-notices-area">
+                        <?php settings_errors('wpsc_settings'); ?>
+                        <?php $this->noticeManager->renderNotices(); ?>
+                    </div>
 
-                    <!-- Tab Content -->
                     <div class="wpsc-tab-content">
                         <?php
                         switch ($current_tab) {
@@ -171,8 +151,6 @@ final class AdminPanelManager
                                 $this->settingsManager->renderAdvancedTab();
                                 break;
                             case 'tools':
-                                // If you have a separate ToolsManager, call it here
-                                // For now we assume settingsManager handles simple tools or we instantiate ToolsManager
                                 (new \WPSCache\Admin\Tools\ToolsManager())->render();
                                 break;
                             case 'analytics':

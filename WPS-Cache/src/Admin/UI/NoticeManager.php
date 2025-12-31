@@ -4,25 +4,16 @@ declare(strict_types=1);
 
 namespace WPSCache\Admin\UI;
 
-/**
- * Manages Admin Notices using the PRG pattern (Post/Redirect/Get).
- * Ensures messages persist through redirects.
- */
 class NoticeManager
 {
     private const TRANSIENT_KEY = 'wpsc_admin_notices';
 
     public function __construct()
     {
-        add_action('admin_notices', [$this, 'renderNotices']);
+        // We do NOT add_action('admin_notices') here anymore.
+        // The AdminPanelManager manually calls renderNotices() to control placement.
     }
 
-    /**
-     * Add a flash message to be displayed on the next screen load.
-     * 
-     * @param string $message The message text.
-     * @param string $type    'success', 'error', 'warning', 'info'.
-     */
     public function add(string $message, string $type = 'success'): void
     {
         $notices = get_transient(self::TRANSIENT_KEY) ?: [];
@@ -33,9 +24,6 @@ class NoticeManager
         set_transient(self::TRANSIENT_KEY, $notices, 60);
     }
 
-    /**
-     * Display and clear messages.
-     */
     public function renderNotices(): void
     {
         $notices = get_transient(self::TRANSIENT_KEY);
@@ -44,22 +32,37 @@ class NoticeManager
             return;
         }
 
-        // Clear immediately so they don't persist on refresh
         delete_transient(self::TRANSIENT_KEY);
 
-        foreach ($notices as $notice) {
-            $class = 'wpsc-notice ' . esc_attr($notice['type']);
-            // If it's a standard WP class, map it
-            if (!in_array($notice['type'], ['wpsc-notice', 'success', 'error', 'warning'])) {
-                $class = 'notice notice-' . esc_attr($notice['type']);
-            }
+        echo '<div class="wpsc-notices-container" style="margin-bottom: 20px;">';
 
-            // Render
-            echo sprintf(
-                '<div class="%s is-dismissible"><p>%s</p></div>',
-                esc_attr($class),
-                wp_kses_post($notice['message'])
-            );
+        foreach ($notices as $notice) {
+            // Map types to our CSS classes
+            $typeClass = match ($notice['type']) {
+                'error' => 'error',
+                'warning' => 'warning',
+                default => 'success'
+            };
+
+            $icon = match ($notice['type']) {
+                'error' => 'dashicons-warning',
+                'warning' => 'dashicons-flag',
+                default => 'dashicons-yes-alt'
+            };
+
+?>
+            <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
+                    <span><?php echo wp_kses_post($notice['message']); ?></span>
+                </div>
+                <button type="button" class="notice-dismiss" onclick="this.parentElement.remove()" style="background:none; border:none; cursor:pointer; color:var(--wpsc-text-muted);">
+                    <span class="dashicons dashicons-dismiss"></span>
+                </button>
+            </div>
+<?php
         }
+
+        echo '</div>';
     }
 }
