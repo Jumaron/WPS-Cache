@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WPSCache\Cache\Drivers;
 
 use WPSCache\Optimization\JSOptimizer;
-use WPSCache\Optimization\CSSOptimizer;
+use WPSCache\Optimization\AsyncCSS;
 
 /**
  * State-of-the-Art HTML Cache Writer.
@@ -120,28 +120,15 @@ final class HTMLCache extends AbstractCacheDriver
 
             // 2. Initialize Optimizers
             $jsOptimizer = new JSOptimizer($this->settings);
-            $cssOptimizer = new CSSOptimizer($this->settings);
+
+            // NEW SOTA APPROACH: Async CSS + Heuristic Critical Path
+            $cssOptimizer = new AsyncCSS($this->settings);
 
             // 3. Process JS (Defer/Delay)
             $content = $jsOptimizer->process($content);
 
-            // 4. Process CSS (Remove Unused CSS)
-            if (!empty($this->settings['remove_unused_css'])) {
-                // A. Optimize Inline Styles <style>...</style>
-                $content = preg_replace_callback(
-                    '/<style\s*(.*?)>(.*?)<\/style>/is',
-                    function ($matches) use ($cssOptimizer, $content) {
-                        // Pass the FULL HTML ($content) to the optimizer so it knows all classes
-                        $optimizedCSS = $cssOptimizer->process($content, $matches[2]);
-
-                        // If optimization emptied the block, remove it entirely
-                        if (empty(trim($optimizedCSS))) return '';
-
-                        return "<style {$matches[1]}>{$optimizedCSS}</style>";
-                    },
-                    $content
-                );
-            }
+            // 4. Process CSS (Async Load)
+            $content = $cssOptimizer->process($content);
 
             // 5. Add Cache Comment
             $content .= $this->getCacheComment($content, $content);

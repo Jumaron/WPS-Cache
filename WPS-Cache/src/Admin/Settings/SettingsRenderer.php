@@ -74,9 +74,9 @@ class SettingsRenderer
                 'label'       => __('CSS Minification', 'wps-cache'),
                 'description' => __('Minify CSS files', 'wps-cache')
             ],
-            'remove_unused_css' => [
-                'label'       => __('Remove Unused CSS', 'wps-cache'),
-                'description' => __('Heuristic scan to strip unused styles (Experimental)', 'wps-cache')
+            'css_async' => [
+                'label'       => __('Load CSS Asynchronously', 'wps-cache'),
+                'description' => __('Eliminate render-blocking CSS (Safe Method)', 'wps-cache')
             ],
 
             // JS Optimization

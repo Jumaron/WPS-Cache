@@ -149,7 +149,21 @@ class SettingsManager
             ]
         );
 
-        // 5. JS Minification
+        // 5. Load CSS Asynchronously (Replaces Remove Unused CSS)
+        add_settings_field(
+            'wpscac_css_async',
+            __('Load CSS Asynchronously', 'wps-cache'),
+            [$this->renderer, 'renderCheckboxField'],
+            'wpsc_settings',
+            'wpscac_cache_settings',
+            [
+                'label_for'   => 'wpscac_css_async',
+                'option_name' => 'css_async',
+                'description' => __('Eliminate render-blocking CSS (Safe, uses Critical CSS fallback)', 'wps-cache')
+            ]
+        );
+
+        // 6. JS Minification
         add_settings_field(
             'wpscac_js_minify',
             __('JS Minification', 'wps-cache'),
@@ -163,9 +177,7 @@ class SettingsManager
             ]
         );
 
-        // --- NEW SOTA FIELDS ---
-
-        // 6. JS Defer
+        // 7. JS Defer
         add_settings_field(
             'wpscac_js_defer',
             __('Defer JavaScript', 'wps-cache'),
@@ -179,7 +191,7 @@ class SettingsManager
             ]
         );
 
-        // 7. JS Delay
+        // 8. JS Delay
         add_settings_field(
             'wpscac_js_delay',
             __('Delay JavaScript', 'wps-cache'),
@@ -192,22 +204,6 @@ class SettingsManager
                 'description' => __('Load scripts only after user interaction (SOTA)', 'wps-cache')
             ]
         );
-
-        // 8. Remove Unused CSS
-        add_settings_field(
-            'wpscac_remove_unused_css',
-            __('Remove Unused CSS', 'wps-cache'),
-            [$this->renderer, 'renderCheckboxField'],
-            'wpsc_settings',
-            'wpscac_cache_settings',
-            [
-                'label_for'   => 'wpscac_remove_unused_css',
-                'option_name' => 'remove_unused_css',
-                'description' => __('Heuristic scan to strip unused styles (Experimental)', 'wps-cache')
-            ]
-        );
-
-        // --- END SOTA FIELDS ---
 
         // Redis Fields
         add_settings_field(
@@ -404,10 +400,10 @@ class SettingsManager
             'redis_cache'        => false,
             'varnish_cache'      => false,
             'css_minify'         => false,
+            'css_async'          => false, // Updated from remove_unused_css
             'js_minify'          => false,
             'js_defer'           => false,
             'js_delay'           => false,
-            'remove_unused_css'  => false,
             'cache_lifetime'     => 3600,
             'excluded_urls'      => [],
             'excluded_css'       => [],

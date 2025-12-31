@@ -34,9 +34,9 @@ class SettingsValidator
             'js_minify'     => (bool)($settings['js_minify'] ?? false),
 
             // --- NEW SOTA SETTINGS ---
-            'js_defer'          => (bool)($settings['js_defer'] ?? false),
-            'js_delay'          => (bool)($settings['js_delay'] ?? false),
-            'remove_unused_css' => (bool)($settings['remove_unused_css'] ?? false),
+            'css_async'     => (bool)($settings['css_async'] ?? false),
+            'js_defer'      => (bool)($settings['js_defer'] ?? false),
+            'js_delay'      => (bool)($settings['js_delay'] ?? false),
             // -------------------------
 
             'cache_lifetime' => $this->sanitizeCacheLifetime($settings['cache_lifetime'] ?? 3600),
@@ -71,8 +71,6 @@ class SettingsValidator
             'advanced_settings' => $this->sanitizeAdvancedSettings($settings['advanced_settings'] ?? [])
         ];
     }
-
-    // ... (Keep the rest of the private sanitizer methods exactly as they were in the previous version) ...
 
     private function sanitizeCacheLifetime(mixed $lifetime): int
     {
