@@ -53,6 +53,7 @@ class SettingsRenderer
 
                 <label class="wpsc-switch">
                     <input type="checkbox"
+                        role="switch"
                         id="wpsc_<?php echo esc_attr($key); ?>"
                         name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                         value="1"

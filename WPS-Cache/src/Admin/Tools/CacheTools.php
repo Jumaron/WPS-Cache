@@ -108,7 +108,7 @@ class CacheTools
                     <span style="font-weight: 600;">Progress</span>
                     <span class="progress-text">0%</span>
                 </div>
-                <progress value="0" max="100" style="width: 100%; height: 10px; border-radius: 5px;"></progress>
+                <progress value="0" max="100" style="width: 100%; height: 10px; border-radius: 5px;" aria-label="<?php echo esc_attr__('Cache Preloading Progress', 'wps-cache'); ?>"></progress>
             </div>
 
             <div class="wpsc-setting-row" style="border: none; padding: 1rem 0 0 0;">

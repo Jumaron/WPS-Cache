@@ -52,7 +52,7 @@ class NoticeManager
                     <span><?php echo wp_kses_post($notice['message']); ?></span>
                 </div>
                 <!-- Custom Dismiss Button (No WP Core classes) -->
-                <button type="button" class="wpsc-dismiss-btn" onclick="this.closest('.wpsc-notice').remove()">
+                <button type="button" class="wpsc-dismiss-btn" onclick="this.closest('.wpsc-notice').remove()" aria-label="<?php echo esc_attr__('Dismiss this notice', 'wps-cache'); ?>">
                     <span class="dashicons dashicons-dismiss"></span>
                 </button>
             </div>
