@@ -7,9 +7,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (!preloadBtn) return;
 
+  const CONCURRENCY_LIMIT = 3;
   let queue = [];
   let total = 0;
   let processed = 0;
+  let activeRequests = 0;
 
   preloadBtn.addEventListener("click", function () {
     // UI Reset
@@ -18,6 +20,8 @@ document.addEventListener("DOMContentLoaded", function () {
     statusSpan.textContent = wpsc_admin.strings.preload_start;
     progressBar.value = 0;
     percentSpan.textContent = "0%";
+    processed = 0;
+    activeRequests = 0;
 
     // Step 1: Get List
     fetch(wpsc_admin.ajax_url, {
@@ -39,8 +43,8 @@ document.addEventListener("DOMContentLoaded", function () {
             finish("No URLs found.");
             return;
           }
-          statusSpan.textContent = "Processing 1 of " + total;
-          processNextUrl();
+          statusSpan.textContent = "Processing 0/" + total;
+          processQueue();
         } else {
           throw new Error("Failed to fetch URLs");
         }
@@ -51,42 +55,54 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   });
 
-  function processNextUrl() {
-    if (queue.length === 0) {
+  function processQueue() {
+    // If finished
+    if (queue.length === 0 && activeRequests === 0) {
       finish(wpsc_admin.strings.preload_complete);
       return;
     }
 
-    const url = queue.shift(); // Now safely callable
-    processed++;
+    // Fill the active slots
+    while (activeRequests < CONCURRENCY_LIMIT && queue.length > 0) {
+      const url = queue.shift();
+      activeRequests++;
 
-    // Update UI
+      updateStatus();
+
+      // Step 2: Warmup Request
+      fetch(wpsc_admin.ajax_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          action: "wpsc_process_preload_url",
+          url: url,
+          _ajax_nonce: wpsc_admin.nonce,
+        }),
+      })
+        .then(() => {
+          // Success
+        })
+        .catch(() => {
+          // Error - ignore
+        })
+        .finally(() => {
+            activeRequests--;
+            processed++;
+            updateProgress();
+            processQueue();
+        });
+    }
+  }
+
+  function updateStatus() {
+     statusSpan.textContent = `Processing ${processed}/${total} (${activeRequests} active)`;
+  }
+
+  function updateProgress() {
     const percent = Math.round((processed / total) * 100);
     progressBar.value = percent;
     percentSpan.textContent = percent + "%";
-
-    // Safety check for URL string
-    const urlDisplay =
-      typeof url === "string" ? url.split("/").pop() || "Home" : "Page";
-    statusSpan.textContent = `Processing ${processed}/${total}: ${urlDisplay}`;
-
-    // Step 2: Warmup Request
-    fetch(wpsc_admin.ajax_url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        action: "wpsc_process_preload_url",
-        url: url,
-        _ajax_nonce: wpsc_admin.nonce,
-      }),
-    })
-      .then(() => {
-        // Continue regardless of individual page errors (404s etc)
-        processNextUrl();
-      })
-      .catch(() => {
-        processNextUrl();
-      });
+    updateStatus();
   }
 
   function finish(msg) {
