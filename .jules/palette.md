@@ -1,3 +1,3 @@
-## 2024-05-23 - Copy to Clipboard Pattern
-**Learning:** Adding a "Copy" button to readonly textareas significantly improves usability. The implementation should prefer `navigator.clipboard` but must fallback to `document.execCommand('copy')` for compatibility. Visual feedback (changing button text/icon) is crucial for "delight".
-**Action:** When displaying large blocks of text (logs, lists, keys), always bundle a copy action. Use the `wpsc-copy-urls` ID pattern and `admin.js` handler as a template.
+## 2024-05-24 - Password Field UX
+**Learning:** For security, password fields are often cleared on render. This confuses users who don't know if a value is saved.
+**Action:** Always provide a "Password is set" indicator (text or icon) when a value exists in the database but the input is cleared. This reassures users without exposing the actual credential.
