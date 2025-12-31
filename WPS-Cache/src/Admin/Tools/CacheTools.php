@@ -228,7 +228,7 @@ class CacheTools
             try {
                 // Sentinel: Restrict preloader to local site only to prevent SSRF
                 // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
-                if (strpos($url, home_url('/')) !== 0) {
+                if (!str_starts_with($url, home_url('/'))) {
                     throw new \Exception('External URLs are not allowed');
                 }
 
