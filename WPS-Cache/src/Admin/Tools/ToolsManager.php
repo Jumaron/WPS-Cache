@@ -35,10 +35,10 @@ class ToolsManager
 
                 <div id="wpsc-preload-progress" style="display:none; margin: 20px 0; background: #f3f4f6; padding: 15px; border-radius: 6px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 600;">
-                        <span id="wpsc-preload-status">Initializing...</span>
+                        <span id="wpsc-preload-status" role="status" aria-live="polite">Initializing...</span>
                         <span id="wpsc-preload-percent">0%</span>
                     </div>
-                    <progress id="wpsc-preload-bar" value="0" max="100" style="width: 100%; height: 10px;"></progress>
+                    <progress id="wpsc-preload-bar" aria-labelledby="wpsc-preload-status" value="0" max="100" style="width: 100%; height: 10px;"></progress>
                 </div>
 
                 <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary">
@@ -53,7 +53,7 @@ class ToolsManager
                 <h2>System Status</h2>
             </div>
             <div class="wpsc-card-body">
-                <textarea readonly class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
             </div>
         </div>
 <?php
