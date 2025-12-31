@@ -110,4 +110,53 @@ document.addEventListener("DOMContentLoaded", function () {
     percentSpan.textContent = "100%";
     preloadBtn.disabled = false;
   }
+
+  // Copy URL List Functionality
+  const copyBtn = document.getElementById("wpsc-copy-urls");
+  const urlsTextarea = document.getElementById("wpsc-preload-urls");
+
+  if (copyBtn && urlsTextarea) {
+    copyBtn.addEventListener("click", function() {
+      // Select the text
+      urlsTextarea.select();
+      urlsTextarea.setSelectionRange(0, 99999); // For mobile devices
+
+      // Copy to clipboard
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(urlsTextarea.value).then(showSuccess, fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
+      } catch (err) {
+        console.error('Failed to copy', err);
+      }
+    });
+
+    function fallbackCopy() {
+        try {
+            document.execCommand('copy');
+            showSuccess();
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+    }
+
+    function showSuccess() {
+        const originalHtml = copyBtn.innerHTML;
+        const originalWidth = copyBtn.offsetWidth;
+
+        copyBtn.style.width = originalWidth + 'px'; // Maintain width
+        copyBtn.innerHTML = '<span class="dashicons dashicons-yes" style="font-size: 14px; width: 14px; height: 14px; margin-top: 6px;"></span> Copied!';
+        copyBtn.classList.remove('wpsc-btn-secondary');
+        copyBtn.classList.add('button-primary', 'wpsc-btn-primary'); // Use primary color for success
+
+        setTimeout(() => {
+            copyBtn.innerHTML = originalHtml;
+            copyBtn.classList.remove('button-primary', 'wpsc-btn-primary');
+            copyBtn.classList.add('wpsc-btn-secondary');
+            copyBtn.style.width = '';
+        }, 2000);
+    }
+  }
 });
