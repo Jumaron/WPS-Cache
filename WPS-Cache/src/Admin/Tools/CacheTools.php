@@ -116,7 +116,7 @@ class CacheTools
                     <summary style="cursor: pointer; color: var(--wpsc-primary);">View URL List</summary>
                     <div style="position: relative; margin-top: 10px;">
                         <div style="display: flex; justify-content: flex-end; margin-bottom: 5px;">
-                            <button type="button" id="wpsc-copy-urls" class="button wpsc-btn-secondary" style="font-size: 12px; padding: 0 10px; height: 28px; line-height: 26px;">
+                            <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-preload-urls" style="font-size: 12px; padding: 0 10px; height: 28px; line-height: 26px;">
                                 <span class="dashicons dashicons-clipboard" style="font-size: 14px; width: 14px; height: 14px; margin-top: 6px;"></span> Copy List
                             </button>
                         </div>
