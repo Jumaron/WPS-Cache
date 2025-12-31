@@ -104,11 +104,11 @@ class CacheTools
             </div>
 
             <div id="wpsc-preload-progress" style="display: none; background: #f9fafb; padding: 1rem; border-radius: 8px; border: 1px solid var(--wpsc-border);">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-weight: 600;">Progress</span>
-                    <span class="progress-text">0%</span>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;" aria-live="polite">
+                    <span id="wpsc-preload-status" style="font-weight: 600;">Progress</span>
+                    <span id="wpsc-preload-percent" class="progress-text">0%</span>
                 </div>
-                <progress value="0" max="100" style="width: 100%; height: 10px; border-radius: 5px;" aria-label="<?php echo esc_attr__('Cache Preloading Progress', 'wps-cache'); ?>"></progress>
+                <progress id="wpsc-preload-bar" value="0" max="100" style="width: 100%; height: 10px; border-radius: 5px;" aria-label="<?php echo esc_attr__('Cache Preloading Progress', 'wps-cache'); ?>"></progress>
             </div>
 
             <div class="wpsc-setting-row" style="border: none; padding: 1rem 0 0 0;">
