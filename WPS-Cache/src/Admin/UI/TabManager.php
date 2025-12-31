@@ -63,11 +63,13 @@ class TabManager
         echo '<nav class="wpsc-nav">';
 
         foreach ($this->tabs as $key => $data) {
-            $activeClass = ($current === $key) ? 'active' : '';
+            $isActive = ($current === $key);
+            $activeClass = $isActive ? 'active' : '';
+            $ariaCurrent = $isActive ? ' aria-current="page"' : '';
             $url = add_query_arg(['page' => 'wps-cache', 'tab' => $key], admin_url('admin.php'));
 
 ?>
-            <a href="<?php echo esc_url($url); ?>" class="wpsc-nav-item <?php echo esc_attr($activeClass); ?>">
+            <a href="<?php echo esc_url($url); ?>" class="wpsc-nav-item <?php echo esc_attr($activeClass); ?>"<?php echo $ariaCurrent; ?>>
                 <span class="dashicons <?php echo esc_attr($data['icon']); ?>"></span>
                 <?php echo esc_html($data['label']); ?>
             </a>
