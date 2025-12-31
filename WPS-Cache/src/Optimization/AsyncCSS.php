@@ -99,6 +99,16 @@ class AsyncCSS
             return '';
         }
 
+        // 1. Check Transient Cache
+        // We use the full URL (including version query strings) for the key
+        // This ensures that if the file version changes, we regenerate the cache.
+        $cache_key = 'wpsc_ccss_' . md5($url);
+        $cached_css = get_transient($cache_key);
+
+        if ($cached_css !== false) {
+            return $cached_css;
+        }
+
         $path = str_replace(site_url(), ABSPATH, $url);
         // Remove query strings (ver=1.2.3)
         $path = strtok($path, '?');
@@ -126,6 +136,10 @@ class AsyncCSS
                 }
             }
         }
+
+        // 2. Set Transient Cache (1 Week)
+        // Even if empty, we cache it to avoid re-reading/re-parsing the file.
+        set_transient($cache_key, $critical, WEEK_IN_SECONDS);
 
         return $critical;
     }
