@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WPSCache\Admin\UI;
 
 /**
- * Manages admin interface navigation tabs
+ * Manages admin interface navigation (Sidebar Style)
  */
 class TabManager
 {
@@ -26,24 +26,37 @@ class TabManager
      */
     private function initializeTabs(): void
     {
+        // Using "FlyingPress" style logical grouping
         $this->tabs = [
             'settings' => [
-                'label'      => __('Settings', 'wps-cache'),
+                'label'      => __('Dashboard', 'wps-cache'),
                 'capability' => 'manage_options',
-                'icon'       => 'dashicons-admin-generic',
+                'icon'       => 'dashicons-dashboard',
                 'order'      => 10
+            ],
+            'cache' => [ // Split settings
+                'label'      => __('Cache', 'wps-cache'),
+                'capability' => 'manage_options',
+                'icon'       => 'dashicons-database',
+                'order'      => 20
+            ],
+            'css_js' => [ // New distinct tab
+                'label'      => __('CSS & JS', 'wps-cache'),
+                'capability' => 'manage_options',
+                'icon'       => 'dashicons-editor-code',
+                'order'      => 30
             ],
             'analytics' => [
                 'label'      => __('Analytics', 'wps-cache'),
                 'capability' => 'manage_options',
                 'icon'       => 'dashicons-chart-bar',
-                'order'      => 20
+                'order'      => 40
             ],
             'tools' => [
                 'label'      => __('Tools', 'wps-cache'),
                 'capability' => 'manage_options',
                 'icon'       => 'dashicons-admin-tools',
-                'order'      => 30
+                'order'      => 50
             ]
         ];
     }
@@ -53,18 +66,35 @@ class TabManager
      *
      * @param string $current_tab Currently active tab
      */
-    public function renderTabs(string $current_tab = 'settings'): void
+    public function renderSidebar(string $current_tab = 'settings'): void
     {
         $tabs = $this->getAccessibleTabs();
-
-        if (empty($tabs)) {
-            return;
-        }
 ?>
-        <div class="nav-tab-wrapper wp-clearfix">
-            <?php foreach ($tabs as $tab_id => $tab): ?>
-                <?php $this->renderTab($tab_id, $tab, $current_tab === $tab_id); ?>
-            <?php endforeach; ?>
+        <div class="wpsc-sidebar">
+            <nav class="wpsc-nav">
+                <?php foreach ($tabs as $tab_id => $tab): ?>
+                    <?php
+                    $url = add_query_arg(['page' => 'wps-cache', 'tab' => $tab_id], admin_url('admin.php'));
+                    $active = $current_tab === $tab_id ? 'active' : '';
+                    ?>
+                    <a href="<?php echo esc_url($url); ?>" class="wpsc-nav-item <?php echo esc_attr($active); ?>">
+                        <span class="dashicons <?php echo esc_attr($tab['icon']); ?>"></span>
+                        <?php echo esc_html($tab['label']); ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+
+            <!-- Quick Action in Sidebar -->
+            <div style="margin-top: 2rem; padding: 1rem; background: #f3f4f6; border-radius: 8px; text-align: center;">
+                <p style="margin-bottom: 0.5rem; font-size: 0.8rem; color: #666;">Need a boost?</p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php wp_nonce_field('wpsc_clear_cache'); ?>
+                    <input type="hidden" name="action" value="wpsc_clear_cache">
+                    <button type="submit" class="button wpsc-btn-secondary" style="width: 100%;">
+                        <span class="dashicons dashicons-trash" style="vertical-align: middle; font-size: 16px;"></span> Purge All
+                    </button>
+                </form>
+            </div>
         </div>
     <?php
     }
@@ -240,11 +270,6 @@ class TabManager
     public function getCurrentTab(): string
     {
         $current_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'settings';
-
-        if (!$this->isTabAccessible($current_tab)) {
-            return 'settings';
-        }
-
-        return $current_tab;
+        return isset($this->tabs[$current_tab]) ? $current_tab : 'settings';
     }
 }

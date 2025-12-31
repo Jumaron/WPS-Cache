@@ -21,60 +21,64 @@ class CacheTools
     }
 
     /**
-     * Renders cache management interface
+     * Renders cache management interface (New Grid Layout)
      */
     public function renderCacheManagement(): void
     {
         $object_cache_installed = file_exists(WP_CONTENT_DIR . '/object-cache.php');
 ?>
-        <div class="wpsc-cache-management">
-            <!-- Clear Cache -->
-            <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Clear Cache', 'wps-cache'); ?></h4>
-                <p class="description">
-                    <?php esc_html_e('Clear all active caches including HTML, Redis, and Varnish caches.', 'wps-cache'); ?>
-                </p>
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                    <?php wp_nonce_field('wpsc_clear_cache'); ?>
-                    <input type="hidden" name="action" value="wpsc_clear_cache">
-                    <button type="submit" class="button button-primary">
-                        <?php esc_html_e('Clear All Caches', 'wps-cache'); ?>
-                    </button>
-                </form>
-            </div>
+        <div class="wpsc-stats-grid" style="margin-bottom: 2rem;">
+            <!-- Clear Cache Card -->
+            <div class="wpsc-card" style="margin-bottom: 0;">
+                <div class="wpsc-card-body" style="text-align: center; padding: 2rem;">
+                    <div style="background: #eff6ff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+                        <span class="dashicons dashicons-trash" style="color: var(--wpsc-primary); font-size: 24px; width: 24px; height: 24px;"></span>
+                    </div>
+                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Purge Entire Cache</h3>
+                    <p style="color: var(--wpsc-text-muted); margin-bottom: 1.5rem;">Clear HTML, Redis, and Varnish caches.</p>
 
-            <!-- Object Cache Drop-in -->
-            <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Object Cache Drop-in', 'wps-cache'); ?></h4>
-                <?php if ($object_cache_installed): ?>
-                    <p class="wpsc-status-ok">
-                        <?php esc_html_e('Object cache drop-in is installed and active.', 'wps-cache'); ?>
-                    </p>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                        <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
-                        <input type="hidden" name="action" value="wpsc_remove_object_cache">
-                        <button type="submit" class="button button-secondary">
-                            <?php esc_html_e('Remove Object Cache Drop-in', 'wps-cache'); ?>
+                        <?php wp_nonce_field('wpsc_clear_cache'); ?>
+                        <input type="hidden" name="action" value="wpsc_clear_cache">
+                        <button type="submit" class="button wpsc-btn-primary" style="width: 100%;">
+                            Clear All Caches
                         </button>
                     </form>
-                <?php else: ?>
-                    <p class="wpsc-status-warning">
-                        <?php esc_html_e('Object cache drop-in is not installed.', 'wps-cache'); ?>
-                    </p>
-                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                        <?php wp_nonce_field('wpsc_install_object_cache'); ?>
-                        <input type="hidden" name="action" value="wpsc_install_object_cache">
-                        <button type="submit" class="button button-primary">
-                            <?php esc_html_e('Install Object Cache Drop-in', 'wps-cache'); ?>
-                        </button>
-                    </form>
-                <?php endif; ?>
+                </div>
             </div>
 
-            <!-- Cache Status -->
-            <div class="wpsc-tool-box">
-                <h4><?php esc_html_e('Cache Status', 'wps-cache'); ?></h4>
-                <?php $this->renderCacheStatus(); ?>
+            <!-- Object Cache Drop-in Card -->
+            <div class="wpsc-card" style="margin-bottom: 0;">
+                <div class="wpsc-card-body" style="text-align: center; padding: 2rem;">
+                    <div style="background: #f3f4f6; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+                        <span class="dashicons dashicons-database" style="color: #4b5563; font-size: 24px; width: 24px; height: 24px;"></span>
+                    </div>
+                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Object Cache Drop-in</h3>
+
+                    <?php if ($object_cache_installed): ?>
+                        <p style="color: var(--wpsc-success); margin-bottom: 1.5rem; font-weight: 500;">
+                            <span class="dashicons dashicons-yes"></span> Installed & Active
+                        </p>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                            <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
+                            <input type="hidden" name="action" value="wpsc_remove_object_cache">
+                            <button type="submit" class="button wpsc-btn-secondary" style="color: var(--wpsc-danger); border-color: var(--wpsc-danger); width: 100%;">
+                                Uninstall Drop-in
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <p style="color: var(--wpsc-warning); margin-bottom: 1.5rem;">
+                            Not Installed
+                        </p>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                            <?php wp_nonce_field('wpsc_install_object_cache'); ?>
+                            <input type="hidden" name="action" value="wpsc_install_object_cache">
+                            <button type="submit" class="button wpsc-btn-primary" style="width: 100%;">
+                                Install Drop-in
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     <?php
@@ -88,223 +92,39 @@ class CacheTools
         $urls = $this->getPreloadUrls();
     ?>
         <div class="wpsc-preload-tools">
-            <p class="description">
-                <?php esc_html_e('Preload cache for your most important pages to ensure optimal performance.', 'wps-cache'); ?>
+            <p class="wpsc-setting-desc" style="margin-bottom: 1rem;">
+                Preload cache for your most important pages to ensure optimal performance.
+                Found <strong><?php echo count($urls); ?></strong> URLs to process.
             </p>
 
-            <div class="wpsc-preload-urls">
-                <h4><?php esc_html_e('URLs to Preload', 'wps-cache'); ?></h4>
-                <textarea id="wpsc-preload-urls" class="large-text code" rows="5" readonly>
-                    <?php echo esc_textarea(implode("\n", $urls)); ?>
-                </textarea>
-                <p class="description">
-                    <?php esc_html_e('These URLs will be preloaded. You can customize the list in settings.', 'wps-cache'); ?>
-                </p>
+            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+                <button type="button" class="button wpsc-btn-primary" id="wpsc-preload-cache">
+                    Start Preloading
+                </button>
             </div>
 
-            <button type="button" class="button button-primary" id="wpsc-preload-cache">
-                <?php esc_html_e('Start Preloading', 'wps-cache'); ?>
-            </button>
+            <div id="wpsc-preload-progress" style="display: none; background: #f9fafb; padding: 1rem; border-radius: 8px; border: 1px solid var(--wpsc-border);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600;">Progress</span>
+                    <span class="progress-text">0%</span>
+                </div>
+                <progress value="0" max="100" style="width: 100%; height: 10px; border-radius: 5px;"></progress>
+            </div>
 
-            <div id="wpsc-preload-progress" style="display: none;">
-                <progress value="0" max="100"></progress>
-                <span class="progress-text">0%</span>
+            <div class="wpsc-setting-row" style="border: none; padding: 1rem 0 0 0;">
+                <details>
+                    <summary style="cursor: pointer; color: var(--wpsc-primary);">View URL List</summary>
+                    <textarea id="wpsc-preload-urls" class="wpsc-textarea" rows="5" readonly style="margin-top: 10px; width: 100%;">
+                        <?php echo esc_textarea(implode("\n", $urls)); ?>
+                    </textarea>
+                </details>
             </div>
         </div>
-    <?php
-    }
-
-    /**
-     * Renders cache status information
-     */
-    private function renderCacheStatus(): void
-    {
-        $stats = $this->getCacheStats();
-    ?>
-        <table class="widefat striped">
-            <tbody>
-                <tr>
-                    <th><?php esc_html_e('HTML Cache', 'wps-cache'); ?></th>
-                    <td>
-                        <?php if ($stats['html']['enabled']): ?>
-                            <span class="wpsc-status-ok">
-                                <?php
-                                echo esc_html(sprintf(
-                                    /* translators: %1$s: number of files, %2$s: total cache size */
-                                    __('Active - %1$s files, %2$s total size', 'wps-cache'),
-                                    number_format_i18n($stats['html']['files']),
-                                    size_format($stats['html']['size'])
-                                ));
-                                ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Redis Cache', 'wps-cache'); ?></th>
-                    <td>
-                        <?php if ($stats['redis']['enabled']): ?>
-                            <span class="wpsc-status-ok">
-                                <?php
-                                echo esc_html(sprintf(
-                                    /* translators: %1$s: amount of memory used */
-                                    __('Connected - %1$s memory used', 'wps-cache'),
-                                    size_format($stats['redis']['memory_used'])
-                                ));
-                                ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Varnish Cache', 'wps-cache'); ?></th>
-                    <td>
-                        <?php if ($stats['varnish']['enabled']): ?>
-                            <span class="wpsc-status-ok">
-                                <?php esc_html_e('Active and responding', 'wps-cache'); ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="wpsc-status-inactive"><?php esc_html_e('Inactive', 'wps-cache'); ?></span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Last Cache Clear', 'wps-cache'); ?></th>
-                    <td>
-                        <?php
-                        $last_clear = get_transient('wpsc_last_cache_clear');
-                        echo esc_html(
-                            $last_clear
-                                ? human_time_diff($last_clear) . ' ' . __('ago', 'wps-cache')
-                                : __('Never', 'wps-cache')
-                        );
-                        ?>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
 <?php
     }
 
     /**
-     * Gets cache statistics
-     */
-    private function getCacheStats(): array
-    {
-        $settings = get_option('wpsc_settings');
-
-        return [
-            'html'    => $this->getHtmlCacheStats($settings),
-            'redis'   => $this->getRedisCacheStats($settings),
-            'varnish' => $this->getVarnishCacheStats($settings)
-        ];
-    }
-
-    /**
-     * Gets HTML cache statistics
-     */
-    private function getHtmlCacheStats(array $settings): array
-    {
-        $enabled = (bool)($settings['html_cache'] ?? false);
-        if (!$enabled) {
-            return ['enabled' => false];
-        }
-
-        $cache_dir = WPSC_CACHE_DIR . 'html/';
-        $total_size = 0;
-        $file_count = 0;
-
-        if (is_dir($cache_dir)) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($cache_dir, \RecursiveDirectoryIterator::SKIP_DOTS)
-            );
-
-            foreach ($iterator as $file) {
-                if ($file->isFile() && $file->getExtension() === 'html') {
-                    $total_size += $file->getSize();
-                    $file_count++;
-                }
-            }
-        }
-
-        return [
-            'enabled' => true,
-            'files'   => $file_count,
-            'size'    => $total_size
-        ];
-    }
-
-    /**
-     * Gets Redis cache statistics
-     */
-    private function getRedisCacheStats(array $settings): array
-    {
-        $enabled = (bool)($settings['redis_cache'] ?? false);
-        if (!$enabled) {
-            return ['enabled' => false];
-        }
-
-        try {
-            $redis_driver = $this->cache_manager->getDriver('redis');
-            if (!$redis_driver instanceof RedisCache) {
-                return null;
-            }
-
-            $stats = $redis_driver->getStats();
-
-            return [
-                'enabled'           => true,
-                'memory_used'       => $stats['memory_used'] ?? 0,
-                'connected_clients' => $stats['connected_clients'] ?? 0,
-                'hits'              => $stats['hits'] ?? 0,
-                'misses'            => $stats['misses'] ?? 0
-            ];
-        } catch (\Exception $e) {
-            return [
-                'enabled' => true,
-                'error'   => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Gets Varnish cache statistics
-     */
-    private function getVarnishCacheStats(array $settings): array
-    {
-        $enabled = (bool)($settings['varnish_cache'] ?? false);
-        if (!$enabled) {
-            return ['enabled' => false];
-        }
-
-        try {
-            $varnish_host = $settings['varnish_host'] ?? '127.0.0.1';
-            $varnish_port = (int)($settings['varnish_port'] ?? 6081);
-
-            // Use wp_remote_get() instead of fsockopen()/fclose()
-            $response = wp_remote_get("http://{$varnish_host}:{$varnish_port}", ['timeout' => 1]);
-            $connected = !is_wp_error($response);
-
-            return [
-                'enabled'   => true,
-                'connected' => $connected,
-                'error'     => $connected ? null : 'Connection failed'
-            ];
-        } catch (\Exception $e) {
-            return [
-                'enabled'   => true,
-                'connected' => false,
-                'error'     => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Clears all caches
+     * Clears all caches (Full Logic)
      */
     public function clearAllCaches(): array
     {
@@ -340,7 +160,6 @@ class CacheTools
 
             set_transient('wpsc_last_cache_clear', time());
         } catch (\Exception $e) {
-            // Removed debug logging.
             $success = false;
         }
 
@@ -351,14 +170,14 @@ class CacheTools
     }
 
     /**
-     * Gets URLs for preloading
+     * Gets URLs for preloading (Full Logic)
      */
     public function getPreloadUrls(): array
     {
         $settings = get_option('wpsc_settings');
         $urls = $settings['preload_urls'] ?? [];
 
-        // Add important URLs if not specified
+        // Add important URLs if not specified manually
         if (empty($urls)) {
             $url_set = [];
 
@@ -397,7 +216,7 @@ class CacheTools
     }
 
     /**
-     * Preloads cache for specified URLs
+     * Preloads cache for specified URLs (Full Logic)
      */
     public function preloadCache(): array
     {
@@ -443,7 +262,7 @@ class CacheTools
                 ];
             }
 
-            // Small delay between URLs
+            // Small delay between URLs to prevent server overload
             usleep(250000); // 0.25 second delay
         }
 
@@ -462,50 +281,33 @@ class CacheTools
     }
 
     /**
-     * Performs scheduled cache maintenance
+     * Performs scheduled cache maintenance (Full Logic)
      */
     public function performMaintenance(): void
     {
         try {
-            // Clean expired HTML cache files
-            $this->cleanExpiredHtmlCache();
+            $settings = get_option('wpsc_settings');
+            $lifetime = $settings['cache_lifetime'] ?? 3600;
+            $cache_dir = WPSC_CACHE_DIR . 'html/';
 
-            // Optimize Redis if enabled
-            if ($this->isRedisEnabled()) {
-                $this->optimizeRedisCache();
-            }
-        } catch (\Exception $e) {
-            // Removed debug logging.
-        }
-    }
-
-    /**
-     * Cleans expired HTML cache files
-     */
-    private function cleanExpiredHtmlCache(): void
-    {
-        $settings = get_option('wpsc_settings');
-        $lifetime = $settings['cache_lifetime'] ?? 3600;
-        $cache_dir = WPSC_CACHE_DIR . 'html/';
-        $files = glob($cache_dir . '*.html');
-        $cleaned = 0;
-
-        if (is_array($files)) {
-            foreach ($files as $file) {
-                if (is_file($file) && (time() - filemtime($file)) >= $lifetime) {
-                    if (wp_delete_file($file)) {
-                        $cleaned++;
+            if (is_dir($cache_dir)) {
+                $files = glob($cache_dir . '*.html');
+                if ($files) {
+                    foreach ($files as $file) {
+                        if (is_file($file) && (time() - filemtime($file)) >= $lifetime) {
+                            @unlink($file);
+                        }
                     }
                 }
             }
-        }
 
-        return;
+            // Optimize Redis if enabled
+            $this->optimizeRedisCache();
+        } catch (\Exception $e) {
+            // Log error if needed
+        }
     }
 
-    /**
-     * Optimizes Redis cache
-     */
     private function optimizeRedisCache(): void
     {
         try {
@@ -524,12 +326,12 @@ class CacheTools
                 $redis_driver->deleteExpired();
             }
         } catch (\Exception $e) {
-            // Removed debug logging.
+            // Ignore errors
         }
     }
 
     /**
-     * Installs object cache drop-in
+     * Installs object cache drop-in (Full Logic)
      */
     public function installObjectCache(): array
     {
@@ -568,7 +370,7 @@ class CacheTools
     }
 
     /**
-     * Removes object cache drop-in
+     * Removes object cache drop-in (Full Logic)
      */
     public function removeObjectCache(): array
     {
@@ -599,14 +401,5 @@ class CacheTools
                 'message' => $e->getMessage()
             ];
         }
-    }
-
-    /**
-     * Checks if Redis is enabled
-     */
-    private function isRedisEnabled(): bool
-    {
-        $settings = get_option('wpsc_settings');
-        return (bool)($settings['redis_cache'] ?? false);
     }
 }

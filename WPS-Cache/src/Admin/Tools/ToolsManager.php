@@ -54,31 +54,31 @@ class ToolsManager
             return;
         }
 ?>
-        <div class="wpsc-tools-container">
-            <h2><?php esc_html_e('Cache Tools', 'wps-cache'); ?></h2>
+        <div class="wpsc-tools-view">
+            <!-- Cache Management (Grid Layout) -->
+            <?php $this->cache_tools->renderCacheManagement(); ?>
 
-            <!-- Cache Management -->
-            <div class="wpsc-tool-section">
-                <h3><?php esc_html_e('Cache Management', 'wps-cache'); ?></h3>
-                <?php $this->cache_tools->renderCacheManagement(); ?>
+            <!-- Preloading (Card Layout) -->
+            <div class="wpsc-card">
+                <div class="wpsc-card-header">
+                    <h2><?php esc_html_e('Cache Preloading', 'wps-cache'); ?></h2>
+                </div>
+                <div class="wpsc-card-body">
+                    <?php $this->cache_tools->renderPreloadingTools(); ?>
+                </div>
             </div>
 
-            <!-- Cache Preloading -->
-            <div class="wpsc-tool-section">
-                <h3><?php esc_html_e('Cache Preloading', 'wps-cache'); ?></h3>
-                <?php $this->cache_tools->renderPreloadingTools(); ?>
-            </div>
+            <!-- Import/Export (Grid Layout) -->
+            <?php $this->import_export_tools->renderImportExport(); ?>
 
-            <!-- Import/Export -->
-            <div class="wpsc-tool-section">
-                <h3><?php esc_html_e('Import/Export Settings', 'wps-cache'); ?></h3>
-                <?php $this->import_export_tools->renderImportExport(); ?>
-            </div>
-
-            <!-- Diagnostic Information -->
-            <div class="wpsc-tool-section">
-                <h3><?php esc_html_e('Diagnostic Information', 'wps-cache'); ?></h3>
-                <?php $this->diagnostic_tools->renderDiagnostics(); ?>
+            <!-- Diagnostics (Card Layout) -->
+            <div class="wpsc-card">
+                <div class="wpsc-card-header">
+                    <h2><?php esc_html_e('System Diagnostics', 'wps-cache'); ?></h2>
+                </div>
+                <div class="wpsc-card-body">
+                    <?php $this->diagnostic_tools->renderDiagnostics(); ?>
+                </div>
             </div>
         </div>
 <?php

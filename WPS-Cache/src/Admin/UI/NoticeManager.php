@@ -26,7 +26,9 @@ class NoticeManager
 
     public function __construct()
     {
-        add_action('admin_notices', [$this, 'displayNotices']);
+        // INTENTIONALLY LEFT EMPTY
+        // We removed add_action('admin_notices') to prevent double rendering.
+        // The displayNotices() method is now called manually in AdminPanelManager.
     }
 
     /**
@@ -34,7 +36,6 @@ class NoticeManager
      */
     public function displayNotices(): void
     {
-
         $this->displayQueuedNotices();
         $this->displayStatusNotices();
         $this->displaySystemNotices();
@@ -42,11 +43,6 @@ class NoticeManager
 
     /**
      * Adds a notice to the queue
-     *
-     * @param string $message Notice message
-     * @param string $type Notice type (info|success|warning|error)
-     * @param bool $dismissible Whether notice is dismissible
-     * @param array $args Additional arguments
      */
     public function addNotice(
         string $message,
@@ -255,125 +251,38 @@ class NoticeManager
     {
         // PHP version check
         if (version_compare(PHP_VERSION, '7.4', '<')) {
-            /* translators: %s: current PHP version */
             $message = __('WPS Cache requires PHP 7.4 or higher. Your current PHP version is %s.', 'wps-cache');
-            $this->renderNotice(
-                sprintf(
-                    $message,
-                    PHP_VERSION
-                ),
-                'error'
-            );
+            $this->renderNotice(sprintf($message, PHP_VERSION), 'error');
         }
 
         // Check for conflicting plugins
         $conflicting_plugins = $this->getConflictingPlugins();
         if (!empty($conflicting_plugins)) {
-            /* translators: %s: list of conflicting plugin names */
             $message = __('The following plugins may conflict with WPS Cache: %s', 'wps-cache');
-            $this->renderNotice(
-                sprintf(
-                    $message,
-                    implode(', ', $conflicting_plugins)
-                ),
-                'warning'
-            );
-        }
-
-        // WordPress version check
-        global $wp_version;
-        if (version_compare($wp_version, '5.6', '<')) {
-            /* translators: %s: current WordPress version */
-            $message = __('WPS Cache recommends WordPress 5.6 or higher. Your current version is %s.', 'wps-cache');
-            $this->renderNotice(
-                sprintf(
-                    $message,
-                    $wp_version
-                ),
-                'warning'
-            );
+            $this->renderNotice(sprintf($message, implode(', ', $conflicting_plugins)), 'warning');
         }
     }
 
-    /**
-     * Displays configuration warnings
-     */
     private function displayConfigurationWarnings(): void
     {
         $settings = get_option('wpsc_settings', []);
 
-        // Redis extension check
         if (($settings['redis_cache'] ?? false) && !extension_loaded('redis')) {
-            $this->renderNotice(
-                __('Redis cache is enabled but the Redis PHP extension is not installed.', 'wps-cache'),
-                'error'
-            );
+            $this->renderNotice(__('Redis cache is enabled but the Redis PHP extension is not installed.', 'wps-cache'), 'error');
         }
 
-        // Object cache dropin check
         if (($settings['redis_cache'] ?? false) && !file_exists(WP_CONTENT_DIR . '/object-cache.php')) {
-            $this->renderNotice(
-                __('Redis cache is enabled but the object cache drop-in is not installed.', 'wps-cache'),
-                'warning'
-            );
-        }
-
-        // Varnish configuration check
-        if (($settings['varnish_cache'] ?? false) && !function_exists('curl_init')) {
-            $this->renderNotice(
-                __('Varnish cache is enabled but the PHP cURL extension is not installed.', 'wps-cache'),
-                'warning'
-            );
-        }
-
-        // Cache directory permissions using WP_Filesystem
-        $cache_dir = WPSC_CACHE_DIR;
-        if (!function_exists('WP_Filesystem')) {
-            require_once(ABSPATH . 'wp-admin/includes/file.php');
-        }
-        WP_Filesystem();
-        global $wp_filesystem;
-        if (!$wp_filesystem->is_writable($cache_dir)) {
-            /* translators: %s: cache directory path */
-            $message = __('The cache directory %s is not writable. Please check the permissions.', 'wps-cache');
-            $this->renderNotice(
-                sprintf(
-                    $message,
-                    '<code>' . esc_html($cache_dir) . '</code>'
-                ),
-                'error'
-            );
+            $this->renderNotice(__('Redis cache is enabled but the object cache drop-in is not installed.', 'wps-cache'), 'warning');
         }
     }
 
-    /**
-     * Displays performance-related notices
-     */
     private function displayPerformanceNotices(): void
     {
-        // OPcache check
         if (!function_exists('opcache_get_status')) {
-            $this->renderNotice(
-                __('OPcache is not enabled. Enabling it can significantly improve performance.', 'wps-cache'),
-                'info',
-                true,
-                ['documentation_url' => 'https://www.php.net/manual/en/book.opcache.php']
-            );
-        }
-
-        // Memory limit check
-        $memory_limit = wp_convert_hr_to_bytes(ini_get('memory_limit'));
-        if ($memory_limit < 64 * MB_IN_BYTES) {
-            $this->renderNotice(
-                __('PHP memory limit is low. Consider increasing it to at least 64MB for better performance.', 'wps-cache'),
-                'warning'
-            );
+            $this->renderNotice(__('OPcache is not enabled. Enabling it can significantly improve performance.', 'wps-cache'), 'info');
         }
     }
 
-    /**
-     * Gets list of potentially conflicting plugins
-     */
     private function getConflictingPlugins(): array
     {
         $conflicting_plugins = [];
@@ -394,7 +303,7 @@ class NoticeManager
     }
 
     /**
-     * Renders a notice
+     * Renders a notice using the new CSS classes
      */
     private function renderNotice(
         string $message,
@@ -402,58 +311,33 @@ class NoticeManager
         bool $dismissible = true,
         array $args = []
     ): void {
-        $classes = ['notice', self::NOTICE_TYPES[$type] ?? 'notice-info'];
+        // Map types to dashicons
+        $icon_map = [
+            'success' => 'dashicons-yes-alt',
+            'error'   => 'dashicons-warning',
+            'warning' => 'dashicons-flag',
+            'info'    => 'dashicons-info',
+        ];
 
-        if ($dismissible) {
-            $classes[] = 'is-dismissible';
-        }
+        $css_class = self::NOTICE_TYPES[$type] ?? 'notice-info';
+        $icon = $icon_map[$type] ?? 'dashicons-info';
 ?>
-        <div class="<?php echo esc_attr(implode(' ', $classes)); ?>">
-            <p><?php echo wp_kses_post($message); ?></p>
-
-            <?php if (!empty($args['documentation_url'])): ?>
-                <p>
-                    <a href="<?php echo esc_url($args['documentation_url']); ?>"
-                        target="_blank"
-                        rel="noopener noreferrer">
-                        <?php esc_html_e('Learn more', 'wps-cache'); ?> ›
-                    </a>
-                </p>
+        <div class="wpsc-notice <?php echo esc_attr($css_class); ?>">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
+                <span><?php echo wp_kses_post($message); ?></span>
+            </div>
+            <?php if ($dismissible): ?>
+                <button type="button" class="notice-dismiss" style="position: static; text-decoration: none; margin: 0;">
+                    <span class="screen-reader-text">Dismiss</span>
+                </button>
             <?php endif; ?>
         </div>
 <?php
     }
 
-    /**
-     * Clears all notices
-     */
     public function clearNotices(): void
     {
         delete_transient(self::NOTICES_TRANSIENT);
-    }
-
-    /**
-     * Gets count of current notices
-     */
-    public function getNoticeCount(): int
-    {
-        $notices = get_transient(self::NOTICES_TRANSIENT);
-        return is_array($notices) ? count($notices) : 0;
-    }
-
-    /**
-     * Checks if there are any notices
-     */
-    public function hasNotices(): bool
-    {
-        return $this->getNoticeCount() > 0;
-    }
-
-    /**
-     * Gets all current notices without displaying them
-     */
-    public function getNotices(): array
-    {
-        return get_transient(self::NOTICES_TRANSIENT) ?: [];
     }
 }

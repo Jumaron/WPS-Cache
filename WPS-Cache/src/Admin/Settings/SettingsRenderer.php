@@ -5,349 +5,164 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Settings;
 
 /**
- * Renders the settings interface for WPS Cache
+ * Renders the modern UI components (Cards, Toggles, Inputs)
  */
 class SettingsRenderer
 {
     /**
-     * Renders the main settings page
+     * Renders the opening form tag and security fields
      */
-    public function renderSettingsPage(): void
+    public function renderSettingsFormStart(): void
     {
-        $settings = get_option('wpsc_settings');
+        echo '<form method="post" action="options.php" class="wpsc-settings-form">';
+        settings_fields('wpsc_settings');
+    }
+
+    /**
+     * Renders the submit button and closing form tag
+     */
+    public function renderSettingsFormEnd(): void
+    {
 ?>
-        <form method="post" action="options.php" class="wpsc-settings-form">
-            <?php settings_fields('wpsc_settings'); ?>
-
-            <!-- Cache & Optimization Types Section -->
-            <div class="wpsc-section">
-                <h2><?php esc_html_e('Cache & Optimization', 'wps-cache'); ?></h2>
-                <div class="wpsc-cache-types-grid">
-                    <?php $this->renderCacheTypeCards($settings); ?>
-                </div>
-            </div>
-
-            <!-- Redis Settings -->
-            <div id="redis-settings" class="wpsc-section"
-                style="<?php echo (!($settings['redis_cache'] ?? false)) ? 'display: none;' : ''; ?>">
-                <h2><?php esc_html_e('Redis Configuration', 'wps-cache'); ?></h2>
-                <table class="form-table">
-                    <?php $this->renderRedisSettings($settings); ?>
-                </table>
-            </div>
-
-            <!-- Advanced Settings -->
-            <div class="wpsc-section">
-                <h2><?php esc_html_e('Advanced Settings', 'wps-cache'); ?></h2>
-                <table class="form-table">
-                    <?php $this->renderAdvancedSettings($settings); ?>
-                </table>
-            </div>
-
-            <?php submit_button(__('Save Settings', 'wps-cache')); ?>
+        <div class="wpsc-submit-section" style="margin-top: 2rem; border-top: 1px solid var(--wpsc-border); padding-top: 1.5rem;">
+            <?php submit_button(__('Save Changes', 'wps-cache'), 'primary wpsc-btn-primary large'); ?>
+        </div>
         </form>
     <?php
     }
 
     /**
-     * Renders cache type selection cards
+     * Renders a styled modern card wrapper
+     *
+     * @param string   $title            Card title
+     * @param string   $description      Card description (optional)
+     * @param callable $content_callback Function to output the card body
      */
-    private function renderCacheTypeCards(array $settings): void
-    {
-        $cache_types = [
-            // Core Cache
-            'html_cache' => [
-                'label'       => __('Static HTML Cache', 'wps-cache'),
-                'description' => __('Cache static HTML pages for faster delivery', 'wps-cache')
-            ],
-            'redis_cache' => [
-                'label'       => __('Redis Object Cache', 'wps-cache'),
-                'description' => __('Cache database queries using Redis', 'wps-cache')
-            ],
-            'varnish_cache' => [
-                'label'       => __('Varnish Cache', 'wps-cache'),
-                'description' => __('HTTP cache acceleration using Varnish', 'wps-cache')
-            ],
-
-            // CSS Optimization
-            'css_minify' => [
-                'label'       => __('CSS Minification', 'wps-cache'),
-                'description' => __('Minify CSS files', 'wps-cache')
-            ],
-            'css_async' => [
-                'label'       => __('Load CSS Asynchronously', 'wps-cache'),
-                'description' => __('Eliminate render-blocking CSS (Safe Method)', 'wps-cache')
-            ],
-
-            // JS Optimization
-            'js_minify' => [
-                'label'       => __('JavaScript Minification', 'wps-cache'),
-                'description' => __('Minify JavaScript files', 'wps-cache')
-            ],
-            'js_defer' => [
-                'label'       => __('Defer JavaScript', 'wps-cache'),
-                'description' => __('Non-blocking script loading (Safe)', 'wps-cache')
-            ],
-            'js_delay' => [
-                'label'       => __('Delay JavaScript', 'wps-cache'),
-                'description' => __('Load scripts only after user interaction (SOTA)', 'wps-cache')
-            ]
-        ];
-
-        foreach ($cache_types as $type => $info) {
-            $this->renderCacheTypeCard($type, $info, $settings[$type] ?? false);
-        }
-    }
-
-    /**
-     * Renders individual cache type card
-     */
-    private function renderCacheTypeCard(string $type, array $info, bool $enabled): void
+    public function renderCard(string $title, string $description, callable $content_callback): void
     {
     ?>
-        <div class="wpsc-cache-type-card">
-            <label>
-                <input type="checkbox"
-                    name="wpsc_settings[<?php echo esc_attr($type); ?>]"
-                    value="1"
-                    <?php checked($enabled); ?>
-                    class="wpsc-toggle-settings"
-                    data-target="<?php echo esc_attr(str_replace('_', '-', $type)); ?>-settings">
-                <?php echo esc_html($info['label']); ?>
-            </label>
-            <p class="description">
-                <?php echo esc_html($info['description']); ?>
-            </p>
+        <div class="wpsc-card">
+            <div class="wpsc-card-header">
+                <div>
+                    <h2><?php echo esc_html($title); ?></h2>
+                    <?php if (!empty($description)): ?>
+                        <p class="wpsc-setting-desc"><?php echo esc_html($description); ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="wpsc-card-body">
+                <?php call_user_func($content_callback); ?>
+            </div>
         </div>
     <?php
     }
 
     /**
-     * Renders Redis settings fields
+     * Renders an iOS-style Toggle Switch Row
+     *
+     * @param string $key         Setting key
+     * @param string $label       Setting label
+     * @param string $description Setting description
+     * @param array  $settings    Current settings array
      */
-    private function renderRedisSettings(array $settings): void
+    public function renderToggleRow(string $key, string $label, string $description, array $settings): void
     {
-        $redis_fields = [
-            'redis_host' => [
-                'label'       => __('Redis Host', 'wps-cache'),
-                'type'        => 'text',
-                'description' => __('Redis server hostname or IP address', 'wps-cache')
-            ],
-            'redis_port' => [
-                'label'       => __('Redis Port', 'wps-cache'),
-                'type'        => 'number',
-                'min'         => 1,
-                'max'         => 65535,
-                'description' => __('Redis server port number', 'wps-cache')
-            ],
-            'redis_password' => [
-                'label'       => __('Redis Password', 'wps-cache'),
-                'type'        => 'password',
-                'description' => __('Redis server password (leave empty if no authentication required)', 'wps-cache')
-            ],
-            'redis_db' => [
-                'label'       => __('Redis Database', 'wps-cache'),
-                'type'        => 'number',
-                'min'         => 0,
-                'max'         => 15,
-                'description' => __('Redis database index (0-15)', 'wps-cache')
-            ],
-            'redis_prefix' => [
-                'label'       => __('Redis Key Prefix', 'wps-cache'),
-                'type'        => 'text',
-                'description' => __('Prefix for Redis keys (default: wpsc:)', 'wps-cache')
-            ]
-        ];
-
-        foreach ($redis_fields as $key => $field) {
-            $this->renderSettingField($key, $field, $settings[$key] ?? '');
-        }
-
-        // Render Redis options
-        $this->renderCheckboxField(
-            'redis_persistent',
-            __('Persistent Connections', 'wps-cache'),
-            $settings['redis_persistent'] ?? false,
-            __('Maintains persistent connections to Redis between requests', 'wps-cache')
-        );
-
-        $this->renderCheckboxField(
-            'redis_compression',
-            __('Enable Compression', 'wps-cache'),
-            $settings['redis_compression'] ?? true,
-            __('Compress cache data to save memory', 'wps-cache')
-        );
-    }
-
-    /**
-     * Renders advanced settings fields
-     */
-    private function renderAdvancedSettings(array $settings): void
-    {
-        $advanced = $settings['advanced_settings'] ?? [];
-
-        // Cache Lifetime
-        $this->renderSettingField(
-            'cache_lifetime',
-            [
-                'label'       => __('Cache Lifetime', 'wps-cache'),
-                'type'        => 'number',
-                'min'         => 60,
-                'max'         => 2592000,
-                'description' => __('Cache lifetime in seconds (default: 3600)', 'wps-cache')
-            ],
-            $settings['cache_lifetime'] ?? 3600
-        );
-
-        // Object Cache Options Limit
-        $this->renderSettingField(
-            'object_cache_alloptions_limit',
-            [
-                'label'       => __('Alloptions Limit', 'wps-cache'),
-                'type'        => 'number',
-                'min'         => 100,
-                'max'         => 5000,
-                'description' => __('Maximum number of options to store in alloptions cache', 'wps-cache')
-            ],
-            $advanced['object_cache_alloptions_limit'] ?? 1000
-        );
-
-        // Excluded URLs
-        $this->renderTextareaField(
-            'excluded_urls',
-            __('Excluded URLs', 'wps-cache'),
-            $settings['excluded_urls'] ?? [],
-            __('Enter one URL per line', 'wps-cache')
-        );
-
-        // Cache Groups
-        $this->renderTextareaField(
-            'cache_groups',
-            __('Cache Groups', 'wps-cache'),
-            $advanced['cache_groups'] ?? [],
-            __('Enter one cache group per line', 'wps-cache')
-        );
-    }
-
-    /**
-     * Renders a generic setting field
-     */
-    private function renderSettingField(string $key, array $field, mixed $value): void
-    {
+        $checked = isset($settings[$key]) && (bool)$settings[$key];
     ?>
-        <tr>
-            <th scope="row">
-                <label for="wpsc_<?php echo esc_attr($key); ?>">
-                    <?php echo esc_html($field['label']); ?>
+        <div class="wpsc-setting-row">
+            <div class="wpsc-setting-info">
+                <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
+                    <?php echo esc_html($label); ?>
                 </label>
-            </th>
-            <td>
-                <input type="<?php echo esc_attr($field['type']); ?>"
-                    id="wpsc_<?php echo esc_attr($key); ?>"
-                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                    value="<?php echo esc_attr($value); ?>"
-                    class="regular-text"
-                    <?php if (isset($field['min'])) echo 'min="' . esc_attr($field['min']) . '"'; ?>
-                    <?php if (isset($field['max'])) echo 'max="' . esc_attr($field['max']) . '"'; ?>>
-                <p class="description">
-                    <?php echo esc_html($field['description']); ?>
-                </p>
-            </td>
-        </tr>
-    <?php
-    }
-
-    /**
-     * Renders a checkbox field
-     */
-    private function renderCheckboxField(string $key, string $label, bool $checked, string $description): void
-    {
-    ?>
-        <tr>
-            <th scope="row"><?php echo esc_html($label); ?></th>
-            <td>
-                <label>
+                <p class="wpsc-setting-desc"><?php echo esc_html($description); ?></p>
+            </div>
+            <div class="wpsc-setting-control">
+                <label class="wpsc-switch">
                     <input type="checkbox"
+                        id="wpsc_<?php echo esc_attr($key); ?>"
                         name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                         value="1"
                         <?php checked($checked); ?>>
-                    <?php echo esc_html($description); ?>
+                    <span class="wpsc-slider"></span>
                 </label>
-            </td>
-        </tr>
+            </div>
+        </div>
     <?php
     }
 
     /**
-     * Renders a textarea field
+     * Renders a standard Input Row (Text, Number, Password, Textarea, Select)
+     *
+     * @param string $key         Setting key
+     * @param string $label       Setting label
+     * @param string $description Setting description
+     * @param array  $settings    Current settings array
+     * @param string $type        Input type (text, number, password, textarea, select)
+     * @param array  $attrs       Additional attributes or options for select
      */
-    private function renderTextareaField(string $key, string $label, array $values, string $description): void
+    public function renderInputRow(string $key, string $label, string $description, array $settings, string $type = 'text', array $attrs = []): void
     {
+        $value = $settings[$key] ?? '';
+
+        // Convert array to string for textareas (e.g., excluded URLs)
+        if (is_array($value) && $type === 'textarea') {
+            $value = implode("\n", $value);
+        }
+
+        // Build extra attributes string
+        $attr_str = '';
+        foreach ($attrs as $k => $v) {
+            if ($k !== 'options') { // Skip options array used for selects
+                $attr_str .= esc_attr($k) . '="' . esc_attr($v) . '" ';
+            }
+        }
     ?>
-        <tr>
-            <th scope="row">
-                <label for="wpsc_<?php echo esc_attr($key); ?>">
+        <div class="wpsc-setting-row" style="flex-direction: column; align-items: stretch;">
+            <div class="wpsc-setting-info" style="margin-bottom: 0.75rem;">
+                <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
                     <?php echo esc_html($label); ?>
                 </label>
-            </th>
-            <td>
-                <textarea id="wpsc_<?php echo esc_attr($key); ?>"
-                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                    rows="5"
-                    class="large-text code"><?php echo esc_textarea(implode("\n", $values)); ?></textarea>
-                <p class="description">
-                    <?php echo esc_html($description); ?>
-                </p>
-            </td>
-        </tr>
-    <?php
-    }
+                <?php if (!empty($description)): ?>
+                    <p class="wpsc-setting-desc"><?php echo esc_html($description); ?></p>
+                <?php endif; ?>
+            </div>
 
-    /**
-     * Renders settings section information
-     */
-    public function renderCacheSettingsInfo(): void
-    {
-    ?>
-        <p>
-            <?php esc_html_e('Configure which types of caching you want to enable and their basic settings.', 'wps-cache'); ?>
-        </p>
-    <?php
-    }
+            <div class="wpsc-setting-control" style="width: 100%;">
+                <?php if ($type === 'textarea'): ?>
 
-    /**
-     * Renders Redis settings section information
-     */
-    public function renderRedisSettingsInfo(): void
-    {
-    ?>
-        <p>
-            <?php esc_html_e('Configure your Redis server connection settings. Redis provides powerful object caching capabilities.', 'wps-cache'); ?>
-        </p>
-    <?php
-    }
+                    <textarea class="wpsc-textarea"
+                        id="wpsc_<?php echo esc_attr($key); ?>"
+                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                        rows="4"
+                        <?php echo $attr_str; ?>><?php echo esc_textarea($value); ?></textarea>
 
-    /**
-     * Renders Varnish settings section information
-     */
-    public function renderVarnishSettingsInfo(): void
-    {
-    ?>
-        <p>
-            <?php esc_html_e('Configure Varnish cache settings if you are using Varnish as a reverse proxy cache.', 'wps-cache'); ?>
-        </p>
-    <?php
-    }
+                <?php elseif ($type === 'select'): ?>
 
-    /**
-     * Renders advanced settings section information
-     */
-    public function renderAdvancedSettingsInfo(): void
-    {
-    ?>
-        <p>
-            <?php esc_html_e('Advanced settings for fine-tuning cache behavior. Change these only if you know what you\'re doing.', 'wps-cache'); ?>
-        </p>
+                    <select class="wpsc-input-text"
+                        id="wpsc_<?php echo esc_attr($key); ?>"
+                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                        <?php echo $attr_str; ?>>
+                        <?php if (isset($attrs['options']) && is_array($attrs['options'])): ?>
+                            <?php foreach ($attrs['options'] as $opt_val => $opt_label): ?>
+                                <option value="<?php echo esc_attr($opt_val); ?>" <?php selected($value, $opt_val); ?>>
+                                    <?php echo esc_html($opt_label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+
+                <?php else: ?>
+
+                    <input type="<?php echo esc_attr($type); ?>"
+                        class="wpsc-input-<?php echo esc_attr($type === 'password' ? 'password' : 'text'); ?>"
+                        id="wpsc_<?php echo esc_attr($key); ?>"
+                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                        value="<?php echo esc_attr($value); ?>"
+                        <?php echo $attr_str; ?>>
+
+                <?php endif; ?>
+            </div>
+        </div>
 <?php
     }
 }

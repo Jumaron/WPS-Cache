@@ -11,9 +11,6 @@ use WPSCache\Admin\Tools\ToolsManager;
 use WPSCache\Admin\UI\TabManager;
 use WPSCache\Admin\UI\NoticeManager;
 
-/**
- * Main coordinator class for the WPS Cache admin interface
- */
 final class AdminPanelManager
 {
     private CacheManager $cache_manager;
@@ -30,9 +27,6 @@ final class AdminPanelManager
         $this->initializeHooks();
     }
 
-    /**
-     * Initializes all admin component managers
-     */
     private function initializeComponents(): void
     {
         $this->settings_manager = new SettingsManager($this->cache_manager);
@@ -42,21 +36,16 @@ final class AdminPanelManager
         $this->notice_manager = new NoticeManager();
     }
 
-    /**
-     * Sets up WordPress admin hooks
-     */
     private function initializeHooks(): void
     {
-        // Admin menu and assets
         add_action('admin_menu', [$this, 'addAdminMenu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAdminAssets']);
 
-        // Ajax handlers
+        // Ajax & Post Handlers
         add_action('wp_ajax_wpsc_get_cache_stats', [$this->analytics_manager, 'handleAjaxGetCacheStats']);
         add_action('wp_ajax_wpsc_get_cache_metrics', [$this->analytics_manager, 'handleAjaxGetCacheMetrics']);
         add_action('wp_ajax_wpsc_preload_cache', [$this->tools_manager, 'handleAjaxPreloadCache']);
 
-        // Admin post handlers
         add_action('admin_post_wpsc_clear_cache', [$this->tools_manager, 'handleCacheClear']);
         add_action('admin_post_wpsc_install_object_cache', [$this->tools_manager, 'handleInstallObjectCache']);
         add_action('admin_post_wpsc_remove_object_cache', [$this->tools_manager, 'handleRemoveObjectCache']);
@@ -64,107 +53,65 @@ final class AdminPanelManager
         add_action('admin_post_wpsc_import_settings', [$this->tools_manager, 'handleImportSettings']);
     }
 
-    /**
-     * Adds the plugin's admin menu item
-     */
     public function addAdminMenu(): void
     {
-        add_menu_page(
-            'WPS Cache',
-            'WPS Cache',
-            'manage_options',
-            'wps-cache',
-            [$this, 'renderAdminPage'],
-            'dashicons-performance',
-            100
-        );
+        add_menu_page('WPS Cache', 'WPS Cache', 'manage_options', 'wps-cache', [$this, 'renderAdminPage'], 'dashicons-performance', 100);
     }
 
-    /**
-     * Enqueues admin scripts and styles
-     */
     public function enqueueAdminAssets(string $hook): void
     {
-        if ('toplevel_page_wps-cache' !== $hook) {
-            return;
-        }
+        if ('toplevel_page_wps-cache' !== $hook) return;
 
-        // Styles
-        wp_enqueue_style(
-            'wpsc-admin-styles',
-            WPSC_PLUGIN_URL . 'assets/css/admin.css',
-            [],
-            WPSC_VERSION
-        );
+        // Use time() during dev to bust cache, WPSC_VERSION in prod
+        $ver = defined('WP_DEBUG') && WP_DEBUG ? time() : WPSC_VERSION;
 
-        wp_enqueue_script(
-            'wpsc-admin-scripts',
-            WPSC_PLUGIN_URL . 'assets/js/admin.js',
-            [],
-            WPSC_VERSION,
-            true
-        );
-
+        wp_enqueue_style('wpsc-admin-styles', WPSC_PLUGIN_URL . 'assets/css/admin.css', [], $ver);
+        wp_enqueue_script('wpsc-admin-scripts', WPSC_PLUGIN_URL . 'assets/js/admin.js', [], $ver, true);
         wp_localize_script('wpsc-admin-scripts', 'wpsc_admin', $this->getJsConfig());
     }
 
-    /**
-     * Gets the JavaScript configuration array
-     */
     private function getJsConfig(): array
     {
         return [
-            'ajax_url'         => admin_url('admin-ajax.php'),
-            'nonce'            => wp_create_nonce('wpsc_ajax_nonce'),
-            'strings'          => $this->getJsStrings(),
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('wpsc_ajax_nonce'),
+            'strings' => [
+                'preload_progress' => __('Preloading: %d%%', 'wps-cache'),
+                'preload_complete' => __('Preloading completed', 'wps-cache'),
+                'preload_error' => __('Error during preloading', 'wps-cache'),
+            ],
             'refresh_interval' => 30000,
         ];
     }
 
-    /**
-     * Gets translated strings for JavaScript
-     */
-    private function getJsStrings(): array
-    {
-        return [
-            'confirm_clear_cache'    => __('Are you sure you want to clear all caches?', 'wps-cache'),
-            'confirm_install_dropin' => __('Are you sure you want to install the object cache drop-in?', 'wps-cache'),
-            'confirm_remove_dropin'  => __('Are you sure you want to remove the object cache drop-in?', 'wps-cache'),
-            'loading'                => __('Loading...', 'wps-cache'),
-            'error'                  => __('An error occurred', 'wps-cache'),
-            'success'                => __('Operation completed successfully', 'wps-cache'),
-            /* translators: %d: percentage of preloading progress */
-            'preload_progress'       => __('Preloading: %d%%', 'wps-cache'),
-            'preload_complete'       => __('Preloading completed', 'wps-cache'),
-            'preload_error'          => __('Error during preloading', 'wps-cache'),
-            'export_error'           => __('Error exporting settings', 'wps-cache'),
-            'import_error'           => __('Error importing settings', 'wps-cache'),
-            'invalid_file'           => __('Invalid settings file', 'wps-cache')
-        ];
-    }
-
-    /**
-     * Renders the main admin page
-     */
     public function renderAdminPage(): void
     {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
+        if (!current_user_can('manage_options')) return;
 
-        // Use TabManager's method to retrieve the active tab, which properly sanitizes
-        // and verifies the nonce for the 'tab' query variable.
+        // CRITICAL FIX: Remove default WP notices to prevent duplication and layout breakage
+        remove_all_actions('admin_notices');
+
         $current_tab = $this->tab_manager->getCurrentTab();
 ?>
-        <div class="wrap">
-            <h1><?php esc_html_e('WPS Cache', 'wps-cache'); ?></h1>
+        <div class="wpsc-wrap">
+            <div class="wpsc-header">
+                <div class="wpsc-logo">
+                    <h1><span class="dashicons dashicons-performance" style="font-size: 30px; width: 30px; height: 30px;"></span> WPS Cache <span class="wpsc-version">v<?php echo WPSC_VERSION; ?></span></h1>
+                </div>
+                <div class="wpsc-header-actions">
+                    <a href="#" class="wpsc-btn-secondary">Documentation</a>
+                </div>
+            </div>
 
-            <div class="wpsc-admin-container">
-                <nav class="wpsc-tabs">
-                    <?php $this->tab_manager->renderTabs($current_tab); ?>
-                </nav>
+            <!-- Custom Notice Area -->
+            <div style="padding-top: 20px;">
+                <?php $this->notice_manager->displayNotices(); ?>
+            </div>
 
-                <div class="wpsc-tab-content">
+            <div class="wpsc-layout">
+                <?php $this->tab_manager->renderSidebar($current_tab); ?>
+
+                <div class="wpsc-content">
                     <?php $this->renderTabContent($current_tab); ?>
                 </div>
             </div>
@@ -172,9 +119,6 @@ final class AdminPanelManager
 <?php
     }
 
-    /**
-     * Renders the content for the current tab
-     */
     private function renderTabContent(string $current_tab): void
     {
         switch ($current_tab) {
@@ -184,8 +128,14 @@ final class AdminPanelManager
             case 'tools':
                 $this->tools_manager->renderTab();
                 break;
+            case 'cache':
+                $this->settings_manager->renderCacheTab();
+                break;
+            case 'css_js':
+                $this->settings_manager->renderCssJsTab();
+                break;
             default:
-                $this->settings_manager->renderTab();
+                $this->settings_manager->renderDashboardTab();
         }
     }
 }

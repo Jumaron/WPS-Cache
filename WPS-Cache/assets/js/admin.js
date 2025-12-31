@@ -1,10 +1,25 @@
 document.addEventListener("DOMContentLoaded", function () {
+  // 1. Attempt to find the button
   const preloadButton = document.getElementById("wpsc-preload-cache");
+
+  // 2. SAFETY CHECK: If button doesn't exist (e.g., we are on Dashboard tab), STOP immediately.
+  if (!preloadButton) {
+    return;
+  }
+
+  // 3. Now it is safe to look for the progress bar elements
   const progressBar = document.getElementById("wpsc-preload-progress");
+
+  // Extra safety: ensure progress bar exists before querying inside it
+  if (!progressBar) {
+    console.warn(
+      "WPS Cache: Preload button found but progress bar is missing."
+    );
+    return;
+  }
+
   const progressText = progressBar.querySelector(".progress-text");
   const progressElement = progressBar.querySelector("progress");
-
-  if (!preloadButton) return;
 
   async function startPreloading() {
     try {
