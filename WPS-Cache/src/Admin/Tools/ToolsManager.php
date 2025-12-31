@@ -105,6 +105,12 @@ class ToolsManager
         $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
         if (empty($url)) wp_send_json_error('No URL provided');
 
+        // Sentinel: Restrict preloader to local site only to prevent SSRF
+        // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
+        if (strpos($url, home_url('/')) !== 0) {
+            wp_send_json_error('External URLs are not allowed');
+        }
+
         // Perform the request
         // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
         $response = wp_safe_remote_get($url, [
