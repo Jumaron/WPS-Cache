@@ -215,15 +215,18 @@ class CacheTools
         }
 
         $cache_dir = WPSC_CACHE_DIR . 'html/';
-        $files = glob($cache_dir . '*.html');
         $total_size = 0;
         $file_count = 0;
 
-        if (is_array($files)) {
-            $file_count = count($files);
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    $total_size += filesize($file);
+        if (is_dir($cache_dir)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($cache_dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === 'html') {
+                    $total_size += $file->getSize();
+                    $file_count++;
                 }
             }
         }

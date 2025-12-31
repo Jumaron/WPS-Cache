@@ -115,22 +115,37 @@ final class HTMLCache extends AbstractCacheDriver
         if (empty($content)) return $content;
 
         try {
-            // 1. Minify HTML (Existing logic)
+            // 1. Minify HTML first
             $content = $this->minifyHTML($content);
 
             // 2. Initialize Optimizers
             $jsOptimizer = new JSOptimizer($this->settings);
-            // Note: CSSOptimizer usually requires intercepting the CSS queue, 
-            // but here we can at least filter inline CSS if needed.
-            // For full RUCSS, we would need to capture the enqueued styles first.
+            $cssOptimizer = new CSSOptimizer($this->settings);
 
-            // 3. Apply JS Optimization (Defer/Delay)
+            // 3. Process JS (Defer/Delay)
             $content = $jsOptimizer->process($content);
 
-            // 4. Add Cache Comment
-            $content .= $this->getCacheComment($content, $content); // Size calc might be off slightly due to modifiers
+            // 4. Process CSS (Remove Unused CSS)
+            if (!empty($this->settings['remove_unused_css'])) {
+                // A. Optimize Inline Styles <style>...</style>
+                $content = preg_replace_callback(
+                    '/<style\s*(.*?)>(.*?)<\/style>/is',
+                    function ($matches) use ($cssOptimizer, $content) {
+                        // Pass the FULL HTML ($content) to the optimizer so it knows all classes
+                        $optimizedCSS = $cssOptimizer->process($content, $matches[2]);
 
-            // 5. Save to Disk
+                        // If optimization emptied the block, remove it entirely
+                        if (empty(trim($optimizedCSS))) return '';
+
+                        return "<style {$matches[1]}>{$optimizedCSS}</style>";
+                    },
+                    $content
+                );
+            }
+
+            // 5. Add Cache Comment
+            $content .= $this->getCacheComment($content, $content);
+
             $this->set('ignored', $content);
 
             return $content;
