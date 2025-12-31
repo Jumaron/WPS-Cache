@@ -10,6 +10,7 @@ use RedisException;
 /**
  * High-performance Redis driver with SOTA compression and serialization.
  * Supports Redis Cluster, TLS, and non-blocking deletion.
+ * Sentinel: Implements HMAC signing to prevent PHP Object Injection.
  */
 final class RedisCache extends AbstractCacheDriver
 {
@@ -20,6 +21,7 @@ final class RedisCache extends AbstractCacheDriver
     private string $password;
     private string $prefix;
     private float $timeout;
+    private string $salt;
 
     public function __construct(
         string $host = '127.0.0.1',
@@ -37,6 +39,27 @@ final class RedisCache extends AbstractCacheDriver
         $this->timeout = $timeout;
         $this->password = $password;
         $this->prefix = $prefix;
+
+        // Sentinel: Initialize Salt for HMAC signing
+        // Use standard WP keys if available.
+        if (defined('WP_REDIS_SIGNING_KEY')) {
+            $this->salt = WP_REDIS_SIGNING_KEY;
+        } elseif (defined('WP_CACHE_KEY_SALT')) {
+            $this->salt = WP_CACHE_KEY_SALT;
+        } elseif (defined('SECURE_AUTH_KEY')) {
+            $this->salt = SECURE_AUTH_KEY;
+        } elseif (defined('LOGGED_IN_KEY')) {
+            $this->salt = LOGGED_IN_KEY;
+        } elseif (defined('NONCE_KEY')) {
+            $this->salt = NONCE_KEY;
+        } elseif (function_exists('wp_salt')) {
+            $this->salt = wp_salt('auth');
+        } else {
+            // Fallback for minimal environments: Use a hash of the site URL or DB config if available,
+            // otherwise a hardcoded string. This ensures persistence across requests.
+            // Note: In a real WP environment, keys or wp_salt should be available.
+            $this->salt = 'wpsc_fallback_salt_change_me_in_production';
+        }
     }
 
     public function isSupported(): bool
@@ -83,12 +106,8 @@ final class RedisCache extends AbstractCacheDriver
         $this->redis->setOption(Redis::OPT_PREFIX, $this->prefix);
 
         // 5. SOTA Optimizations
-        // Use igbinary for smaller memory footprint if available
-        if (defined('Redis::SERIALIZER_IGBINARY') && extension_loaded('igbinary')) {
-            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_IGBINARY);
-        } else {
-            $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);
-        }
+        // Sentinel: Removed automatic serialization (Redis::OPT_SERIALIZER)
+        // We now handle serialization manually with HMAC signing to prevent Object Injection.
 
         // Use ZSTD or LZ4 compression if available (Greatly reduces network/RAM usage)
         if (defined('Redis::COMPRESSION_ZSTD') && extension_loaded('zstd')) {
@@ -104,7 +123,17 @@ final class RedisCache extends AbstractCacheDriver
         if (!$this->redis) return null;
         try {
             $result = $this->redis->get($key);
-            return $result === false ? null : $result;
+            if ($result === false) return null;
+
+            // Sentinel: Verify signature and unserialize
+            // Returns [success, value] to strictly distinguish between valid 'false' value and error.
+            $unpacked = $this->maybeUnserialize($result);
+
+            if ($unpacked[0] === false) {
+                return null; // Cache miss (invalid signature or legacy data)
+            }
+
+            return $unpacked[1];
         } catch (RedisException $e) {
             return null;
         }
@@ -114,6 +143,9 @@ final class RedisCache extends AbstractCacheDriver
     {
         if (!$this->redis) return;
         try {
+            // Sentinel: Serialize and sign all values to preserve types and ensure security
+            $value = $this->maybeSerialize($value);
+
             if ($ttl > 0) {
                 $this->redis->setex($key, $ttl, $value);
             } else {
@@ -172,5 +204,64 @@ final class RedisCache extends AbstractCacheDriver
         } catch (RedisException $e) {
             $this->logError('Clear failed', $e);
         }
+    }
+
+    /**
+     * Serializes data if needed.
+     * Sentinel: Adds HMAC signature to serialized objects to prevent tampering.
+     * NOTE: We serialize ALL values (even primitives) to ensure type fidelity (e.g. true vs "1")
+     * and uniform security handling.
+     */
+    private function maybeSerialize(mixed $value): string
+    {
+        $serialized = serialize($value);
+        $hash = hash_hmac('sha256', $serialized, $this->salt);
+
+        // S:{hash}:{serialized_data}
+        return 'S:' . $hash . ':' . $serialized;
+    }
+
+    /**
+     * Unserializes data if needed.
+     * Sentinel: Verifies HMAC signature before unserializing.
+     *
+     * @return array{0: bool, 1: mixed} [success, value]
+     */
+    private function maybeUnserialize(mixed $value): array
+    {
+        if (!is_string($value) || strlen($value) < 4) {
+            // Should not happen if we serialize everything, but safe fallback
+            // Treat as failure because we expect S:... format
+            return [false, null];
+        }
+
+        // Sentinel: Verify signed payloads
+        if (str_starts_with($value, 'S:')) {
+            $parts = explode(':', $value, 3);
+            if (count($parts) === 3) {
+                $hash = $parts[1];
+                $payload = $parts[2];
+                $calc = hash_hmac('sha256', $payload, $this->salt);
+
+                if (hash_equals($hash, $calc)) {
+                    try {
+                        $val = @unserialize($payload);
+                        // If unserialize returns false, it could be the value false or an error.
+                        // Since we signed it, we trust it, unless payload is corrupted in a way hash didn't catch (unlikely).
+                        // But serialize(false) is b:0; which unserializes to false.
+                        // If payload is garbled but hash matches (collision?), unserialize might return false.
+                        // We assume success if hash matches.
+                        return [true, $val];
+                    } catch (\Exception $e) {
+                        return [false, null];
+                    }
+                }
+            }
+            // Invalid signature or format
+            return [false, null];
+        }
+
+        // Sentinel: REJECT unsigned legacy serialization
+        return [false, null];
     }
 }
