@@ -528,7 +528,21 @@ final class MinifyCSS extends AbstractCacheDriver
         if (!isset($style->src)) return null;
         $src = $style->src;
         if (strpos($src, 'http') !== 0) $src = site_url($src);
-        return str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
+
+        $path = str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
+
+        // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
+        $realPath = realpath($path);
+        if ($realPath === false || !str_starts_with($realPath, ABSPATH)) {
+            return null;
+        }
+
+        // Sentinel Fix: Ensure strictly CSS extension
+        if (pathinfo($realPath, PATHINFO_EXTENSION) !== 'css') {
+            return null;
+        }
+
+        return $realPath;
     }
 
     private function updateStyleRegistration($style, string $cache_file): void
