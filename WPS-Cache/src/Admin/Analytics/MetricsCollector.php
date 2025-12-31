@@ -27,7 +27,6 @@ class MetricsCollector
     {
         $settings = get_option('wpsc_settings', []);
 
-        // FIX: Check toggle. If disabled, return dummy data.
         if (empty($settings['enable_metrics'])) {
             return [
                 'timestamp' => current_time('mysql'),
