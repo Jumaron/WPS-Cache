@@ -35,8 +35,15 @@ document.addEventListener("DOMContentLoaded", function () {
       .then((res) => res.json())
       .then((res) => {
         if (res.success) {
-          // CRITICAL FIX: Ensure we have an Array, even if PHP sent an Object
-          queue = Array.isArray(res.data) ? res.data : Object.values(res.data);
+          // CRITICAL FIX: Ensure we have an Array.
+          // The backend now guarantees an array via array_values(), so we can rely on it.
+          // However, we keep a check for robustness.
+          if (Array.isArray(res.data)) {
+             queue = res.data;
+          } else {
+             console.warn("API returned non-array, attempting fallback", res.data);
+             queue = Object.values(res.data);
+          }
 
           total = queue.length;
           if (total === 0) {

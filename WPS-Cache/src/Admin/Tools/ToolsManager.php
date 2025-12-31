@@ -93,6 +93,7 @@ class ToolsManager
 
         // CRITICAL FIX: array_values() re-indexes the array (0,1,2...)
         // ensuring json_encode outputs an Array [...], not an Object {"0":...}
+        // This addresses the API consistency issue, allowing frontend to expect an Array.
         wp_send_json_success(array_values(array_unique($urls)));
     }
 
