@@ -8,6 +8,7 @@ use WPSCache\Cache\CacheManager;
 use WPSCache\Admin\Settings\SettingsManager;
 use WPSCache\Admin\UI\TabManager;
 use WPSCache\Admin\UI\NoticeManager;
+use WPSCache\Admin\Tools\ToolsManager; // Import ToolsManager
 
 final class AdminPanelManager
 {
@@ -15,6 +16,7 @@ final class AdminPanelManager
     private SettingsManager $settingsManager;
     private TabManager $tabManager;
     private NoticeManager $noticeManager;
+    private ToolsManager $toolsManager; // Add Property
 
     public function __construct(CacheManager $cacheManager)
     {
@@ -22,6 +24,7 @@ final class AdminPanelManager
         $this->settingsManager = new SettingsManager($cacheManager);
         $this->tabManager = new TabManager();
         $this->noticeManager = new NoticeManager();
+        $this->toolsManager = new ToolsManager(); // Initialize Controller
 
         $this->initializeHooks();
     }
@@ -32,6 +35,9 @@ final class AdminPanelManager
         add_action('admin_bar_menu', [$this, 'registerAdminBarNode'], 99);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_post_wpsc_clear_cache', [$this, 'handleManualClear']);
+
+        // Register AJAX hooks from sub-managers (Analytics is handled in its own class usually, but Tools needs explicit init)
+        // ToolsManager hooks are registered in its __construct, which we just called.
     }
 
     public function registerAdminMenu(): void
@@ -78,7 +84,8 @@ final class AdminPanelManager
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce'    => wp_create_nonce('wpsc_ajax_nonce'),
             'strings'  => [
-                'preload_error' => __('Error starting preload', 'wps-cache'),
+                'preload_start' => __('Gathering URLs...', 'wps-cache'),
+                'preload_error' => __('Error during preload.', 'wps-cache'),
                 'preload_complete' => __('Preloading Complete!', 'wps-cache')
             ]
         ]);
@@ -90,11 +97,8 @@ final class AdminPanelManager
         check_admin_referer('wpsc_clear_cache');
 
         $this->cacheManager->clearAllCaches();
-
-        // Add flash message
         $this->noticeManager->add('All caches have been purged successfully.', 'success');
 
-        // Redirect back
         wp_redirect(remove_query_arg('wpsc_cleared', wp_get_referer()));
         exit;
     }
@@ -102,15 +106,11 @@ final class AdminPanelManager
     public function renderAdminPage(): void
     {
         if (!current_user_can('manage_options')) return;
-
-        // CRITICAL FIX: Remove standard WP notices so they don't appear above our header
         remove_all_actions('admin_notices');
 
         $current_tab = $this->tabManager->getCurrentTab();
 ?>
         <div class="wpsc-wrap">
-
-            <!-- Custom Header -->
             <div class="wpsc-header">
                 <div class="wpsc-logo">
                     <h1>
@@ -120,19 +120,16 @@ final class AdminPanelManager
                     </h1>
                 </div>
                 <div class="wpsc-actions">
-                    <a href="https://github.com/Jumaron/WPS-Cache" target="_blank" class="wpsc-btn-secondary">Documentation</a>
+                    <a href="#" class="wpsc-btn-secondary">Documentation</a>
                 </div>
             </div>
 
-            <!-- Layout -->
             <div class="wpsc-layout">
-
                 <div class="wpsc-sidebar">
                     <?php $this->tabManager->renderSidebar($current_tab); ?>
                 </div>
 
                 <div class="wpsc-content">
-                    <!-- CRITICAL FIX: Render Notices HERE, under the header, inside the content area -->
                     <div class="wpsc-notices-area">
                         <?php settings_errors('wpsc_settings'); ?>
                         <?php $this->noticeManager->renderNotices(); ?>
@@ -151,7 +148,7 @@ final class AdminPanelManager
                                 $this->settingsManager->renderAdvancedTab();
                                 break;
                             case 'tools':
-                                (new \WPSCache\Admin\Tools\ToolsManager())->render();
+                                $this->toolsManager->render(); // Use the instantiated property
                                 break;
                             case 'analytics':
                                 (new \WPSCache\Admin\Analytics\AnalyticsManager($this->cacheManager))->render();

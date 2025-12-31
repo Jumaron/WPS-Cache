@@ -1,70 +1,98 @@
 document.addEventListener("DOMContentLoaded", function () {
-  // 1. Attempt to find the button
-  const preloadButton = document.getElementById("wpsc-preload-cache");
+  const preloadBtn = document.getElementById("wpsc-start-preload");
+  const progressDiv = document.getElementById("wpsc-preload-progress");
+  const statusSpan = document.getElementById("wpsc-preload-status");
+  const percentSpan = document.getElementById("wpsc-preload-percent");
+  const progressBar = document.getElementById("wpsc-preload-bar");
 
-  // 2. SAFETY CHECK: If button doesn't exist (e.g., we are on Dashboard tab), STOP immediately.
-  if (!preloadButton) {
-    return;
-  }
+  if (!preloadBtn) return;
 
-  // 3. Now it is safe to look for the progress bar elements
-  const progressBar = document.getElementById("wpsc-preload-progress");
+  let queue = [];
+  let total = 0;
+  let processed = 0;
 
-  // Extra safety: ensure progress bar exists before querying inside it
-  if (!progressBar) {
-    console.warn(
-      "WPS Cache: Preload button found but progress bar is missing."
-    );
-    return;
-  }
+  preloadBtn.addEventListener("click", function () {
+    // UI Reset
+    preloadBtn.disabled = true;
+    progressDiv.style.display = "block";
+    statusSpan.textContent = wpsc_admin.strings.preload_start;
+    progressBar.value = 0;
+    percentSpan.textContent = "0%";
 
-  const progressText = progressBar.querySelector(".progress-text");
-  const progressElement = progressBar.querySelector("progress");
+    // Step 1: Get List
+    fetch(wpsc_admin.ajax_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        action: "wpsc_get_preload_urls",
+        _ajax_nonce: wpsc_admin.nonce,
+      }),
+    })
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success) {
+          // CRITICAL FIX: Ensure we have an Array, even if PHP sent an Object
+          queue = Array.isArray(res.data) ? res.data : Object.values(res.data);
 
-  async function startPreloading() {
-    try {
-      preloadButton.disabled = true;
-      progressBar.style.display = "block";
-      progressElement.value = 0;
-      progressText.textContent = "0%";
-
-      const response = await fetch(wpsc_admin.ajax_url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          action: "wpsc_preload_cache",
-          _ajax_nonce: wpsc_admin.nonce,
-        }),
+          total = queue.length;
+          if (total === 0) {
+            finish("No URLs found.");
+            return;
+          }
+          statusSpan.textContent = "Processing 1 of " + total;
+          processNextUrl();
+        } else {
+          throw new Error("Failed to fetch URLs");
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        finish("Error: " + err.message);
       });
+  });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const jsonResponse = await response.json();
-
-      if (!jsonResponse.success) {
-        throw new Error(jsonResponse.data || wpsc_admin.strings.preload_error);
-      }
-
-      const data = jsonResponse.data;
-
-      // Update final progress
-      progressElement.value = 100;
-      progressText.textContent = `100% (${data.total}/${data.total} URLs)`;
-
-      // Show completion message
-      alert(wpsc_admin.strings.preload_complete);
-    } catch (error) {
-      console.error("Preload error:", error);
-      alert(wpsc_admin.strings.preload_error);
-    } finally {
-      preloadButton.disabled = false;
-      progressBar.style.display = "none";
+  function processNextUrl() {
+    if (queue.length === 0) {
+      finish(wpsc_admin.strings.preload_complete);
+      return;
     }
+
+    const url = queue.shift(); // Now safely callable
+    processed++;
+
+    // Update UI
+    const percent = Math.round((processed / total) * 100);
+    progressBar.value = percent;
+    percentSpan.textContent = percent + "%";
+
+    // Safety check for URL string
+    const urlDisplay =
+      typeof url === "string" ? url.split("/").pop() || "Home" : "Page";
+    statusSpan.textContent = `Processing ${processed}/${total}: ${urlDisplay}`;
+
+    // Step 2: Warmup Request
+    fetch(wpsc_admin.ajax_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        action: "wpsc_process_preload_url",
+        url: url,
+        _ajax_nonce: wpsc_admin.nonce,
+      }),
+    })
+      .then(() => {
+        // Continue regardless of individual page errors (404s etc)
+        processNextUrl();
+      })
+      .catch(() => {
+        processNextUrl();
+      });
   }
 
-  preloadButton.addEventListener("click", startPreloading);
+  function finish(msg) {
+    statusSpan.textContent = msg;
+    progressBar.value = 100;
+    percentSpan.textContent = "100%";
+    preloadBtn.disabled = false;
+  }
 });
