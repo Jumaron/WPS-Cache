@@ -123,13 +123,11 @@ final class CacheManager
 
     private function clearWordPressInternals(bool $full_flush = true): void
     {
-        // Flush Memory Object Cache
+        // Flush Memory Object Cache & Transients only on full system reset
         if ($full_flush) {
             wp_cache_flush();
+            $this->clearDatabaseTransients();
         }
-
-        // Flush Transients (DB) - SOTA Optimized
-        $this->clearDatabaseTransients();
 
         // Remove physical page cache files if driver missing but files exist (cleanup)
         $this->forceCleanupHtmlDirectory();
