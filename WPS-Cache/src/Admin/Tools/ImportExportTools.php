@@ -155,6 +155,11 @@ class ImportExportTools
 
     private function prepareExportData(array $settings): array
     {
+        // Sentinel: Redact sensitive information from export to prevent leakage
+        if (isset($settings['redis_password'])) {
+            $settings['redis_password'] = '';
+        }
+
         return [
             'settings'       => $settings,
             'version'        => WPSC_VERSION,

@@ -12,3 +12,8 @@
 **Vulnerability:** The `HTMLCache` driver sanitized the `HTTP_HOST` header using a regex that allowed dots (`[^a-zA-Z0-9\-\.]`). This permitted attackers to send a Host header containing `..` sequences (e.g., `Host: ..`), causing the plugin to write cache files outside the intended `html` directory (e.g., into the parent `wps-cache` directory).
 **Learning:** Regex character classes like `[\.]` treat dots literally but do not prevent sequences like `..`. User input used in file paths (like `HTTP_HOST` or `REQUEST_URI`) must be strictly validated against directory traversal attacks.
 **Prevention:** explicitly strip `..` sequences, enforce strict hostname formats (alphanumeric + single dots), and validate the final resolved path against the intended cache root.
+
+## 2024-05-26 - Sensitive Data Exposure in Settings Export
+**Vulnerability:** The settings export functionality (`ImportExportTools::exportSettings`) dumped the entire `wpsc_settings` array, including the `redis_password` field, to a JSON file. This could lead to accidental leakage of database credentials if the export file was shared (e.g., for support or debugging).
+**Learning:** Generic "export all settings" functions often overlook sensitive fields. Developers tend to trust "admin-only" features, but data often leaves the secure boundary (the server) via files.
+**Prevention:** Implement an explicit "allowlist" for exportable fields or a "denylist" for sensitive ones. Always scrub sensitive data (passwords, keys, salts) from export payloads unless there is a specific, secure mechanism to handle them (e.g., encryption).
