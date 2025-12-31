@@ -168,7 +168,11 @@ final class RedisCache extends AbstractCacheDriver
     {
         if (!$this->redis) return;
         try {
-            $this->redis->del($key);
+            if (method_exists($this->redis, 'unlink')) {
+                $this->redis->unlink($key);
+            } else {
+                $this->redis->del($key);
+            }
         } catch (RedisException $e) {
             // Ignore delete errors
         }
@@ -193,7 +197,12 @@ final class RedisCache extends AbstractCacheDriver
             // If prefix is empty, we must be careful not to flush unrelated data.
             // But if we are the only user of this DB, flushDB is faster.
             if (empty($this->prefix)) {
-                $this->redis->flushDB();
+                // Async flush if available (Redis 4.0+)
+                if (version_compare(phpversion('redis'), '3.1.3', '>=')) {
+                    $this->redis->flushDB(true);
+                } else {
+                    $this->redis->flushDB();
+                }
                 return;
             }
 
@@ -206,7 +215,11 @@ final class RedisCache extends AbstractCacheDriver
             // We loop until iterator returns to 0
             while ($keys = $this->redis->scan($iterator, '*', 100)) {
                 if (!empty($keys)) {
-                    $this->redis->del($keys);
+                    if (method_exists($this->redis, 'unlink')) {
+                        $this->redis->unlink($keys);
+                    } else {
+                        $this->redis->del($keys);
+                    }
                 }
             }
         } catch (RedisException $e) {
