@@ -75,7 +75,9 @@ class SettingsRenderer
         $value = $settings[$key] ?? '';
 
         // Sentinel Fix: Prevent password exposure in HTML source
+        $isPasswordSet = false;
         if ($type === 'password') {
+            $isPasswordSet = !empty($value);
             $value = '';
         }
 
@@ -105,6 +107,12 @@ class SettingsRenderer
                     value="<?php echo esc_attr($value); ?>"
                     <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>
                     <?php echo $attrStr; ?>>
+                <?php if ($isPasswordSet): ?>
+                    <div style="margin-top: 5px; font-size: 12px; color: #10b981; display: flex; align-items: center; gap: 4px;">
+                        <span class="dashicons dashicons-yes" style="font-size: 16px; width: 16px; height: 16px;"></span>
+                        <?php esc_html_e('Password is set. Leave blank to keep unchanged.', 'wps-cache'); ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     <?php
