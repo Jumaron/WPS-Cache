@@ -388,16 +388,46 @@ final class MinifyJS extends AbstractCacheDriver
 
     private function shouldInsertSemicolon(array $prev, array $next): bool
     {
-        if ($next['type'] !== self::T_WORD) return false;
-        if ($prev['type'] === self::T_WORD) return true;
-        if ($prev['type'] === self::T_STRING || $prev['type'] === self::T_REGEX || $prev['type'] === self::T_TEMPLATE) return true;
-        if ($prev['type'] === self::T_OPERATOR) {
+        // Check if previous token can end a statement
+        $canEndStatement = false;
+        if ($prev['type'] === self::T_WORD) {
+            // Exclude keywords that expect a continuation
+            $keywords = ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'try', 'catch', 'finally', 'with', 'var', 'let', 'const', 'function', 'class', 'new', 'import', 'export', 'extends', 'instanceof', 'typeof', 'void', 'delete'];
+            if (!in_array($prev['value'], $keywords, true)) {
+                $canEndStatement = true;
+            }
+        } elseif ($prev['type'] === self::T_STRING || $prev['type'] === self::T_REGEX || $prev['type'] === self::T_TEMPLATE) {
+            $canEndStatement = true;
+        } elseif ($prev['type'] === self::T_OPERATOR) {
             if (in_array($prev['value'], ['}', ']', ')', '++', '--'], true)) {
-                $exceptions = ['else', 'catch', 'finally', 'instanceof', 'in'];
-                if (in_array($next['value'], $exceptions, true)) return false;
-                return true;
+                $canEndStatement = true;
             }
         }
+
+        if (!$canEndStatement) return false;
+
+        // Special Case: Don't insert semicolon between ) and { (e.g. if(x){...})
+        if ($prev['value'] === ')' && $next['value'] === '{') {
+            return false;
+        }
+
+        // Check if next token starts a new statement or needs separation
+        if ($next['type'] === self::T_WORD) {
+            if ($next['value'] === 'while' && $prev['value'] === '}') {
+                return false;
+            }
+            $exceptions = ['else', 'catch', 'finally', 'instanceof', 'in'];
+            return !in_array($next['value'], $exceptions, true);
+        }
+
+        if ($next['type'] === self::T_STRING || $next['type'] === self::T_REGEX || $next['type'] === self::T_TEMPLATE) {
+            return true;
+        }
+
+        if ($next['type'] === self::T_OPERATOR) {
+            return in_array($next['value'], ['!', '~', '{', '++', '--'], true);
+        }
+
         return false;
     }
 
