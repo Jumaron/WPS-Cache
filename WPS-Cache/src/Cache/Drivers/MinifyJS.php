@@ -7,13 +7,13 @@ namespace WPSCache\Cache\Drivers;
 /**
  * Enhanced JavaScript minification implementation.
  * 
- * Uses a Lexical Scanner (Tokenizer) instead of Regex replacement to safely 
- * parse and minify modern JavaScript (ES6+), avoiding common pitfalls like 
- * corrupting regex literals or breaking Automatic Semicolon Insertion (ASI).
+ * Uses a Lexical Scanner (Tokenizer) to safely parse and minify JS.
+ * Handles ASI (Automatic Semicolon Insertion) by detecting where
+ * semicolons or newlines must be preserved.
  */
 final class MinifyJS extends AbstractCacheDriver
 {
-    private const MAX_FILE_SIZE = 1024 * 1024; // 1MB limit for minification safety
+    private const MAX_FILE_SIZE = 1024 * 1024; // 1MB limit
 
     // Token Types
     private const T_WHITESPACE = 0;
@@ -21,7 +21,7 @@ final class MinifyJS extends AbstractCacheDriver
     private const T_STRING     = 2;
     private const T_REGEX      = 3;
     private const T_OPERATOR   = 4;
-    private const T_WORD       = 5; // Identifiers, Keywords, Numbers
+    private const T_WORD       = 5; // Identifiers, Keywords, Numbers, Booleans
     private const T_TEMPLATE   = 6;
 
     private string $cache_dir;
@@ -65,8 +65,6 @@ final class MinifyJS extends AbstractCacheDriver
         }
 
         $file = $this->getCacheFile($key);
-
-        // Use atomic write to prevent race conditions
         if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write JS cache file: $file");
         }
@@ -86,7 +84,6 @@ final class MinifyJS extends AbstractCacheDriver
         if (!is_array($files)) {
             return;
         }
-
         foreach ($files as $file) {
             if (is_file($file) && !wp_delete_file($file)) {
                 $this->logError("Failed to delete JS file during clear: $file");
@@ -97,7 +94,6 @@ final class MinifyJS extends AbstractCacheDriver
     public function processScripts(): void
     {
         global $wp_scripts;
-
         if (empty($wp_scripts->queue)) {
             return;
         }
@@ -135,7 +131,6 @@ final class MinifyJS extends AbstractCacheDriver
             return;
         }
 
-        // Generate cache key
         $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
         $cache_file = $this->getCacheFile($cache_key);
 
@@ -144,13 +139,11 @@ final class MinifyJS extends AbstractCacheDriver
                 $minified = $this->minifyJS($content);
                 $this->set($cache_key, $minified);
             } catch (\Throwable $e) {
-                // Fail safe: If minification errors, do not cache broken file
                 $this->logError("JS Minification failed for $handle", $e);
                 return;
             }
         }
 
-        // Serve cached file
         if (file_exists($cache_file)) {
             $this->updateScriptRegistration($script, $cache_file);
         }
@@ -164,8 +157,6 @@ final class MinifyJS extends AbstractCacheDriver
         $output = fopen('php://memory', 'r+');
         $prevToken = null;
 
-        // We need to look ahead one token to handle ASI (Automatic Semicolon Insertion)
-        // logic safely. We allow the tokenizer to yield, but we buffer one token.
         $iterator = $this->tokenize($js);
         $currToken = $iterator->current();
 
@@ -175,10 +166,8 @@ final class MinifyJS extends AbstractCacheDriver
 
             // 1. Handle Comments: Skip them
             if ($currToken['type'] === self::T_COMMENT) {
-                // Preserve license comments (/*! ... */)
                 if (str_starts_with($currToken['value'], '/*!')) {
                     fwrite($output, $currToken['value'] . "\n");
-                    // Treat preserved comment as a whitespace break
                     $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
                 }
                 $currToken = $nextToken;
@@ -187,11 +176,27 @@ final class MinifyJS extends AbstractCacheDriver
 
             // 2. Handle Whitespace
             if ($currToken['type'] === self::T_WHITESPACE) {
-                // ASI Safety Check: Preserve newline if next token implies a new statement
-                // e.g. return \n a  or  a = b \n [1]
-                if ($prevToken && $nextToken && $this->needsNewlineProtection($prevToken, $nextToken, $currToken['value'])) {
-                    fwrite($output, "\n");
-                    $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
+                $hasNewline = str_contains($currToken['value'], "\n") || str_contains($currToken['value'], "\r");
+
+                if ($prevToken && $nextToken && $hasNewline) {
+                    // 2a. ASI Protection: Preserve Newline if strictly necessary for syntax (e.g. return \n val)
+                    if ($this->needsNewlineProtection($prevToken, $nextToken, $currToken['value'])) {
+                        fwrite($output, "\n");
+                        $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
+                        $currToken = $nextToken;
+                        continue;
+                    }
+
+                    // 2b. MISSING SEMICOLON FIX:
+                    // If we remove the newline, we might merge two statements (e.g. "{} window").
+                    // If the original code implied a semicolon via ASI, we must insert a real one now.
+                    if ($this->shouldInsertSemicolon($prevToken, $nextToken)) {
+                        fwrite($output, ';');
+                        // Treat inserted semicolon as an operator for subsequent logic
+                        $prevToken = ['type' => self::T_OPERATOR, 'value' => ';'];
+                        $currToken = $nextToken;
+                        continue;
+                    }
                 }
 
                 $currToken = $nextToken;
@@ -227,7 +232,7 @@ final class MinifyJS extends AbstractCacheDriver
         while ($i < $len) {
             $char = $js[$i];
 
-            // --- 1. Whitespace ---
+            // Whitespace
             if (ctype_space($char)) {
                 $start = $i;
                 while ($i < $len && ctype_space($js[$i])) {
@@ -237,23 +242,18 @@ final class MinifyJS extends AbstractCacheDriver
                 continue;
             }
 
-            // --- 2. Comments or Division or Regex ---
+            // Comments / Regex / Division
             if ($char === '/') {
                 $next = $js[$i + 1] ?? '';
 
-                // Line Comment //
-                if ($next === '/') {
+                if ($next === '/') { // Line Comment
                     $start = $i;
                     $i += 2;
-                    while ($i < $len && $js[$i] !== "\n" && $js[$i] !== "\r") {
-                        $i++;
-                    }
+                    while ($i < $len && $js[$i] !== "\n" && $js[$i] !== "\r") $i++;
                     yield ['type' => self::T_COMMENT, 'value' => substr($js, $start, $i - $start)];
                     continue;
                 }
-
-                // Block Comment /* */
-                if ($next === '*') {
+                if ($next === '*') { // Block Comment
                     $start = $i;
                     $i += 2;
                     while ($i < $len - 1) {
@@ -267,56 +267,40 @@ final class MinifyJS extends AbstractCacheDriver
                     continue;
                 }
 
-                // Regex Literal vs Division Operator
                 if ($this->isRegexStart($lastMeaningfulToken)) {
                     $start = $i;
-                    $i++; // Consume opening /
-                    $inClass = false; // Inside [] char class
-
+                    $i++;
+                    $inClass = false;
                     while ($i < $len) {
                         $c = $js[$i];
-
-                        if ($c === '\\') { // Escape char
+                        if ($c === '\\') {
                             $i += 2;
                             continue;
                         }
-
                         if ($c === '[') {
                             $inClass = true;
                         }
                         if ($c === ']') {
                             $inClass = false;
                         }
-
                         if ($c === '/' && !$inClass) {
-                            $i++; // Consume closing /
-                            // Consume flags (g, i, m, etc.)
-                            while ($i < $len && ctype_alpha($js[$i])) {
-                                $i++;
-                            }
+                            $i++;
+                            while ($i < $len && ctype_alpha($js[$i])) $i++;
                             break;
                         }
-
-                        // Safety break for unclosed regex at newline
-                        if ($c === "\n" || $c === "\r") {
-                            break;
-                        }
-
+                        if ($c === "\n" || $c === "\r") break;
                         $i++;
                     }
-
-                    $regex = substr($js, $start, $i - $start);
-                    yield $lastMeaningfulToken = ['type' => self::T_REGEX, 'value' => $regex];
+                    yield $lastMeaningfulToken = ['type' => self::T_REGEX, 'value' => substr($js, $start, $i - $start)];
                     continue;
                 }
 
-                // Division Operator
                 yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => '/'];
                 $i++;
                 continue;
             }
 
-            // --- 3. Strings ---
+            // Strings
             if ($char === '"' || $char === "'") {
                 $quote = $char;
                 $start = $i;
@@ -330,16 +314,14 @@ final class MinifyJS extends AbstractCacheDriver
                         $i++;
                         break;
                     }
-                    if ($js[$i] === "\n" || $js[$i] === "\r") {
-                        break; // Unclosed string
-                    }
+                    if ($js[$i] === "\n" || $js[$i] === "\r") break;
                     $i++;
                 }
                 yield $lastMeaningfulToken = ['type' => self::T_STRING, 'value' => substr($js, $start, $i - $start)];
                 continue;
             }
 
-            // --- 4. Template Literals ---
+            // Template Literals
             if ($char === '`') {
                 $start = $i;
                 $i++;
@@ -358,42 +340,31 @@ final class MinifyJS extends AbstractCacheDriver
                 continue;
             }
 
-            // --- 5. Operators & Punctuation ---
+            // Operators
             if (str_contains('{}()[],:;?^~', $char)) {
                 yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => $char];
                 $i++;
                 continue;
             }
-
             if (str_contains('.!<>=+-*%&|', $char)) {
                 $start = $i;
-                while ($i < $len && str_contains('.!<>=+-*%&|', $js[$i])) {
-                    $i++;
-                }
+                while ($i < $len && str_contains('.!<>=+-*%&|', $js[$i])) $i++;
                 yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => substr($js, $start, $i - $start)];
                 continue;
             }
 
-            // --- 6. Words (Identifiers, Keywords, Numbers) ---
+            // Words
             $start = $i;
             while ($i < $len) {
                 $c = $js[$i];
-
-                // FIX: Treat decimals (e.g. 1.4) as part of the word/number
-                // If it is a dot, and it is surrounded by digits, consume it.
                 if ($c === '.' && $i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
                     $i++;
                     continue;
                 }
-
-                if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) {
-                    break;
-                }
+                if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) break;
                 $i++;
             }
 
-            // Fix: Property Access Bug
-            // If previous token was a DOT, mark this WORD as a Property so it doesn't trigger Regex logic
             $isProperty = false;
             if ($lastMeaningfulToken !== null && $lastMeaningfulToken['type'] === self::T_OPERATOR && $lastMeaningfulToken['value'] === '.') {
                 $isProperty = true;
@@ -407,44 +378,18 @@ final class MinifyJS extends AbstractCacheDriver
         }
     }
 
-    /**
-     * Correctly determines if a forward slash '/' should be treated as a Regex Literal.
-     */
     private function isRegexStart(?array $lastToken): bool
     {
-        if ($lastToken === null) {
-            return true; // Start of file
-        }
-
+        if ($lastToken === null) return true;
         $val = $lastToken['value'];
-
-        // Fix 1: Division can follow closing parenthesis or brackets
-        // e.g. (a + b) / 2  or  list[0] / 5
-        if ($val === ')' || $val === ']') {
-            return false;
-        }
-
+        if ($val === ')' || $val === ']') return false;
         if ($lastToken['type'] === self::T_OPERATOR) {
-            // Fix 2: ++ and -- are operators, but treated as suffixes, so / is division
-            // e.g. x++ / y
-            if ($val === '++' || $val === '--') {
-                return false;
-            }
+            if ($val === '++' || $val === '--') return false;
             return true;
         }
+        if ($lastToken['type'] !== self::T_WORD) return false;
+        if (!empty($lastToken['is_property'])) return false;
 
-        if ($lastToken['type'] !== self::T_WORD) {
-            return false;
-        }
-
-        // Fix 3: Property Access Bug (obj.return / 5)
-        // If the token is marked as a property, it cannot start a regex.
-        if (!empty($lastToken['is_property'])) {
-            return false;
-        }
-
-        // Fix 4: Comprehensive Keyword list
-        // These keywords typically expect an expression (which could be a regex) to follow
         $keywords = [
             'case',
             'else',
@@ -461,34 +406,58 @@ final class MinifyJS extends AbstractCacheDriver
             'for',
             'in',
             'instanceof',
-            'new'
+            'new',
+            'export'
         ];
-
         return in_array($val, $keywords, true);
     }
 
-    /**
-     * Determines if a space is required between two tokens.
-     */
     private function needsSpace(array $prev, array $curr): bool
     {
-        // Word + Word needs space (var x, return 1, in foo)
-        if ($prev['type'] === self::T_WORD && $curr['type'] === self::T_WORD) {
-            return true;
-        }
-
-        // Fix 5: Number + Dot needs space to prevent syntax error
-        // 10 .toString() (valid) vs 10.toString() (invalid float)
-        // If prev starts with digit and curr is dot
-        if ($prev['type'] === self::T_WORD && is_numeric($prev['value'][0]) && $curr['value'] === '.') {
-            return true;
-        }
-
-        // Operator spacing for + + and - - 
+        if ($prev['type'] === self::T_WORD && $curr['type'] === self::T_WORD) return true;
+        if ($prev['type'] === self::T_WORD && is_numeric($prev['value'][0]) && $curr['value'] === '.') return true;
         if ($prev['type'] === self::T_OPERATOR && $curr['type'] === self::T_OPERATOR) {
             if (($prev['value'] === '+' && str_starts_with($curr['value'], '+')) ||
                 ($prev['value'] === '-' && str_starts_with($curr['value'], '-'))
-            ) {
+            ) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Determines if a semicolon must be inserted when a newline is removed.
+     */
+    private function shouldInsertSemicolon(array $prev, array $next): bool
+    {
+        // 1. Next token must be a Word (Keyword or Identifier)
+        if ($next['type'] !== self::T_WORD) {
+            return false;
+        }
+
+        // 2. Previous token must be the end of an expression/block/statement
+        // Words (variables/literals)
+        if ($prev['type'] === self::T_WORD) return true;
+
+        // Strings/Regex/Templates
+        if ($prev['type'] === self::T_STRING || $prev['type'] === self::T_REGEX || $prev['type'] === self::T_TEMPLATE) return true;
+
+        // Operators that can end an expression
+        if ($prev['type'] === self::T_OPERATOR) {
+            // } = end of object or block
+            // ] = end of array or access
+            // ) = end of function call or grouping
+            // ++ / -- = postfix operators
+            if (in_array($prev['value'], ['}', ']', ')', '++', '--'], true)) {
+
+                // EXCEPTION: Do not insert semicolon before these continuations
+                // 'instanceof' and 'in' are binary operators (infix).
+                // 'else', 'catch', 'finally' continue a control block.
+                $exceptions = ['else', 'catch', 'finally', 'instanceof', 'in'];
+
+                if (in_array($next['value'], $exceptions, true)) {
+                    return false;
+                }
+
                 return true;
             }
         }
@@ -496,50 +465,31 @@ final class MinifyJS extends AbstractCacheDriver
         return false;
     }
 
-    /**
-     * Checks if a newline must be preserved for ASI (Automatic Semicolon Insertion).
-     */
     private function needsNewlineProtection(array $prev, array $next, string $whitespace): bool
     {
-        // If whitespace has no newline, we are safe
-        if (!str_contains($whitespace, "\n") && !str_contains($whitespace, "\r")) {
-            return false;
-        }
+        if (!str_contains($whitespace, "\n") && !str_contains($whitespace, "\r")) return false;
 
-        // 1. Restricted Productions (return, throw, etc) cannot have newline after them
+        // 1. Restricted Productions (return, throw, etc cannot have newline after them)
         if ($prev['type'] === self::T_WORD) {
             $restricted = ['return', 'throw', 'break', 'continue', 'yield'];
-            if (in_array($prev['value'], $restricted, true)) {
-                return true;
-            }
+            if (in_array($prev['value'], $restricted, true)) return true;
         }
 
-        // 2. Ambiguous Starts: [ ( ` + - /
-        // If the previous line didn't end clearly (semicolon or block), and the next
-        // line starts with one of these, JS tries to combine them.
+        // 2. Ambiguous Starts of next line
         if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
             $val = $next['value'];
             if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {
-                // If previous token was a clear terminator, we might be safe, but ASI is complex.
-                // The safest terminators are ; } :
                 $safeTerminators = [';', '}', ':'];
-                if (!in_array($prev['value'], $safeTerminators, true)) {
-                    return true;
-                }
+                if (!in_array($prev['value'], $safeTerminators, true)) return true;
             }
         }
-
         return false;
     }
 
     // --- Helpers ---
-
     private function shouldProcessScript($script, string $handle, array $excluded_js): bool
     {
-        if (!isset($script->src) || empty($script->src)) {
-            return false;
-        }
-
+        if (!isset($script->src) || empty($script->src)) return false;
         $src = $script->src;
         return strpos($src, '.min.js') === false
             && strpos($src, '//') !== 0
@@ -550,34 +500,20 @@ final class MinifyJS extends AbstractCacheDriver
 
     private function getSourcePath($script): ?string
     {
-        if (!isset($script->src)) {
-            return null;
-        }
-
+        if (!isset($script->src)) return null;
         $src = $script->src;
-        if (strpos($src, 'http') !== 0) {
-            $src = site_url($src);
-        }
-
-        return str_replace(
-            [site_url(), 'wp-content'],
-            [ABSPATH, 'wp-content'],
-            $src
-        );
+        if (strpos($src, 'http') !== 0) $src = site_url($src);
+        return str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
     }
 
     private function isValidSource(?string $source): bool
     {
-        return $source
-            && is_readable($source)
-            && filesize($source) <= self::MAX_FILE_SIZE;
+        return $source && is_readable($source) && filesize($source) <= self::MAX_FILE_SIZE;
     }
 
     private function updateScriptRegistration($script, string $cache_file): void
     {
-        if (!isset($script->src)) {
-            return;
-        }
+        if (!isset($script->src)) return;
         $script->src = str_replace(ABSPATH, site_url('/'), $cache_file);
         $script->ver = filemtime($cache_file);
     }
@@ -590,9 +526,7 @@ final class MinifyJS extends AbstractCacheDriver
     private function isExcluded(string $url, array $excluded_patterns): bool
     {
         foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url)) {
-                return true;
-            }
+            if (fnmatch($pattern, $url)) return true;
         }
         return false;
     }
