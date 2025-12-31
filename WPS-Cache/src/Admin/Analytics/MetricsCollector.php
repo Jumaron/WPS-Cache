@@ -25,7 +25,18 @@ class MetricsCollector
      */
     public function getStats(): array
     {
-        // Try to get cached stats first
+        $settings = get_option('wpsc_settings', []);
+
+        // FIX: Check toggle. If disabled, return dummy data.
+        if (empty($settings['enable_metrics'])) {
+            return [
+                'timestamp' => current_time('mysql'),
+                'html'      => ['enabled' => false, 'files' => 0, 'size' => '0 B'],
+                'redis'     => ['enabled' => false],
+                'system'    => $this->getSystemStats()
+            ];
+        }
+
         $cached = get_transient('wpsc_stats_cache');
         if ($cached !== false) {
             return $cached;
@@ -38,7 +49,6 @@ class MetricsCollector
             'system'    => $this->getSystemStats()
         ];
 
-        // Cache for 5 minutes
         set_transient('wpsc_stats_cache', $stats, 5 * MINUTE_IN_SECONDS);
 
         return $stats;
@@ -54,6 +64,8 @@ class MetricsCollector
         $count = 0;
         $size = 0;
 
+        // NOTE: We cannot track "Hits" for HTML cache because Apache serves the file 
+        // before PHP starts. We can only track "Files Created" and "Disk Usage".
         if (is_dir($dir)) {
             try {
                 $iterator = new \RecursiveIteratorIterator(
@@ -110,7 +122,7 @@ class MetricsCollector
                 'enabled'     => true,
                 'connected'   => true,
                 'memory_used' => $info['used_memory_human'] ?? '0B',
-                'hit_ratio'   => $ratio,
+                'hit_ratio'   => $ratio, // THIS is the valid Hit Ratio (Redis Only)
                 'hits'        => $hits,
                 'misses'      => $misses,
                 'uptime'      => $info['uptime_in_days'] ?? 0

@@ -8,6 +8,7 @@ use WPSCache\Cache\CacheManager;
 use WPSCache\Admin\AdminPanelManager;
 use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, MinifyJS};
 use WPSCache\Server\ServerConfigManager;
+use WPSCache\Cron\CronManager; // Added for Preloading
 
 /**
  * Main plugin class handling initialization, DI container, and lifecycle management.
@@ -15,22 +16,27 @@ use WPSCache\Server\ServerConfigManager;
 final class Plugin
 {
     private const DEFAULT_SETTINGS = [
-        'html_cache'     => true,
-        'redis_cache'    => false,
-        'varnish_cache'  => false,
-        'css_minify'     => false,
-        'js_minify'      => false,
-        'cache_lifetime' => 3600,
-        'excluded_urls'  => [],
-        'excluded_css'   => [],
-        'excluded_js'    => [],
-        'redis_host'     => '127.0.0.1',
-        'redis_port'     => 6379,
-        'redis_db'       => 0,
-        'redis_password' => '',
-        'redis_prefix'   => 'wpsc:',
-        'varnish_host'   => '127.0.0.1',
-        'varnish_port'   => 6081,
+        'html_cache'       => true,
+        'redis_cache'      => false,
+        'varnish_cache'    => false,
+        'css_minify'       => false,
+        'css_async'        => false, // Added
+        'js_minify'        => false,
+        'js_defer'         => false, // Added
+        'js_delay'         => false, // Added
+        'enable_metrics'   => true,  // Added
+        'preload_interval' => 'daily', // Added
+        'cache_lifetime'   => 3600,
+        'excluded_urls'    => [],
+        'excluded_css'     => [],
+        'excluded_js'      => [],
+        'redis_host'       => '127.0.0.1',
+        'redis_port'       => 6379,
+        'redis_db'         => 0,
+        'redis_password'   => '',
+        'redis_prefix'     => 'wpsc:',
+        'varnish_host'     => '127.0.0.1',
+        'varnish_port'     => 6081,
     ];
 
     private const REQUIRED_DIRECTORIES = [
@@ -48,6 +54,7 @@ final class Plugin
     private ?CacheManager $cacheManager = null;
     private ?ServerConfigManager $serverManager = null;
     private ?AdminPanelManager $adminPanelManager = null;
+    private ?CronManager $cronManager = null; // Added
 
     /**
      * Singleton Accessor
@@ -70,15 +77,19 @@ final class Plugin
         // Initialize Core Services
         $this->cacheManager = new CacheManager();
         $this->serverManager = new ServerConfigManager();
+        $this->cronManager = new CronManager(); // Init Cron
 
         // Load Settings
         $settings = get_option('wpsc_settings', self::DEFAULT_SETTINGS);
 
-        // Ensure settings array has all defaults (merging prevents undefined index errors on updates)
+        // Ensure settings array has all defaults
         $settings = array_merge(self::DEFAULT_SETTINGS, is_array($settings) ? $settings : []);
 
         $this->initializeCacheDrivers($settings);
         $this->setupHooks();
+
+        // Initialize Cron Listener
+        $this->cronManager->initialize();
 
         if (is_admin()) {
             $this->adminPanelManager = new AdminPanelManager($this->cacheManager);
@@ -87,6 +98,9 @@ final class Plugin
         // Initialize Cache Logic (Late binding)
         add_action('plugins_loaded', [$this->cacheManager, 'initializeCache'], 5);
         add_action('wpscac_settings_updated', [$this, 'refreshServerConfig']);
+
+        // Pass settings update to CronManager as well
+        add_action('wpscac_settings_updated', [$this->cronManager, 'updateSchedule']);
     }
 
     /**
@@ -202,6 +216,7 @@ final class Plugin
         $this->removeDropIns();
 
         wp_clear_scheduled_hook(self::CACHE_CLEANUP_HOOK);
+        wp_clear_scheduled_hook('wpsc_scheduled_preload'); // Clear Preload Cron
 
         // Remove .htaccess rules
         $this->serverManager->removeConfiguration();
