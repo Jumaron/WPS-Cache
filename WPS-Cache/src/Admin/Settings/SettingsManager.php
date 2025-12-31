@@ -34,22 +34,60 @@ class SettingsManager
         );
     }
 
-    // ... (sanitizeSettings and getDefaultSettings methods from previous turn remain the same) ...
-    // Note: Ensure you include the sanitizeSettings and getDefaultSettings logic from Turn 7 here.
+    /**
+     * Helper to get settings with defaults merged.
+     * Prevents "undefined index" errors in views.
+     */
+    private function getSettings(): array
+    {
+        $defaults = $this->getDefaultSettings();
+        $current = get_option('wpsc_settings', []);
+
+        if (!is_array($current)) {
+            return $defaults;
+        }
+
+        return array_merge($defaults, $current);
+    }
 
     public function getDefaultSettings(): array
     {
-        // ... include array from Turn 7 ...
         return [
-            'html_cache' => false,
-            // ... etc
+            // Switches
+            'html_cache'     => false,
+            'redis_cache'    => false,
+            'varnish_cache'  => false,
+            'css_minify'     => false,
+            'css_async'      => false,
+            'js_minify'      => false,
+            'js_defer'       => false,
+            'js_delay'       => false,
+            'enable_metrics' => true,
+
+            // Config
+            'cache_lifetime' => 3600,
+            'metrics_retention' => 30,
+
+            // Redis
+            'redis_host'     => '127.0.0.1',
+            'redis_port'     => 6379,
+            'redis_db'       => 0,
+            'redis_password' => '',
+            'redis_prefix'   => 'wpsc:',
+
+            // Varnish
+            'varnish_host'   => '127.0.0.1',
+            'varnish_port'   => 6081,
+
+            // Arrays
+            'excluded_urls'  => [],
+            'excluded_css'   => [],
+            'excluded_js'    => [],
+            'preload_urls'   => []
         ];
     }
 
-    private function getSettings(): array
-    {
-        return get_option('wpsc_settings', $this->getDefaultSettings());
-    }
+    // --- Form Renderers ---
 
     private function formStart(): void
     {
@@ -75,8 +113,19 @@ class SettingsManager
             'Master switches for the caching system.',
             function () use ($settings) {
                 $this->renderer->renderToggle('html_cache', 'Page Caching', 'Enable static HTML caching.', $settings);
-                $this->renderer->renderToggle('redis_cache', 'Redis Object Cache', 'Enable database query caching.', $settings);
-                $this->renderer->renderToggle('varnish_cache', 'Varnish Integration', 'Enable Varnish purge headers.', $settings);
+                $this->renderer->renderToggle('enable_metrics', 'Analytics', 'Collect performance metrics.', $settings);
+            }
+        );
+
+        $this->renderer->renderCard(
+            'Preloading',
+            'Automatically generate cache.',
+            function () use ($settings) {
+                $this->renderer->renderSelect('preload_interval', 'Interval', 'How often to restart.', $settings, [
+                    'hourly' => 'Hourly',
+                    'daily' => 'Daily',
+                    'weekly' => 'Weekly'
+                ]);
             }
         );
 
@@ -89,20 +138,31 @@ class SettingsManager
         $this->formStart();
 
         $this->renderer->renderCard(
-            'Redis Configuration',
-            'Connection details for your Redis server.',
+            'Caching Engines',
+            'Backend storage configuration.',
             function () use ($settings) {
-                $this->renderer->renderInput('redis_host', 'Host', 'e.g., 127.0.0.1', $settings);
-                $this->renderer->renderInput('redis_port', 'Port', 'Default: 6379', $settings, 'number');
-                $this->renderer->renderInput('redis_password', 'Password', 'Leave empty if none.', $settings, 'password');
-                $this->renderer->renderInput('redis_prefix', 'Prefix', 'Unique prefix for this site.', $settings);
+                $this->renderer->renderToggle('redis_cache', 'Redis Object Cache', 'Enable database query caching.', $settings);
+                $this->renderer->renderToggle('varnish_cache', 'Varnish Integration', 'Enable Varnish purge headers.', $settings);
             }
         );
 
         $this->renderer->renderCard(
-            'Exclusions',
-            'Prevent specific content from being cached.',
+            'Redis Details',
+            'Connection settings.',
             function () use ($settings) {
+                $this->renderer->renderInput('redis_host', 'Host', 'e.g., 127.0.0.1', $settings);
+                $this->renderer->renderInput('redis_port', 'Port', 'Default: 6379', $settings, 'number');
+                $this->renderer->renderInput('redis_password', 'Password', 'Hidden for security.', $settings, 'password');
+                $this->renderer->renderInput('redis_db', 'Database ID', 'Default: 0', $settings, 'number');
+                $this->renderer->renderInput('redis_prefix', 'Prefix', 'Key prefix.', $settings);
+            }
+        );
+
+        $this->renderer->renderCard(
+            'Rules',
+            'What to cache.',
+            function () use ($settings) {
+                $this->renderer->renderInput('cache_lifetime', 'TTL (Seconds)', 'Default: 3600', $settings, 'number');
                 $this->renderer->renderTextarea('excluded_urls', 'Excluded URLs', 'One URL or path per line.', $settings);
             }
         );
@@ -117,22 +177,22 @@ class SettingsManager
 
         $this->renderer->renderCard(
             'CSS Optimization',
-            'Improve First Contentful Paint (FCP).',
+            'Improve First Contentful Paint.',
             function () use ($settings) {
-                $this->renderer->renderToggle('css_minify', 'Minify CSS', 'Remove whitespace and comments.', $settings);
-                $this->renderer->renderToggle('css_async', 'Optimize CSS Delivery', 'Load CSS asynchronously to fix render blocking.', $settings);
-                $this->renderer->renderTextarea('excluded_css', 'Exclude CSS', 'Filenames to exclude.', $settings);
+                $this->renderer->renderToggle('css_minify', 'Minify CSS', 'Strip whitespace/comments.', $settings);
+                $this->renderer->renderToggle('css_async', 'Async CSS', 'Load non-critical CSS later.', $settings);
+                $this->renderer->renderTextarea('excluded_css', 'Exclude CSS', 'Filenames to skip.', $settings);
             }
         );
 
         $this->renderer->renderCard(
             'JavaScript Optimization',
-            'Improve Time to Interactive (TTI).',
+            'Improve Time to Interactive.',
             function () use ($settings) {
-                $this->renderer->renderToggle('js_minify', 'Minify JS', 'Compress JavaScript files.', $settings);
-                $this->renderer->renderToggle('js_defer', 'Defer JS', 'Load JS after HTML parsing.', $settings);
+                $this->renderer->renderToggle('js_minify', 'Minify JS', 'Compress JS files.', $settings);
+                $this->renderer->renderToggle('js_defer', 'Defer JS', 'Move to footer execution.', $settings);
                 $this->renderer->renderToggle('js_delay', 'Delay JS', 'Wait for user interaction.', $settings);
-                $this->renderer->renderTextarea('excluded_js', 'Exclude JS', 'Filenames to exclude.', $settings);
+                $this->renderer->renderTextarea('excluded_js', 'Exclude JS', 'Filenames to skip.', $settings);
             }
         );
 
@@ -141,14 +201,14 @@ class SettingsManager
 
     public function renderAdvancedTab(): void
     {
-        // Advanced tab content...
-        $this->formStart();
         $settings = $this->getSettings();
+        $this->formStart();
         $this->renderer->renderCard(
-            'Cache Lifespan',
-            'How long should cache files exist?',
+            'Varnish Details',
+            'Connection for PURGE requests.',
             function () use ($settings) {
-                $this->renderer->renderInput('cache_lifetime', 'Global TTL (seconds)', 'Default: 3600', $settings, 'number');
+                $this->renderer->renderInput('varnish_host', 'Host', '127.0.0.1', $settings);
+                $this->renderer->renderInput('varnish_port', 'Port', '6081', $settings, 'number');
             }
         );
         $this->formEnd();

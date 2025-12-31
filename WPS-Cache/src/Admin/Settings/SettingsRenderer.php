@@ -33,7 +33,9 @@ class SettingsRenderer
     }
 
     /**
-     * Renders an iOS-style Toggle Switch.
+     * Note the hidden input with value="0". 
+     * This ensures the key exists in $_POST even if the checkbox is unchecked.
+     * BUT it only exists if this specific renderToggle is called (i.e., we are on the right tab).
      */
     public function renderToggle(string $key, string $label, string $description, array $settings): void
     {
@@ -47,7 +49,6 @@ class SettingsRenderer
                 <p class="wpsc-setting-desc"><?php echo esc_html($description); ?></p>
             </div>
             <div class="wpsc-setting-control">
-                <!-- Hidden input ensures '0' is sent if unchecked -->
                 <input type="hidden" name="wpsc_settings[<?php echo esc_attr($key); ?>]" value="0">
 
                 <label class="wpsc-switch">
