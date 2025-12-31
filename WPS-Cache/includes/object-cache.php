@@ -394,6 +394,11 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
         private bool $failGracefully;
 
         /**
+         * Secret salt for HMAC signing
+         */
+        private string $salt;
+
+        /**
          * Constructor.
          *
          * @param bool $failGracefully Whether to fail gracefully on Redis connection errors
@@ -403,6 +408,23 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             global $blog_id, $table_prefix;
 
             $this->failGracefully = $failGracefully;
+
+            // Initialize Salt for HMAC
+            // Sentinel: Try standard keys in order of preference
+            if (defined('WP_REDIS_SIGNING_KEY')) {
+                $this->salt = WP_REDIS_SIGNING_KEY;
+            } elseif (defined('WP_CACHE_KEY_SALT')) {
+                $this->salt = WP_CACHE_KEY_SALT;
+            } elseif (defined('SECURE_AUTH_KEY')) {
+                $this->salt = SECURE_AUTH_KEY;
+            } elseif (defined('LOGGED_IN_KEY')) {
+                $this->salt = LOGGED_IN_KEY;
+            } elseif (defined('NONCE_KEY')) {
+                $this->salt = NONCE_KEY;
+            } else {
+                // Last resort: uniqid makes cache invalid on every request (safe but slow)
+                $this->salt = uniqid('wpsc_salt_', true);
+            }
 
             // Pre-compute key prefixes
             $prefix = defined('WP_REDIS_PREFIX') ? WP_REDIS_PREFIX : '';
@@ -1015,20 +1037,27 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
 
         /**
          * Serializes data if needed.
+         * Sentinel: Adds HMAC signature to serialized objects to prevent tampering.
          *
          * @param mixed $value The value to serialize.
          * @return mixed The serialized value if needed, otherwise the original value.
          */
         private function maybeSerialize(mixed $value): mixed
         {
-            return match (gettype($value)) {
-                'string', 'integer', 'double', 'boolean' => $value,
-                default => serialize($value)
-            };
+            if (is_numeric($value) || is_string($value) || is_bool($value)) {
+                return $value;
+            }
+
+            $serialized = serialize($value);
+            $hash = hash_hmac('sha256', $serialized, $this->salt);
+
+            // S:{hash}:{serialized_data}
+            return 'S:' . $hash . ':' . $serialized;
         }
 
         /**
          * Unserializes data if needed.
+         * Sentinel: Verifies HMAC signature before unserializing.
          *
          * @param mixed $value The value to unserialize.
          * @return mixed The unserialized value if needed, otherwise the original value.
@@ -1039,18 +1068,36 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 return $value;
             }
 
-            // Static pattern for better performance
-            static $pattern = '/^[absiOCrdN]:[0-9]+/';
-            if (!preg_match($pattern, $value)) {
-                return $value;
+            // Sentinel: Verify signed payloads
+            if (str_starts_with($value, 'S:')) {
+                $parts = explode(':', $value, 3);
+                if (count($parts) === 3) {
+                    $hash = $parts[1];
+                    $payload = $parts[2];
+                    $calc = hash_hmac('sha256', $payload, $this->salt);
+
+                    if (hash_equals($hash, $calc)) {
+                        try {
+                            $unserialized = @unserialize($payload);
+                            return ($unserialized !== false || $payload === 'b:0;') ? $unserialized : $value;
+                        } catch (Exception) {
+                            return $value;
+                        }
+                    }
+                }
+                // Invalid signature or format: Treat as corrupted/miss
+                return false;
             }
 
-            try {
-                $unserialized = @unserialize($value);
-                return ($unserialized !== false || $value === 'b:0;') ? $unserialized : $value;
-            } catch (Exception) {
-                return $value;
+            // Sentinel: REJECT unsigned legacy serialization to prevent Object Injection
+            // If it looks like serialized data but has no signature, assume it's dangerous.
+            static $pattern = '/^[absiOCrdN]:[0-9]+/';
+            if (preg_match($pattern, $value)) {
+                return false; // Force cache miss
             }
+
+            // It's a primitive string/int matching no pattern
+            return $value;
         }
 
         /**
