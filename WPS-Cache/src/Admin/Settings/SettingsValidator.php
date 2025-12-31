@@ -121,11 +121,6 @@ class SettingsValidator
             return $this->sanitizeHost($val);
         }
 
-        // Special handling for password:
-        // We allow clearing the password if the user submits an empty string.
-        // We do NOT implement masking logic here anymore; masking is a UI concern.
-        // If the value is submitted, it is what the user intends.
-
         return sanitize_text_field($val);
     }
 
