@@ -21,11 +21,11 @@ class DiagnosticTools
                 <h2><?php esc_html_e('System Information', 'wps-cache'); ?></h2>
             </div>
             <div class="wpsc-card-body">
-                <textarea readonly class="wpsc-textarea" rows="10" style="font-family: monospace; font-size: 12px; width: 100%; background: #1f2937; color: #e5e7eb; border: none; padding: 1rem; border-radius: 6px;">
+                <textarea id="wpsc-system-info-content" readonly class="wpsc-textarea" rows="10" style="font-family: monospace; font-size: 12px; width: 100%; background: #1f2937; color: #e5e7eb; border: none; padding: 1rem; border-radius: 6px;">
 <?php echo esc_textarea($this->getFormattedDiagnosticInfo()); ?>
                 </textarea>
                 <div style="margin-top: 1rem;">
-                    <button type="button" class="button wpsc-btn-secondary" onclick="const btn=this; const original=btn.innerHTML; navigator.clipboard.writeText(this.parentElement.previousElementSibling.value).then(function(){ btn.innerHTML = '<span class=\'dashicons dashicons-yes\' style=\'vertical-align: middle;\'></span> Copied!'; setTimeout(function(){ btn.innerHTML = original; }, 2000); });">
+                    <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-system-info-content">
                         <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy to Clipboard
                     </button>
                 </div>
@@ -83,10 +83,13 @@ class DiagnosticTools
             $lines = explode("\n", $content);
             $content = implode("\n", array_slice($lines, -50));
         ?>
-            <textarea readonly class="wpsc-textarea" rows="10" style="font-family: monospace; font-size: 12px; width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 1rem; margin-bottom: 1rem; border-radius: 6px;">
+            <textarea id="wpsc-error-log-content" readonly class="wpsc-textarea" rows="10" style="font-family: monospace; font-size: 12px; width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 1rem; margin-bottom: 1rem; border-radius: 6px;">
 <?php echo esc_textarea($content); ?>
             </textarea>
             <div style="display: flex; gap: 10px;">
+                <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-error-log-content">
+                    <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy Log
+                </button>
                 <button type="button" class="button wpsc-btn-secondary" id="wpsc-download-log">
                     <span class="dashicons dashicons-download" style="vertical-align: middle;"></span> Download
                 </button>

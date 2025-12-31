@@ -111,52 +111,48 @@ document.addEventListener("DOMContentLoaded", function () {
     preloadBtn.disabled = false;
   }
 
-  // Copy URL List Functionality
-  const copyBtn = document.getElementById("wpsc-copy-urls");
-  const urlsTextarea = document.getElementById("wpsc-preload-urls");
+  // Generic Copy Functionality
+  document.querySelectorAll('.wpsc-copy-trigger').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const targetId = this.dataset.copyTarget;
+      const targetEl = document.getElementById(targetId);
 
-  if (copyBtn && urlsTextarea) {
-    copyBtn.addEventListener("click", function() {
-      // Select the text
-      urlsTextarea.select();
-      urlsTextarea.setSelectionRange(0, 99999); // For mobile devices
+      if (!targetEl) return;
 
-      // Copy to clipboard
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(urlsTextarea.value).then(showSuccess, fallbackCopy);
-        } else {
-            fallbackCopy();
-        }
-      } catch (err) {
-        console.error('Failed to copy', err);
+      targetEl.select();
+      targetEl.setSelectionRange(0, 99999);
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(targetEl.value).then(() => showSuccess(btn), () => fallbackCopy(targetEl, btn));
+      } else {
+        fallbackCopy(targetEl, btn);
       }
     });
+  });
 
-    function fallbackCopy() {
-        try {
-            document.execCommand('copy');
-            showSuccess();
-        } catch (err) {
-            console.error('Fallback copy failed', err);
-        }
+  function fallbackCopy(targetEl, btn) {
+    try {
+      document.execCommand('copy');
+      showSuccess(btn);
+    } catch (err) {
+      console.error('Copy failed', err);
     }
+  }
 
-    function showSuccess() {
-        const originalHtml = copyBtn.innerHTML;
-        const originalWidth = copyBtn.offsetWidth;
+  function showSuccess(btn) {
+    const originalHtml = btn.innerHTML;
+    const originalWidth = btn.offsetWidth;
 
-        copyBtn.style.width = originalWidth + 'px'; // Maintain width
-        copyBtn.innerHTML = '<span class="dashicons dashicons-yes" style="font-size: 14px; width: 14px; height: 14px; margin-top: 6px;"></span> Copied!';
-        copyBtn.classList.remove('wpsc-btn-secondary');
-        copyBtn.classList.add('button-primary', 'wpsc-btn-primary'); // Use primary color for success
+    btn.style.width = originalWidth + 'px';
+    btn.innerHTML = '<span class="dashicons dashicons-yes" style="vertical-align: middle;"></span> Copied!';
+    btn.classList.remove('wpsc-btn-secondary');
+    btn.classList.add('button-primary', 'wpsc-btn-primary');
 
-        setTimeout(() => {
-            copyBtn.innerHTML = originalHtml;
-            copyBtn.classList.remove('button-primary', 'wpsc-btn-primary');
-            copyBtn.classList.add('wpsc-btn-secondary');
-            copyBtn.style.width = '';
-        }, 2000);
-    }
+    setTimeout(() => {
+      btn.innerHTML = originalHtml;
+      btn.classList.remove('button-primary', 'wpsc-btn-primary');
+      btn.classList.add('wpsc-btn-secondary');
+      btn.style.width = '';
+    }, 2000);
   }
 });
