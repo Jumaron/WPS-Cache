@@ -160,8 +160,13 @@ final class MinifyCSS extends AbstractCacheDriver
         $output = fopen('php://memory', 'r+');
 
         $prevToken = null;
+        $prevPrevToken = null;
         $calcDepth = 0; // Tracks if we are inside calc(), clamp(), var()
         $pendingSemicolon = false; // Deferred write buffer
+
+        $parenStack = [];
+        $lastClosedFunc = null;
+        $whitespaceSkipped = false;
 
         foreach ($this->tokenize($css) as $token) {
 
@@ -182,6 +187,7 @@ final class MinifyCSS extends AbstractCacheDriver
 
             // 2. Whitespace
             if ($token['type'] === self::T_WHITESPACE) {
+                $whitespaceSkipped = true;
                 continue; // We generate our own spaces later
             }
 
@@ -200,17 +206,27 @@ final class MinifyCSS extends AbstractCacheDriver
                 continue;
             }
 
-            // 5. Calc Context Tracking
+            // 5. Context Tracking
             if ($token['type'] === self::T_PAREN_OPEN) {
-                // Check if previous token was a function name related to math
-                if ($prevToken && $prevToken['type'] === self::T_WORD && preg_match('/^(calc|clamp|min|max|var)$/i', $prevToken['value'])) {
-                    $calcDepth++;
+                $func = null;
+                // Check if previous token was a function name
+                if ($prevToken && $prevToken['type'] === self::T_WORD) {
+                    $func = strtolower($prevToken['value']);
+                    if (in_array($func, ['calc', 'clamp', 'min', 'max', 'var'], true)) {
+                        $calcDepth++;
+                    } elseif ($calcDepth > 0) {
+                        $calcDepth++; // Nested parens inside calc
+                    }
                 } elseif ($calcDepth > 0) {
-                    $calcDepth++; // Nested parens inside calc
+                    $calcDepth++;
                 }
+                $parenStack[] = $func;
             }
-            if ($token['type'] === self::T_PAREN_CLOSE && $calcDepth > 0) {
-                $calcDepth--;
+            if ($token['type'] === self::T_PAREN_CLOSE) {
+                if ($calcDepth > 0) {
+                    $calcDepth--;
+                }
+                $lastClosedFunc = array_pop($parenStack);
             }
 
             // 6. Optimization: Zero Units
@@ -225,12 +241,14 @@ final class MinifyCSS extends AbstractCacheDriver
             }
 
             // 8. Insert Space Logic
-            if ($prevToken && $this->needsSpace($prevToken, $token, $calcDepth > 0)) {
+            if ($prevToken && $this->needsSpace($prevToken, $token, $calcDepth > 0, $lastClosedFunc, $prevPrevToken, $whitespaceSkipped)) {
                 fwrite($output, ' ');
             }
 
             fwrite($output, $token['value']);
+            $prevPrevToken = $prevToken;
             $prevToken = $token;
+            $whitespaceSkipped = false;
         }
 
         // Write trailing semicolon if exists
@@ -354,7 +372,7 @@ final class MinifyCSS extends AbstractCacheDriver
         }
     }
 
-    private function needsSpace(array $prev, array $curr, bool $inCalc): bool
+    private function needsSpace(array $prev, array $curr, bool $inCalc, ?string $lastClosedFunc = null, ?array $prevPrevToken = null, bool $whitespaceSkipped = false): bool
     {
         // 1. Inside calc(), spaces are REQUIRED around + and - operators
         if ($inCalc) {
@@ -370,17 +388,43 @@ final class MinifyCSS extends AbstractCacheDriver
         // 2. Word + Word (margin: 10px 20px)
         if ($t1 === self::T_WORD && $t2 === self::T_WORD) return true;
 
-        // 3. Variable/Function fusion fix: var(--a) var(--b)
-        if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) return true;
+        // 3. Variable/Function fusion fix
+        if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
+            // If whitespace was explicitly skipped, usually preserve it (space as combinator)
+            if ($whitespaceSkipped) {
+                return true;
+            }
+
+            // If NO whitespace was skipped, check if we need to force space
+
+            // Selector pseudo-classes
+            $selector_pseudos = [
+                'not', 'is', 'where', 'has', 'nth-child', 'nth-last-child',
+                'nth-of-type', 'nth-last-of-type', 'dir', 'lang', 'host',
+                'host-context', 'part', 'slotted'
+            ];
+
+            if ($lastClosedFunc && in_array($lastClosedFunc, $selector_pseudos, true)) {
+                // In selector context, no input space means chained selector.
+                // Do NOT insert space.
+                return false;
+            }
+
+            // Default (Value context or unknown): Add space to be safe/fix fusion
+            // E.g. var(--a)var(--b) -> var(--a) var(--b)
+            return true;
+        }
 
         // 4. Media Query "and ("
         if ($t1 === self::T_WORD && $t2 === self::T_PAREN_OPEN) {
             $kw = strtolower($prev['value']);
-            if ($kw === 'and' || $kw === 'or' || $kw === 'not') return true;
-        }
-        if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
-            $kw = strtolower($curr['value']);
-            if ($kw === 'and' || $kw === 'or' || $kw === 'not') return true;
+            if ($kw === 'and' || $kw === 'or' || $kw === 'not') {
+                // Check if this is a pseudo-class like :not(
+                if ($kw === 'not' && $prevPrevToken && $prevPrevToken['type'] === self::T_COLON) {
+                    return false;
+                }
+                return true;
+            }
         }
 
         return false;
