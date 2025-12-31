@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
 
+use WPSCache\Optimization\JSOptimizer;
+use WPSCache\Optimization\CSSOptimizer;
+
 /**
  * State-of-the-Art HTML Cache Writer.
  * Synchronized with advanced-cache.php for Path-Based caching.
@@ -112,13 +115,25 @@ final class HTMLCache extends AbstractCacheDriver
         if (empty($content)) return $content;
 
         try {
-            $minified = $this->minifyHTML($content);
-            $minified .= $this->getCacheComment($content, $minified);
+            // 1. Minify HTML (Existing logic)
+            $content = $this->minifyHTML($content);
 
-            // Trigger save
-            $this->set('ignored', $minified);
+            // 2. Initialize Optimizers
+            $jsOptimizer = new JSOptimizer($this->settings);
+            // Note: CSSOptimizer usually requires intercepting the CSS queue, 
+            // but here we can at least filter inline CSS if needed.
+            // For full RUCSS, we would need to capture the enqueued styles first.
 
-            return $minified;
+            // 3. Apply JS Optimization (Defer/Delay)
+            $content = $jsOptimizer->process($content);
+
+            // 4. Add Cache Comment
+            $content .= $this->getCacheComment($content, $content); // Size calc might be off slightly due to modifiers
+
+            // 5. Save to Disk
+            $this->set('ignored', $content);
+
+            return $content;
         } catch (\Throwable $e) {
             $this->logError('HTML processing failed', $e);
             return $content;

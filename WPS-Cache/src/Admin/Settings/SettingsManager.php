@@ -36,7 +36,6 @@ class SettingsManager
      */
     public function registerSettings(): void
     {
-        // FIX: Changed 'wpscac_settings' to 'wpsc_settings' to match SettingsRenderer
         register_setting(
             'wpsc_settings',      // Option group (must match settings_fields)
             'wpsc_settings',      // Option name (database key)
@@ -59,9 +58,9 @@ class SettingsManager
         // Cache Settings Section
         add_settings_section(
             'wpscac_cache_settings',
-            __('Cache Settings', 'wps-cache'),
+            __('Cache & Optimization', 'wps-cache'),
             [$this->renderer, 'renderCacheSettingsInfo'],
-            'wps_settings' // FIX: Changed page slug to match
+            'wps_settings'
         );
 
         // Redis Settings Section
@@ -94,12 +93,12 @@ class SettingsManager
      */
     private function registerSettingsFields(): void
     {
-        // Cache Type Fields
+        // 1. HTML Cache
         add_settings_field(
             'wpscac_html_cache',
             __('HTML Cache', 'wps-cache'),
             [$this->renderer, 'renderCheckboxField'],
-            'wpsc_settings', // FIX: Changed page slug to match
+            'wpsc_settings',
             'wpscac_cache_settings',
             [
                 'label_for'   => 'wpscac_html_cache',
@@ -107,6 +106,8 @@ class SettingsManager
                 'description' => __('Enable static HTML caching', 'wps-cache')
             ]
         );
+
+        // 2. Redis Cache
         add_settings_field(
             'wpscac_redis_cache',
             __('Redis Cache', 'wps-cache'),
@@ -119,6 +120,8 @@ class SettingsManager
                 'description' => __('Enable Redis object caching', 'wps-cache')
             ]
         );
+
+        // 3. Varnish Cache
         add_settings_field(
             'wpscac_varnish_cache',
             __('Varnish Cache', 'wps-cache'),
@@ -131,6 +134,8 @@ class SettingsManager
                 'description' => __('Enable Varnish HTTP cache', 'wps-cache')
             ]
         );
+
+        // 4. CSS Minification
         add_settings_field(
             'wpscac_css_minify',
             __('CSS Minification', 'wps-cache'),
@@ -143,6 +148,8 @@ class SettingsManager
                 'description' => __('Minify CSS (Experimental)', 'wps-cache')
             ]
         );
+
+        // 5. JS Minification
         add_settings_field(
             'wpscac_js_minify',
             __('JS Minification', 'wps-cache'),
@@ -155,6 +162,52 @@ class SettingsManager
                 'description' => __('Minify JS (Experimental)', 'wps-cache')
             ]
         );
+
+        // --- NEW SOTA FIELDS ---
+
+        // 6. JS Defer
+        add_settings_field(
+            'wpscac_js_defer',
+            __('Defer JavaScript', 'wps-cache'),
+            [$this->renderer, 'renderCheckboxField'],
+            'wpsc_settings',
+            'wpscac_cache_settings',
+            [
+                'label_for'   => 'wpscac_js_defer',
+                'option_name' => 'js_defer',
+                'description' => __('Non-blocking script loading (Safe)', 'wps-cache')
+            ]
+        );
+
+        // 7. JS Delay
+        add_settings_field(
+            'wpscac_js_delay',
+            __('Delay JavaScript', 'wps-cache'),
+            [$this->renderer, 'renderCheckboxField'],
+            'wpsc_settings',
+            'wpscac_cache_settings',
+            [
+                'label_for'   => 'wpscac_js_delay',
+                'option_name' => 'js_delay',
+                'description' => __('Load scripts only after user interaction (SOTA)', 'wps-cache')
+            ]
+        );
+
+        // 8. Remove Unused CSS
+        add_settings_field(
+            'wpscac_remove_unused_css',
+            __('Remove Unused CSS', 'wps-cache'),
+            [$this->renderer, 'renderCheckboxField'],
+            'wpsc_settings',
+            'wpscac_cache_settings',
+            [
+                'label_for'   => 'wpscac_remove_unused_css',
+                'option_name' => 'remove_unused_css',
+                'description' => __('Heuristic scan to strip unused styles (Experimental)', 'wps-cache')
+            ]
+        );
+
+        // --- END SOTA FIELDS ---
 
         // Redis Fields
         add_settings_field(
@@ -352,10 +405,19 @@ class SettingsManager
             'varnish_cache'      => false,
             'css_minify'         => false,
             'js_minify'          => false,
+            'js_defer'           => false,
+            'js_delay'           => false,
+            'remove_unused_css'  => false,
             'cache_lifetime'     => 3600,
             'excluded_urls'      => [],
             'excluded_css'       => [],
-            'excluded_js'        => [],
+            'excluded_js' => [
+                'jquery',
+                'jquery-core',
+                'jquery-migrate',
+                'wp-includes/js', // Safe default to prevent wp.domReady errors
+                'google-analytics'
+            ],
             'redis_host'         => '127.0.0.1',
             'redis_port'         => 6379,
             'redis_db'           => 0,
@@ -383,9 +445,10 @@ class SettingsManager
      */
     public function updateSettings(array $settings): bool
     {
+        // This method is primarily used for programmatic updates.
+        // The standard Options API uses the Validator directly.
         $validated_settings = $this->validator->sanitizeSettings($settings);
 
-        // FIX: Update the correct option name
         $updated = update_option('wpsc_settings', $validated_settings);
 
         if ($updated) {

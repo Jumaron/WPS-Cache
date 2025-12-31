@@ -19,9 +19,9 @@ class SettingsRenderer
         <form method="post" action="options.php" class="wpsc-settings-form">
             <?php settings_fields('wpsc_settings'); ?>
 
-            <!-- Cache Types Section -->
+            <!-- Cache & Optimization Types Section -->
             <div class="wpsc-section">
-                <h2><?php esc_html_e('Cache Types', 'wps-cache'); ?></h2>
+                <h2><?php esc_html_e('Cache & Optimization', 'wps-cache'); ?></h2>
                 <div class="wpsc-cache-types-grid">
                     <?php $this->renderCacheTypeCards($settings); ?>
                 </div>
@@ -55,6 +55,7 @@ class SettingsRenderer
     private function renderCacheTypeCards(array $settings): void
     {
         $cache_types = [
+            // Core Cache
             'html_cache' => [
                 'label'       => __('Static HTML Cache', 'wps-cache'),
                 'description' => __('Cache static HTML pages for faster delivery', 'wps-cache')
@@ -67,13 +68,29 @@ class SettingsRenderer
                 'label'       => __('Varnish Cache', 'wps-cache'),
                 'description' => __('HTTP cache acceleration using Varnish', 'wps-cache')
             ],
+
+            // CSS Optimization
             'css_minify' => [
                 'label'       => __('CSS Minification', 'wps-cache'),
                 'description' => __('Minify CSS files', 'wps-cache')
             ],
+            'remove_unused_css' => [
+                'label'       => __('Remove Unused CSS', 'wps-cache'),
+                'description' => __('Heuristic scan to strip unused styles (Experimental)', 'wps-cache')
+            ],
+
+            // JS Optimization
             'js_minify' => [
                 'label'       => __('JavaScript Minification', 'wps-cache'),
                 'description' => __('Minify JavaScript files', 'wps-cache')
+            ],
+            'js_defer' => [
+                'label'       => __('Defer JavaScript', 'wps-cache'),
+                'description' => __('Non-blocking script loading (Safe)', 'wps-cache')
+            ],
+            'js_delay' => [
+                'label'       => __('Delay JavaScript', 'wps-cache'),
+                'description' => __('Load scripts only after user interaction (SOTA)', 'wps-cache')
             ]
         ];
 
