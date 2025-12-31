@@ -41,7 +41,7 @@ class ToolsManager
                     <progress id="wpsc-preload-bar" aria-labelledby="wpsc-preload-status" value="0" max="100" style="width: 100%; height: 10px;"></progress>
                 </div>
 
-                <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary">
+                <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary" aria-controls="wpsc-preload-progress">
                     Start Preloading
                 </button>
             </div>

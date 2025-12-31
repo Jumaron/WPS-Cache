@@ -85,6 +85,8 @@ final class AdminPanelManager
             'nonce'    => wp_create_nonce('wpsc_ajax_nonce'),
             'strings'  => [
                 'preload_start' => __('Gathering URLs...', 'wps-cache'),
+                'preload_loading' => __('Preloading...', 'wps-cache'),
+                'preload_done' => __('Done!', 'wps-cache'),
                 'preload_error' => __('Error during preload.', 'wps-cache'),
                 'preload_complete' => __('Preloading Complete!', 'wps-cache')
             ]

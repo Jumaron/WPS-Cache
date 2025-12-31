@@ -16,6 +16,13 @@ document.addEventListener("DOMContentLoaded", function () {
   preloadBtn.addEventListener("click", function () {
     // UI Reset
     preloadBtn.disabled = true;
+    // Store original text
+    if (!preloadBtn.dataset.originalText) {
+      preloadBtn.dataset.originalText = preloadBtn.innerHTML;
+    }
+    // Set loading state
+    preloadBtn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin"></span> ' + wpsc_admin.strings.preload_loading;
+
     progressDiv.style.display = "block";
     statusSpan.textContent = wpsc_admin.strings.preload_start;
     progressBar.value = 0;
@@ -108,7 +115,17 @@ document.addEventListener("DOMContentLoaded", function () {
     statusSpan.textContent = msg;
     progressBar.value = 100;
     percentSpan.textContent = "100%";
-    preloadBtn.disabled = false;
+
+    // Show success state
+    preloadBtn.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + wpsc_admin.strings.preload_done;
+
+    setTimeout(() => {
+        preloadBtn.disabled = false;
+        // Restore original text
+        if (preloadBtn.dataset.originalText) {
+            preloadBtn.innerHTML = preloadBtn.dataset.originalText;
+        }
+    }, 2000);
   }
 
   // Generic Copy Functionality

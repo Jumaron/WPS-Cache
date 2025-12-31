@@ -415,3 +415,11 @@ input:checked + .wpsc-slider:before {
     margin-left: -10px;
   }
 }
+@keyframes wpsc-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.wpsc-spin {
+  animation: wpsc-spin 2s infinite linear;
+}
