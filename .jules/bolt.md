@@ -9,3 +9,7 @@
 ## 2024-05-30 - [Avoid Global Object Cache Flush on Content Updates]
 **Learning:** `wp_cache_flush()` wipes the entire persistent object cache (Redis/Memcached), causing cache stampedes. Calling it on frequent events like `save_post` defeats the purpose of persistent caching.
 **Action:** Removed `wp_cache_flush()` from `clearContentCaches` in `CacheManager.php`. WordPress natively handles granular invalidation (`clean_post_cache`). Only perform full flushes during system updates (e.g., theme switch).
+
+## 2024-05-30 - [Efficient String Tokenization]
+**Learning:** Parsing strings character-by-character in PHP is slow due to opcode overhead.
+**Action:** Replaced manual loops in `MinifyJS::tokenize` with `strcspn()` to skip over chunks of safe characters. This utilizes C-level performance for scanning, only dropping back to PHP for delimiters. This matches the optimization already present in `MinifyCSS`.
