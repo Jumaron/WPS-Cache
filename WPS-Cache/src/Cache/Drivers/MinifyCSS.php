@@ -32,6 +32,37 @@ final class MinifyCSS extends AbstractCacheDriver
     private const T_OPERATOR   = 9; // , > + ~
     private const T_WORD       = 10; // Selectors, properties, values
 
+    private const SELECTOR_PSEUDOS = [
+        'not',
+        'is',
+        'where',
+        'has',
+        'nth-child',
+        'nth-last-child',
+        'nth-of-type',
+        'nth-last-of-type',
+        'nth-col',
+        'nth-last-col',
+        'dir',
+        'lang',
+        'host',
+        'host-context',
+        'part',
+        'slotted',
+        'matches',
+        '-webkit-any',
+        '-moz-any',
+        'cue',
+        'current',
+        'past',
+        'future',
+        'state',
+        'view-transition-group',
+        'view-transition-image-pair',
+        'view-transition-old',
+        'view-transition-new'
+    ];
+
     private string $cache_dir;
 
     public function __construct()
@@ -405,38 +436,7 @@ final class MinifyCSS extends AbstractCacheDriver
             // If NO whitespace was skipped, check if we need to force space
 
             // Selector pseudo-classes
-            $selector_pseudos = [
-                'not',
-                'is',
-                'where',
-                'has',
-                'nth-child',
-                'nth-last-child',
-                'nth-of-type',
-                'nth-last-of-type',
-                'nth-col',
-                'nth-last-col',
-                'dir',
-                'lang',
-                'host',
-                'host-context',
-                'part',
-                'slotted',
-                'matches',
-                '-webkit-any',
-                '-moz-any',
-                'cue',
-                'current',
-                'past',
-                'future',
-                'state',
-                'view-transition-group',
-                'view-transition-image-pair',
-                'view-transition-old',
-                'view-transition-new'
-            ];
-
-            if ($lastClosedFunc && in_array($lastClosedFunc, $selector_pseudos, true)) {
+            if ($lastClosedFunc && in_array($lastClosedFunc, self::SELECTOR_PSEUDOS, true)) {
                 // In selector context, no input space means chained selector.
                 // Do NOT insert space.
                 return false;
