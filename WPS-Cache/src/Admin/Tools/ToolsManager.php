@@ -91,7 +91,7 @@ class ToolsManager
             if ($link) $urls[$link] = true;
         }
 
-        wp_send_json_success(array_keys($urls));
+        wp_send_json_success(array_values(array_keys($urls)));
     }
 
     /**
