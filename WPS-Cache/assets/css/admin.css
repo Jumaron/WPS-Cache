@@ -331,27 +331,48 @@ input:checked + .wpsc-slider:before {
   color: var(--wpsc-text-main);
 }
 
-/* Notices - Customized */
+/* NOTICES (Updated) */
 .wpsc-notice {
   background: white;
   border-left: 4px solid var(--wpsc-primary);
   box-shadow: var(--wpsc-shadow);
   padding: 1rem 1.5rem;
-  margin: 1rem 2rem 0 2rem; /* Align with content */
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 10px;
 }
-
 .wpsc-notice.success {
   border-left-color: var(--wpsc-success);
 }
 .wpsc-notice.error {
   border-left-color: var(--wpsc-danger);
 }
-.wpsc-notice.warning {
-  border-left-color: var(--wpsc-warning);
+.wpsc-notice-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Custom Dismiss Button */
+.wpsc-dismiss-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--wpsc-text-muted);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+.wpsc-dismiss-btn:hover {
+  color: var(--wpsc-danger);
+}
+.wpsc-dismiss-btn .dashicons {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Utilities */

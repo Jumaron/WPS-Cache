@@ -8,11 +8,7 @@ class NoticeManager
 {
     private const TRANSIENT_KEY = 'wpsc_admin_notices';
 
-    public function __construct()
-    {
-        // We do NOT add_action('admin_notices') here anymore.
-        // The AdminPanelManager manually calls renderNotices() to control placement.
-    }
+    public function __construct() {}
 
     public function add(string $message, string $type = 'success'): void
     {
@@ -37,7 +33,6 @@ class NoticeManager
         echo '<div class="wpsc-notices-container" style="margin-bottom: 20px;">';
 
         foreach ($notices as $notice) {
-            // Map types to our CSS classes
             $typeClass = match ($notice['type']) {
                 'error' => 'error',
                 'warning' => 'warning',
@@ -52,11 +47,12 @@ class NoticeManager
 
 ?>
             <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>">
-                <div style="display:flex; align-items:center; gap:10px;">
+                <div class="wpsc-notice-content">
                     <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
                     <span><?php echo wp_kses_post($notice['message']); ?></span>
                 </div>
-                <button type="button" class="notice-dismiss" onclick="this.parentElement.remove()" style="background:none; border:none; cursor:pointer; color:var(--wpsc-text-muted);">
+                <!-- Custom Dismiss Button (No WP Core classes) -->
+                <button type="button" class="wpsc-dismiss-btn" onclick="this.closest('.wpsc-notice').remove()">
                     <span class="dashicons dashicons-dismiss"></span>
                 </button>
             </div>

@@ -10,14 +10,8 @@ use WPSCache\Optimization\AsyncCSS;
 final class HTMLCache extends AbstractCacheDriver
 {
     private string $cacheDir;
-    private array $ignoredTags = [];
 
-    private const BYPASS_PARAMS = [
-        'add-to-cart',
-        'wp_nonce',
-        'preview',
-        's'
-    ];
+    private const BYPASS_PARAMS = ['add-to-cart', 'wp_nonce', 'preview', 's'];
 
     public function __construct()
     {
@@ -60,57 +54,42 @@ final class HTMLCache extends AbstractCacheDriver
     {
         if (empty($buffer) || http_response_code() !== 200) return $buffer;
 
-        // 1. Safe HTML Optimization (Fix for Elementor)
-        $content = $this->optimizeHTML($buffer);
+        // --- DISABLE HTML OPTIMIZATION FOR STABILITY ---
+        // Elementor and other builders rely on whitespace for inline-block layout.
+        // We skip $this->optimizeHTML($buffer) entirely to ensure 100% visual compatibility.
+        $content = $buffer;
 
-        // 2. Asset Optimization
-        $jsOpt = new JSOptimizer($this->settings);
-        $content = $jsOpt->process($content);
+        // --- ASSET OPTIMIZATION ---
+        // We still apply JS and CSS optimizations as they are handled safely by SOTA drivers.
 
-        $cssOpt = new AsyncCSS($this->settings);
-        $content = $cssOpt->process($content);
+        // 1. JS Delay/Defer
+        if (!empty($this->settings['js_delay']) || !empty($this->settings['js_defer'])) {
+            try {
+                $jsOpt = new JSOptimizer($this->settings);
+                $content = $jsOpt->process($content);
+            } catch (\Throwable $e) {
+                // Fail safe: if optimizer crashes, keep original content
+                $content = $buffer;
+            }
+        }
 
+        // 2. CSS Async
+        if (!empty($this->settings['css_async'])) {
+            try {
+                $cssOpt = new AsyncCSS($this->settings);
+                $content = $cssOpt->process($content);
+            } catch (\Throwable $e) {
+                // Fail safe
+            }
+        }
+
+        // Add Timestamp
         $content .= sprintf("\n<!-- WPS Cache: %s -->", gmdate('Y-m-d H:i:s'));
 
+        // Write to Disk
         $this->writeCacheFile($content);
 
         return $content;
-    }
-
-    /**
-     * SOTA "Safe" HTML Optimizer.
-     * We REMOVED aggressive whitespace collapsing because it breaks
-     * page builders (Elementor/Divi) and inline-block layouts.
-     * We primarily focus on removing comments.
-     */
-    private function optimizeHTML(string $html): string
-    {
-        $this->ignoredTags = [];
-
-        // 1. Protect SCRIPT, STYLE, PRE, TEXTAREA, CODE
-        // Using 's' modifier for dot-matches-newline
-        $html = preg_replace_callback(
-            '/<(script|style|pre|textarea|code)[^>]*>.*?<\/\1>/si',
-            function ($m) {
-                $k = "<!--WP_P_" . count($this->ignoredTags) . "-->";
-                $this->ignoredTags[$k] = $m[0];
-                return $k;
-            },
-            $html
-        );
-
-        // 2. Remove HTML Comments (Except IE conditionals)
-        $html = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $html);
-
-        // 3. (REMOVED) Whitespace collapsing.
-        // $html = preg_replace('/\s+/', ' ', $html); <--- THIS WAS KILLING ELEMENTOR
-
-        // 4. Restore protected blocks
-        if (!empty($this->ignoredTags)) {
-            $html = strtr($html, $this->ignoredTags);
-        }
-
-        return trim($html);
     }
 
     private function writeCacheFile(string $content): void
