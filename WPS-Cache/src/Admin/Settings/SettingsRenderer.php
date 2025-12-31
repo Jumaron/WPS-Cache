@@ -73,6 +73,12 @@ class SettingsRenderer
     public function renderInput(string $key, string $label, string $description, array $settings, string $type = 'text', array $attrs = []): void
     {
         $value = $settings[$key] ?? '';
+
+        // Sentinel Fix: Prevent password exposure in HTML source
+        if ($type === 'password') {
+            $value = '';
+        }
+
         $class = ($type === 'number') ? 'wpsc-input-number' : 'wpsc-input-text';
         $descId = $description ? 'wpsc_' . esc_attr($key) . '_desc' : '';
 
