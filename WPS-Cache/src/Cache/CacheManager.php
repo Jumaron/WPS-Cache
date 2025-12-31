@@ -14,9 +14,12 @@ use Throwable;
  */
 final class CacheManager
 {
-    private const CACHE_CLEANUP_HOOKS = [
+    private const CONTENT_CLEANUP_HOOKS = [
         'save_post',
         'comment_post',
+    ];
+
+    private const SYSTEM_CLEANUP_HOOKS = [
         'switched_theme',
         'activated_plugin',
         'deactivated_plugin'
@@ -59,15 +62,20 @@ final class CacheManager
 
     private function setupCacheHooks(): void
     {
-        foreach (self::CACHE_CLEANUP_HOOKS as $hook) {
+        foreach (self::CONTENT_CLEANUP_HOOKS as $hook) {
+            add_action($hook, [$this, 'clearContentCaches']);
+        }
+
+        foreach (self::SYSTEM_CLEANUP_HOOKS as $hook) {
             add_action($hook, [$this, 'clearAllCaches']);
         }
     }
 
     /**
-     * Master Switch: Clears every layer of caching available.
+     * Clears content caches (Drivers + WP Internals) but preserves OpCache.
+     * Used for frequent updates like post saves and comments.
      */
-    public function clearAllCaches(): bool
+    public function clearContentCaches(): bool
     {
         $this->errorLog = [];
         $success = true;
@@ -85,12 +93,26 @@ final class CacheManager
         // 2. Clear WordPress Internals (Object Cache & Transients)
         $this->clearWordPressInternals();
 
+        // 3. Fire Content Signal
+        do_action('wpsc_content_cache_cleared', $success, $this->errorLog);
+
+        return $success && empty($this->errorLog);
+    }
+
+    /**
+     * Master Switch: Clears every layer of caching available.
+     */
+    public function clearAllCaches(): bool
+    {
+        // 1 & 2. Clear Content Caches
+        $success = $this->clearContentCaches();
+
         // 3. Clear OpCache (PHP Code Cache)
         if (function_exists('opcache_reset')) {
             @opcache_reset();
         }
 
-        // 4. Fire Signal
+        // 4. Fire Master Signal
         do_action('wpsc_cache_cleared', $success, $this->errorLog);
 
         return $success && empty($this->errorLog);
