@@ -522,7 +522,21 @@ final class MinifyJS extends AbstractCacheDriver
         if (!isset($script->src)) return null;
         $src = $script->src;
         if (strpos($src, 'http') !== 0) $src = site_url($src);
-        return str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
+
+        $path = str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
+
+        // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
+        $realPath = realpath($path);
+        if ($realPath === false || !str_starts_with($realPath, ABSPATH)) {
+            return null;
+        }
+
+        // Sentinel Fix: Ensure strictly JS extension (prevents reading .php files)
+        if (pathinfo($realPath, PATHINFO_EXTENSION) !== 'js') {
+            return null;
+        }
+
+        return $realPath;
     }
 
     private function isValidSource(?string $source): bool
