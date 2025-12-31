@@ -106,10 +106,10 @@ class ToolsManager
         if (empty($url)) wp_send_json_error('No URL provided');
 
         // Perform the request
-        $response = wp_remote_get($url, [
+        // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
+        $response = wp_safe_remote_get($url, [
             'timeout'   => 10,
             'blocking'  => true,
-            'sslverify' => false,
             'cookies'   => [],
             'headers'   => [
                 'User-Agent' => 'WPS-Cache-Preloader/1.0; ' . home_url()

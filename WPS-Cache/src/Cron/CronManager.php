@@ -46,10 +46,10 @@ class CronManager
 
         // 2. Crawl them (Warm up cache)
         foreach ($urls as $url) {
-            wp_remote_get($url, [
+            // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
+            wp_safe_remote_get($url, [
                 'timeout'   => 5,
                 'blocking'  => true, // Wait for it to generate
-                'sslverify' => false,
                 'cookies'   => [],
                 'headers'   => ['User-Agent' => 'WPS-Cache-Cron-Preloader']
             ]);
