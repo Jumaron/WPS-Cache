@@ -25,7 +25,7 @@ class DiagnosticTools
 <?php echo esc_textarea($this->getFormattedDiagnosticInfo()); ?>
                 </textarea>
                 <div style="margin-top: 1rem;">
-                    <button type="button" class="button wpsc-btn-secondary" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); alert('Copied to clipboard!');">
+                    <button type="button" class="button wpsc-btn-secondary" onclick="const btn=this; const original=btn.innerHTML; navigator.clipboard.writeText(this.parentElement.previousElementSibling.value).then(function(){ btn.innerHTML = '<span class=\'dashicons dashicons-yes\' style=\'vertical-align: middle;\'></span> Copied!'; setTimeout(function(){ btn.innerHTML = original; }, 2000); });">
                         <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy to Clipboard
                     </button>
                 </div>
