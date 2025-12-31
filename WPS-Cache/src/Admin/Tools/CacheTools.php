@@ -226,9 +226,9 @@ class CacheTools
 
         foreach ($urls as $index => $url) {
             try {
-                $response = wp_remote_get($url, [
+                // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
+                $response = wp_safe_remote_get($url, [
                     'timeout'   => 30,
-                    'sslverify' => false,
                     'user-agent' => 'WPSCache Preloader'
                 ]);
 
