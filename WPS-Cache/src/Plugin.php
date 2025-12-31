@@ -15,7 +15,7 @@ use WPSCache\Cron\CronManager; // Added for Preloading
  */
 final class Plugin
 {
-    private const DEFAULT_SETTINGS = [
+    public const DEFAULT_SETTINGS = [
         'html_cache'       => true,
         'redis_cache'      => false,
         'varnish_cache'    => false,
@@ -25,7 +25,9 @@ final class Plugin
         'js_defer'         => false, // Added
         'js_delay'         => false, // Added
         'enable_metrics'   => true,  // Added
+        'metrics_retention'=> 14,    // Added
         'preload_interval' => 'daily', // Added
+        'preload_urls'     => [],    // Added
         'cache_lifetime'   => 3600,
         'excluded_urls'    => [],
         'excluded_css'     => [],

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace WPSCache\Admin\Settings;
 
+use WPSCache\Plugin;
+
 /**
  * Handles security, validation, and sanitization of user inputs.
- * FIX: Implements "Patch" logic to prevent overwriting settings from other tabs.
+ * Implements "Patch" logic to prevent overwriting settings from other tabs.
  */
 class SettingsValidator
 {
@@ -22,97 +24,104 @@ class SettingsValidator
             $current = [];
         }
 
+        // Merge current DB with defaults to ensure we have a complete set of keys
+        // We use Plugin::DEFAULT_SETTINGS as the schema source of truth.
+        $defaults = Plugin::DEFAULT_SETTINGS;
+        $current = array_merge($defaults, $current);
+
         $clean = [];
 
-        // --- 1. Boolean Switches ---
-        // Note: The Renderer outputs a hidden "0" field before the checkbox.
-        // So if the field is on screen, we receive "0" or "1".
-        // If the field is NOT on screen (different tab), the key is missing entirely.
-        $booleans = [
-            'html_cache',
-            'enable_metrics',
-            'redis_cache',
-            'varnish_cache',
-            'css_minify',
-            'css_async',
-            'js_minify',
-            'js_defer',
-            'js_delay',
-            'redis_persistent',
-            'redis_compression'
-        ];
+        foreach ($defaults as $key => $defaultValue) {
+            // "Patch" Logic:
+            // If the key is present in $input, we update it.
+            // If the key is missing from $input, we keep the existing value ($current).
+            //
+            // Note for Booleans (Checkboxes):
+            // The Renderer outputs a hidden input with value="0" before the checkbox.
+            // So if a checkbox is on the active tab, the key WILL be present in $input (0 or 1).
+            // If it is on a different tab, the key will be missing.
 
-        foreach ($booleans as $key) {
             if (array_key_exists($key, $input)) {
-                // Field was present in form -> update it
-                $clean[$key] = (string)$input[$key] === '1';
+                $clean[$key] = $this->sanitizeValue($key, $input[$key], $defaultValue);
             } else {
-                // Field missing -> keep existing DB value
-                $clean[$key] = isset($current[$key]) ? (bool)$current[$key] : false;
-            }
-        }
-
-        // --- 2. Numeric Values ---
-        $numerics = [
-            'cache_lifetime'    => [60, 31536000],
-            'metrics_retention' => [1, 365],
-            'redis_port'        => [1, 65535],
-            'redis_db'          => [0, 15],
-            'varnish_port'      => [1, 65535]
-        ];
-
-        foreach ($numerics as $key => [$min, $max]) {
-            if (isset($input[$key])) {
-                $clean[$key] = $this->sanitizeInt($input[$key], $min, $max);
-            } else {
-                $clean[$key] = isset($current[$key]) ? (int)$current[$key] : 0;
-            }
-        }
-
-        // --- 3. Strings ---
-        $strings = ['redis_host', 'redis_prefix', 'varnish_host', 'preload_interval'];
-        foreach ($strings as $key) {
-            if (isset($input[$key])) {
-                if ($key === 'redis_host' || $key === 'varnish_host') {
-                    $clean[$key] = $this->sanitizeHost($input[$key]);
-                } else {
-                    $clean[$key] = sanitize_text_field($input[$key]);
-                }
-            } else {
-                $clean[$key] = $current[$key] ?? '';
-            }
-        }
-
-        // --- 4. Password (Masking Handling) ---
-        if (isset($input['redis_password'])) {
-            // Only update if it's not empty/masked.
-            // If user clears it, we might need logic, but usually empty = no change for passwords in admin
-            if (!empty($input['redis_password'])) {
-                $clean['redis_password'] = sanitize_text_field($input['redis_password']);
-            } else {
-                $clean['redis_password'] = $current['redis_password'] ?? '';
-            }
-        } else {
-            $clean['redis_password'] = $current['redis_password'] ?? '';
-        }
-
-        // --- 5. Arrays (Textarea Lines) ---
-        $arrays = ['excluded_urls', 'excluded_css', 'excluded_js', 'preload_urls'];
-        foreach ($arrays as $key) {
-            if (isset($input[$key])) {
-                $clean[$key] = $this->sanitizeLines($input[$key]);
-            } else {
-                $clean[$key] = $current[$key] ?? [];
+                $clean[$key] = $current[$key];
             }
         }
 
         return $clean;
     }
 
-    private function sanitizeInt(mixed $value, int $min, int $max): int
+    private function sanitizeValue(string $key, mixed $value, mixed $defaultValue): mixed
+    {
+        // Determine type based on default value
+        $type = gettype($defaultValue);
+
+        switch ($type) {
+            case 'boolean':
+                return (string)$value === '1';
+
+            case 'integer':
+                // Apply specific ranges for known keys
+                return $this->sanitizeInt($key, $value);
+
+            case 'array':
+                return $this->sanitizeLines($value);
+
+            case 'string':
+                return $this->sanitizeString($key, $value);
+
+            default:
+                // Fallback for unknown types (shouldn't happen with strict typing in Plugin)
+                return sanitize_text_field((string)$value);
+        }
+    }
+
+    private function sanitizeInt(string $key, mixed $value): int
     {
         $val = absint($value);
+
+        // Define specific ranges
+        // Defaults: 0 to PHP_INT_MAX
+        $min = 0;
+        $max = PHP_INT_MAX;
+
+        switch ($key) {
+            case 'cache_lifetime':
+                $min = 60;
+                $max = 31536000;
+                break;
+            case 'metrics_retention':
+                $min = 1;
+                $max = 365;
+                break;
+            case 'redis_port':
+            case 'varnish_port':
+                $min = 1;
+                $max = 65535;
+                break;
+            case 'redis_db':
+                $min = 0;
+                $max = 15;
+                break;
+        }
+
         return max($min, min($max, $val));
+    }
+
+    private function sanitizeString(string $key, mixed $value): string
+    {
+        $val = (string)$value;
+
+        if ($key === 'redis_host' || $key === 'varnish_host') {
+            return $this->sanitizeHost($val);
+        }
+
+        // Special handling for password:
+        // We allow clearing the password if the user submits an empty string.
+        // We do NOT implement masking logic here anymore; masking is a UI concern.
+        // If the value is submitted, it is what the user intends.
+
+        return sanitize_text_field($val);
     }
 
     private function sanitizeHost(string $host): string
@@ -125,6 +134,11 @@ class SettingsValidator
     {
         if (is_string($input)) {
             $input = explode("\n", $input);
+        }
+
+        // Ensure it's an array before mapping
+        if (!is_array($input)) {
+            return [];
         }
 
         $lines = array_map('trim', $input);
