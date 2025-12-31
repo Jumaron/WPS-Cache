@@ -55,10 +55,18 @@ final class RedisCache extends AbstractCacheDriver
         } elseif (function_exists('wp_salt')) {
             $this->salt = wp_salt('auth');
         } else {
-            // Fallback for minimal environments: Use a hash of the site URL or DB config if available,
-            // otherwise a hardcoded string. This ensures persistence across requests.
-            // Note: In a real WP environment, keys or wp_salt should be available.
-            $this->salt = 'wpsc_fallback_salt_change_me_in_production';
+            // Sentinel Fix: Use DB credentials to generate a consistent, site-specific salt.
+            // This prevents using the hardcoded fallback which is publicly known.
+            // We use constants available in wp-config.php which is loaded before plugins.
+            $secret  = (defined('DB_NAME') ? DB_NAME : '');
+            $secret .= (defined('DB_USER') ? DB_USER : '');
+            $secret .= (defined('DB_PASSWORD') ? DB_PASSWORD : '');
+
+            if (empty($secret)) {
+                $secret = 'wpsc_fallback_entropy_' . __FILE__;
+            }
+
+            $this->salt = hash('sha256', $secret);
         }
     }
 
