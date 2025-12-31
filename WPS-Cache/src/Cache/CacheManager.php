@@ -81,7 +81,7 @@ final class CacheManager
         }
 
         // 2. Clear WordPress Internals (Object Cache & Transients)
-        $this->clearWordPressInternals();
+        $this->clearWordPressInternals(false);
 
         // 3. Fire Signal
         do_action('wpsc_cache_cleared', $success, $this->errorLog);
@@ -108,7 +108,7 @@ final class CacheManager
         }
 
         // 2. Clear WordPress Internals (Object Cache & Transients)
-        $this->clearWordPressInternals();
+        $this->clearWordPressInternals(true);
 
         // 3. Clear OpCache (PHP Code Cache)
         if (function_exists('opcache_reset')) {
@@ -121,10 +121,12 @@ final class CacheManager
         return $success && empty($this->errorLog);
     }
 
-    private function clearWordPressInternals(): void
+    private function clearWordPressInternals(bool $full_flush = true): void
     {
         // Flush Memory Object Cache
-        wp_cache_flush();
+        if ($full_flush) {
+            wp_cache_flush();
+        }
 
         // Flush Transients (DB) - SOTA Optimized
         $this->clearDatabaseTransients();

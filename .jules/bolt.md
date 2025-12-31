@@ -5,3 +5,7 @@
 ## 2024-05-24 - [Avoid File I/O for Cache Checks]
 **Learning:** Reading file content to generate a cache key (e.g., via MD5 of content) is a significant performance bottleneck on every request.
 **Action:** Use file metadata (path, mtime, size) to generate cache keys instead. This avoids reading the file content unless a cache miss occurs. Implemented this in `MinifyJS.php` to match the efficient strategy in `MinifyCSS.php`.
+
+## 2024-05-30 - [Avoid Global Object Cache Flush on Content Updates]
+**Learning:** `wp_cache_flush()` wipes the entire persistent object cache (Redis/Memcached), causing cache stampedes. Calling it on frequent events like `save_post` defeats the purpose of persistent caching.
+**Action:** Removed `wp_cache_flush()` from `clearContentCaches` in `CacheManager.php`. WordPress natively handles granular invalidation (`clean_post_cache`). Only perform full flushes during system updates (e.g., theme switch).
