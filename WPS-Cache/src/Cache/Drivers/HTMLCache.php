@@ -96,7 +96,9 @@ final class HTMLCache extends AbstractCacheDriver
     {
         $host = preg_replace('/[^a-zA-Z0-9\-\.]/', '', $_SERVER['HTTP_HOST'] ?? 'unknown');
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        $path = parse_url($uri, PHP_URL_PATH);
+
+        // Sentinel: Prevent path traversal by sanitizing the path
+        $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
 
         if (substr($path, -1) !== '/' && !preg_match('/\.[a-z0-9]{2,4}$/i', $path)) {
             $path .= '/';
@@ -115,6 +117,38 @@ final class HTMLCache extends AbstractCacheDriver
         if (substr($fullPath, -1) !== '/') $fullPath .= '/';
 
         $this->atomicWrite($fullPath . $filename, $content);
+    }
+
+    /**
+     * Sentinel: Sanitize path to prevent Directory Traversal.
+     * Removes dot segments (./ and ../) and enforces strict path structure.
+     */
+    private function sanitizePath(string $path): string
+    {
+        // 1. Remove null bytes
+        $path = str_replace(chr(0), '', $path);
+
+        // 2. Explode and filter parts
+        $parts = explode('/', $path);
+        $safeParts = [];
+
+        foreach ($parts as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part === '..') {
+                // Determine behavior: skip or pop?
+                // Standard URL resolution pops the last segment.
+                // If we are at root, we ignore it.
+                array_pop($safeParts);
+            } else {
+                $safeParts[] = $part;
+            }
+        }
+
+        // 3. Rebuild path
+        return '/' . implode('/', $safeParts);
     }
 
     public function set(string $key, mixed $value, int $ttl = 3600): void {}
