@@ -7,3 +7,8 @@
 **Vulnerability:** The `MinifyJS` and `MinifyCSS` drivers used simple string replacement to map URLs to local paths. This allowed path traversal (`..`) to read files outside the intended directories, and lacked extension validation, permitting reading of sensitive PHP files (like `wp-config.php`) as text.
 **Learning:** Never trust URL-to-Path mapping without strict validation. `str_replace` is insufficient for sanitization.
 **Prevention:** Always use `realpath()` to resolve the final path and verify it against a trusted root (`ABSPATH`). Additionally, enforce strict file extensions (e.g., `.js`, `.css`) to prevent source code disclosure of dynamic files.
+
+## 2024-05-25 - Directory Traversal via Host Header in HTML Cache
+**Vulnerability:** The `HTMLCache` driver sanitized the `HTTP_HOST` header using a regex that allowed dots (`[^a-zA-Z0-9\-\.]`). This permitted attackers to send a Host header containing `..` sequences (e.g., `Host: ..`), causing the plugin to write cache files outside the intended `html` directory (e.g., into the parent `wps-cache` directory).
+**Learning:** Regex character classes like `[\.]` treat dots literally but do not prevent sequences like `..`. User input used in file paths (like `HTTP_HOST` or `REQUEST_URI`) must be strictly validated against directory traversal attacks.
+**Prevention:** explicitly strip `..` sequences, enforce strict hostname formats (alphanumeric + single dots), and validate the final resolved path against the intended cache root.
