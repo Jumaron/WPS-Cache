@@ -35,8 +35,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .then((res) => res.json())
       .then((res) => {
         if (res.success) {
-          // CRITICAL FIX: Ensure we have an Array, even if PHP sent an Object
-          queue = Array.isArray(res.data) ? res.data : Object.values(res.data);
+          queue = res.data;
 
           total = queue.length;
           if (total === 0) {
