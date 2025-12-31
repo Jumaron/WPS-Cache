@@ -269,10 +269,10 @@ final class MinifyJS extends AbstractCacheDriver
             // Whitespace
             if (ctype_space($char)) {
                 $start = $i;
-                while ($i < $len && ctype_space($js[$i])) {
-                    $i++;
-                }
-                yield ['type' => self::T_WHITESPACE, 'value' => substr($js, $start, $i - $start)];
+                // Optimization: Use strspn to skip all whitespace at once (much faster than loop)
+                $len_ws = strspn($js, " \t\n\r\v\f", $i);
+                $i += $len_ws;
+                yield ['type' => self::T_WHITESPACE, 'value' => substr($js, $start, $len_ws)];
                 continue;
             }
 
@@ -379,8 +379,10 @@ final class MinifyJS extends AbstractCacheDriver
             }
             if (str_contains('.!<>=+-*%&|', $char)) {
                 $start = $i;
-                while ($i < $len && str_contains('.!<>=+-*%&|', $js[$i])) $i++;
-                yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => substr($js, $start, $i - $start)];
+                // Optimization: Use strspn to match consecutive operator characters at once
+                $len_op = strspn($js, '.!<>=+-*%&|', $i);
+                $i += $len_op;
+                yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => substr($js, $start, $len_op)];
                 continue;
             }
 
