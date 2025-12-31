@@ -13,3 +13,7 @@
 ## 2024-05-30 - [Efficient String Tokenization]
 **Learning:** Parsing strings character-by-character in PHP is slow due to opcode overhead.
 **Action:** Replaced manual loops in `MinifyJS::tokenize` with `strcspn()` to skip over chunks of safe characters. This utilizes C-level performance for scanning, only dropping back to PHP for delimiters. This matches the optimization already present in `MinifyCSS`.
+
+## 2024-05-30 - [Regex over Iterative Search]
+**Learning:** Repeating `array_merge` and `stripos` loops for every tag (script/style) creates O(N*M) complexity in hot paths.
+**Action:** Pre-compile exclusion lists into a single Regex in the constructor. This reduces per-tag checks to a single O(1) (amortized) `preg_match` call, significantly reducing CPU overhead on pages with many assets.

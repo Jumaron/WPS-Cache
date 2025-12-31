@@ -11,6 +11,7 @@ namespace WPSCache\Optimization;
 class JSOptimizer
 {
     private array $settings;
+    private string $exclusionRegex;
 
     // Critical scripts that should usually be excluded from delay
     private const CRITICAL_EXCLUSIONS = [
@@ -23,6 +24,14 @@ class JSOptimizer
     public function __construct(array $settings)
     {
         $this->settings = $settings;
+
+        // Compile exclusions into a single regex for O(1) matching
+        $exclusions = array_merge(self::CRITICAL_EXCLUSIONS, $this->settings['excluded_js'] ?? []);
+        $exclusions = array_unique($exclusions); // Deduplicate
+
+        // Escape for regex and join
+        $quoted = array_map(fn($s) => preg_quote($s, '/'), $exclusions);
+        $this->exclusionRegex = '/' . implode('|', $quoted) . '/i';
     }
 
     public function process(string $html): string
@@ -93,14 +102,8 @@ class JSOptimizer
 
     private function isExcluded(string $attributes): bool
     {
-        $exclusions = array_merge(self::CRITICAL_EXCLUSIONS, $this->settings['excluded_js'] ?? []);
-
-        foreach ($exclusions as $term) {
-            if (stripos($attributes, $term) !== false) {
-                return true;
-            }
-        }
-        return false;
+        // Optimized: Single regex match instead of loop + array_merge
+        return preg_match($this->exclusionRegex, $attributes) === 1;
     }
 
     /**
