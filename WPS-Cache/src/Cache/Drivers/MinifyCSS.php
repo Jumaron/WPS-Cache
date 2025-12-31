@@ -33,34 +33,42 @@ final class MinifyCSS extends AbstractCacheDriver
     private const T_WORD       = 10; // Selectors, properties, values
 
     private const SELECTOR_PSEUDOS = [
-        'not',
-        'is',
-        'where',
-        'has',
-        'nth-child',
-        'nth-last-child',
-        'nth-of-type',
-        'nth-last-of-type',
-        'nth-col',
-        'nth-last-col',
-        'dir',
-        'lang',
-        'host',
-        'host-context',
-        'part',
-        'slotted',
-        'matches',
-        '-webkit-any',
-        '-moz-any',
-        'cue',
-        'current',
-        'past',
-        'future',
-        'state',
-        'view-transition-group',
-        'view-transition-image-pair',
-        'view-transition-old',
-        'view-transition-new'
+        'not' => true,
+        'is' => true,
+        'where' => true,
+        'has' => true,
+        'nth-child' => true,
+        'nth-last-child' => true,
+        'nth-of-type' => true,
+        'nth-last-of-type' => true,
+        'nth-col' => true,
+        'nth-last-col' => true,
+        'dir' => true,
+        'lang' => true,
+        'host' => true,
+        'host-context' => true,
+        'part' => true,
+        'slotted' => true,
+        'matches' => true,
+        '-webkit-any' => true,
+        '-moz-any' => true,
+        'cue' => true,
+        'current' => true,
+        'past' => true,
+        'future' => true,
+        'state' => true,
+        'view-transition-group' => true,
+        'view-transition-image-pair' => true,
+        'view-transition-old' => true,
+        'view-transition-new' => true
+    ];
+
+    private const CALC_FUNCTIONS = [
+        'calc' => true, 'clamp' => true, 'min' => true, 'max' => true, 'var' => true
+    ];
+
+    private const PRESERVED_UNITS = [
+        's' => true, 'ms' => true, 'deg' => true, 'rad' => true, 'grad' => true, 'turn' => true, 'hz' => true, 'khz' => true
     ];
 
     private string $cache_dir;
@@ -250,7 +258,7 @@ final class MinifyCSS extends AbstractCacheDriver
                 // Check if previous token was a function name
                 if ($prevToken && $prevToken['type'] === self::T_WORD) {
                     $func = strtolower($prevToken['value']);
-                    if (in_array($func, ['calc', 'clamp', 'min', 'max', 'var'], true)) {
+                    if (isset(self::CALC_FUNCTIONS[$func])) {
                         $calcDepth++;
                     } elseif ($calcDepth > 0) {
                         $calcDepth++; // Nested parens inside calc
@@ -455,7 +463,7 @@ final class MinifyCSS extends AbstractCacheDriver
             // If NO whitespace was skipped, check if we need to force space
 
             // Selector pseudo-classes
-            if ($lastClosedFunc && in_array($lastClosedFunc, self::SELECTOR_PSEUDOS, true)) {
+            if ($lastClosedFunc && isset(self::SELECTOR_PSEUDOS[$lastClosedFunc])) {
                 // In selector context, no input space means chained selector.
                 // Do NOT insert space.
                 return false;
@@ -487,7 +495,7 @@ final class MinifyCSS extends AbstractCacheDriver
         if (preg_match('/^0([a-z%]+)$/i', $val, $matches)) {
             $unit = strtolower($matches[1]);
             // Protected units
-            if (in_array($unit, ['s', 'ms', 'deg', 'rad', 'grad', 'turn', 'hz', 'khz'], true)) return $val;
+            if (isset(self::PRESERVED_UNITS[$unit])) return $val;
             return '0';
         }
         return $val;
