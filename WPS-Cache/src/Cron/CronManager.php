@@ -46,6 +46,12 @@ class CronManager
 
         // 2. Crawl them (Warm up cache)
         foreach ($urls as $url) {
+            // Sentinel: Restrict preloader to local site only to prevent SSRF
+            // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
+            if (!str_starts_with($url, home_url('/'))) {
+                continue;
+            }
+
             // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
             wp_safe_remote_get($url, [
                 'timeout'   => 5,

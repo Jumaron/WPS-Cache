@@ -226,6 +226,12 @@ class CacheTools
 
         foreach ($urls as $index => $url) {
             try {
+                // Sentinel: Restrict preloader to local site only to prevent SSRF
+                // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
+                if (!str_starts_with($url, home_url('/'))) {
+                    throw new \Exception('External URLs are not allowed');
+                }
+
                 // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
                 $response = wp_safe_remote_get($url, [
                     'timeout'   => 30,
