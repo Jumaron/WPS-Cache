@@ -5,71 +5,123 @@ declare(strict_types=1);
 namespace WPSCache\Server;
 
 /**
- * Manages Server Configuration for Cache Bypassing.
+ * Manages .htaccess rules to allow direct file serving.
+ * This effectively makes WordPress run as a static site generator for cached pages.
  */
 class ServerConfigManager
 {
-    private string $cache_path_rel = '/wp-content/cache/wps-cache/html/';
+    private string $htaccessPath;
+
+    // The relative path from document root to cache dir
+    private string $cachePathRel = 'wp-content/cache/wps-cache/html/';
+
+    public function __construct()
+    {
+        $this->htaccessPath = ABSPATH . '.htaccess';
+    }
 
     public function applyConfiguration(): void
     {
-        if ($this->isApache() || $this->isLiteSpeed()) {
+        if ($this->isApacheOrLiteSpeed()) {
             $this->writeHtaccess();
         }
     }
 
     public function removeConfiguration(): void
     {
-        if ($this->isApache() || $this->isLiteSpeed()) {
-            $this->removeHtaccessRules();
+        if ($this->isApacheOrLiteSpeed()) {
+            $this->cleanHtaccess();
         }
     }
 
-    private function isApache(): bool
+    private function isApacheOrLiteSpeed(): bool
     {
-        return isset($_SERVER['SERVER_SOFTWARE']) && strpos(strtolower($_SERVER['SERVER_SOFTWARE']), 'apache') !== false;
+        $software = $_SERVER['SERVER_SOFTWARE'] ?? '';
+        return stripos($software, 'Apache') !== false || stripos($software, 'LiteSpeed') !== false;
     }
 
-    private function isLiteSpeed(): bool
-    {
-        return isset($_SERVER['SERVER_SOFTWARE']) && strpos(strtolower($_SERVER['SERVER_SOFTWARE']), 'litespeed') !== false;
-    }
-
+    /**
+     * Writes the Rewrite Rules within markers.
+     */
     private function writeHtaccess(): void
     {
-        $htaccess_path = ABSPATH . '.htaccess';
-        if (!file_exists($htaccess_path) || !is_writable($htaccess_path)) return;
+        if (!file_exists($this->htaccessPath) || !is_writable($this->htaccessPath)) {
+            // If .htaccess doesn't exist, we can try to create it, but usually WP handles this.
+            // Logging error is appropriate here.
+            error_log('WPS Cache: .htaccess is not writable.');
+            return;
+        }
 
-        $rules = $this->getApacheRules();
-        $content = file_get_contents($htaccess_path);
-        $content = preg_replace('/# BEGIN WPS Cache.*?# END WPS Cache/s', '', $content);
-        $content = $rules . "\n" . trim($content);
-        @file_put_contents($htaccess_path, $content);
+        $current_content = file_get_contents($this->htaccessPath);
+        $rules = $this->getRules();
+
+        // Remove old rules first
+        $content = preg_replace('/# BEGIN WPS Cache.*?# END WPS Cache\s*/s', '', $current_content);
+
+        // Insert new rules at the TOP (before WordPress default rules)
+        $new_content = $rules . "\n" . trim($content);
+
+        if ($new_content !== $current_content) {
+            @file_put_contents($this->htaccessPath, $new_content, LOCK_EX);
+        }
     }
 
-    private function removeHtaccessRules(): void
+    private function cleanHtaccess(): void
     {
-        $htaccess_path = ABSPATH . '.htaccess';
-        if (!file_exists($htaccess_path) || !is_writable($htaccess_path)) return;
+        if (!file_exists($this->htaccessPath) || !is_writable($this->htaccessPath)) return;
 
-        $content = file_get_contents($htaccess_path);
-        $content = preg_replace('/# BEGIN WPS Cache.*?# END WPS Cache\s*/s', '', $content);
-        @file_put_contents($htaccess_path, $content);
+        $content = file_get_contents($this->htaccessPath);
+        $new_content = preg_replace('/# BEGIN WPS Cache.*?# END WPS Cache\s*/s', '', $content);
+
+        if ($new_content !== $content) {
+            @file_put_contents($this->htaccessPath, $new_content, LOCK_EX);
+        }
     }
 
-    public function getApacheRules(): string
+    /**
+     * Generates SOTA mod_rewrite rules.
+     * 1. Checks constraints (Not POST, Not Query String, Not Logged In).
+     * 2. Maps %{REQUEST_URI} to the physical file on disk.
+     * 3. Sets default MIME types and Headers.
+     */
+    private function getRules(): string
     {
+        // Sanitize cache path for Regex
+        $base = parse_url(get_home_url(), PHP_URL_PATH) ?? '/';
+        $cache_path = '/' . trim($this->cachePathRel, '/'); // ensure leading slash
+
         return <<<EOT
 # BEGIN WPS Cache
 <IfModule mod_rewrite.c>
 RewriteEngine On
-RewriteBase /
-RewriteCond %{REQUEST_METHOD} !GET
+RewriteBase {$base}
+
+# 1. Bypass if method is POST
+RewriteCond %{REQUEST_METHOD} POST
+RewriteRule .* - [S=2]
+
+# 2. Bypass if Query String exists
 RewriteCond %{QUERY_STRING} !^$
-RewriteCond %{REQUEST_URI} !^(/wp-admin|/xmlrpc.php|/wp-(app|cron|login|register|mail).php|/wp-includes|/wp-content) [NC]
-RewriteCond %{HTTP_COOKIE} !(wp-postpass|wordpress_logged_in|comment_author)_ [NC]
-RewriteCond %{DOCUMENT_ROOT}{$this->cache_path_rel}%{HTTP_HOST}%{REQUEST_URI}index.html -f
-RewriteRule ^(.*)$ {$this->cache_path_rel}%{HTTP_HOST}/$1/index.html [L]
+RewriteRule .* - [S=1]
+
+# 3. Bypass if logged in or special WP cookies
+RewriteCond %{HTTP_COOKIE} (wp-postpass|wordpress_logged_in|comment_author)_ [NC]
+RewriteRule .* - [S=1]
+
+# 4. Check if HTML file exists
+# We map: domain.com/about/ -> /cache/path/domain.com/about/index.html
+RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html -f
+RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
+
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Serve correct headers for cached HTML
+    <FilesMatch "index\.html$">
+        Header set Content-Type "text/html; charset=UTF-8"
+        Header set Cache-Control "max-age=3600, public"
+        Header set X-WPS-Cache "HIT"
+    </FilesMatch>
 </IfModule>
 # END WPS Cache
 EOT;

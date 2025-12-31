@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace WPSCache\Optimization;
 
 /**
- * SOTA Async CSS Loader with Heuristic Critical CSS Generation.
- * STRICT VERSION: Reduces HTML bloat by being pickier about what is "Critical".
+ * Handles Asynchronous CSS Loading and Heuristic Critical CSS Generation.
+ * 
+ * SOTA Strategy:
+ * 1. Convert blocking <link> tags to non-blocking preload links.
+ * 2. Generate lightweight Critical CSS in-line to prevent FOUC (Flash of Unstyled Content).
+ * 3. Provide <noscript> fallbacks.
  */
-final class AsyncCSS
+class AsyncCSS
 {
     private array $settings;
 
-    // STRICTER selectors. Only grab structural elements, not generic buttons/inputs.
+    // Structural selectors to hunt for in local CSS files for "Heuristic Critical CSS"
     private const CRITICAL_KEYWORDS = [
         'body',
         'html',
@@ -20,15 +24,13 @@ final class AsyncCSS
         'header',
         'nav',
         'menu',
-        'logo',
         '.site-header',
         '.main-navigation',
-        '.ast-container', // Theme specific helpers
-        'h1',
-        'h2',
-        'a', // Typography
+        '#masthead',
+        '.container',
+        '.wrapper',
         'display: none',
-        'visibility: hidden' // Crucial for layout stability
+        'visibility: hidden' // Important for layout stability
     ];
 
     public function __construct(array $settings)
@@ -47,126 +49,102 @@ final class AsyncCSS
             return $html;
         }
 
-        $critical_css_buffer = '';
+        $critical_buffer = '';
+        $processed_html = $html;
 
         foreach ($matches as $match) {
             $original_tag = $match[0];
             $url = $match[1];
 
-            // Skip excluded CSS
+            // Skip exclusions
             if ($this->isExcluded($url)) {
                 continue;
             }
 
-            // 2. Fetch Local CSS Content
-            $css_content = $this->getLocalCSS($url);
+            // 2. Generate Critical CSS (if local file)
+            // We accumulate this to inject it in the <head> later
+            $critical_buffer .= $this->generateHeuristicCriticalCSS($url);
 
-            if ($css_content) {
-                // 3. Minify briefly to make parsing easier
-                $minified = $this->minify($css_content);
-
-                // 4. Generate Heuristic Critical CSS
-                // Limit buffer size to 50KB to prevent massive HTML bloat
-                if (strlen($critical_css_buffer) < 50000) {
-                    $critical_css_buffer .= $this->extractCriticalRules($minified);
-                }
-            }
-
-            // 5. Convert to Async Tag
-            // Check if already async to avoid double processing
-            if (strpos($original_tag, 'data-wpsc-async') !== false) {
-                continue;
-            }
-
+            // 3. Convert to Async Load
+            // Strategy: preload -> onload -> switch to stylesheet
             $async_tag = str_replace(
                 ['rel="stylesheet"', "rel='stylesheet'"],
                 'rel="preload" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" data-wpsc-async="1"',
                 $original_tag
             );
 
+            // 4. Add Noscript Fallback
             $noscript = "<noscript><link rel='stylesheet' href='{$url}'></noscript>";
-            $html = str_replace($original_tag, $async_tag . $noscript, $html);
+
+            $processed_html = str_replace($original_tag, $async_tag . $noscript, $processed_html);
         }
 
-        // 6. Inject Critical CSS at the top of <head>
-        if (!empty($critical_css_buffer)) {
-            $style_block = sprintf(
-                '<style id="wpsc-critical-css">%s</style>',
-                $critical_css_buffer
-            );
-            $html = preg_replace('/(<head[^>]*>)/i', '$1' . $style_block, $html, 1);
+        // 5. Inject Critical CSS Block
+        if (!empty($critical_buffer)) {
+            $style_block = sprintf('<style id="wpsc-critical-css">%s</style>', $this->minifyCritical($critical_buffer));
+            $processed_html = preg_replace('/(<head[^>]*>)/i', '$1' . $style_block, $processed_html, 1);
         }
 
-        return $html;
+        return $processed_html;
     }
 
-    private function extractCriticalRules(string $css): string
+    /**
+     * Attempts to read local CSS files and extract structural rules.
+     * This is faster than Puppeteer/API and prevents FOUC for 80% of themes.
+     */
+    private function generateHeuristicCriticalCSS(string $url): string
     {
-        $buffer = '';
-        $css = preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $css);
+        // Only process local files
+        if (strpos($url, site_url()) !== 0) {
+            return '';
+        }
 
+        $path = str_replace(site_url(), ABSPATH, $url);
+        // Remove query strings (ver=1.2.3)
+        $path = strtok($path, '?');
+
+        if (!file_exists($path)) {
+            return '';
+        }
+
+        $css = @file_get_contents($path);
+        if (!$css) return '';
+
+        $critical = '';
+
+        // Simple tokenizer to find rules
+        // We look for selectors containing our keywords
+        // This is a rough heuristic, but effective for initial paint stability
         $parts = explode('}', $css);
-
         foreach ($parts as $part) {
-            if (trim($part) === '') continue;
-
-            $fragments = explode('{', $part);
-            if (count($fragments) < 2) continue;
-
-            $selector = trim($fragments[0]);
-            $body = trim($fragments[1]);
-
-            // Skip @font-face and @keyframes in Critical CSS to save space
-            if (str_starts_with($selector, '@font-face') || str_starts_with($selector, '@keyframes')) {
-                continue;
-            }
-
-            if ($this->isSelectorCritical($selector)) {
-                $buffer .= $selector . '{' . $body . '}';
+            foreach (self::CRITICAL_KEYWORDS as $keyword) {
+                // Check if selector contains keyword (before the { )
+                $check = explode('{', $part);
+                if (isset($check[0]) && stripos($check[0], $keyword) !== false) {
+                    $critical .= $part . '}';
+                    break; // Found one keyword, add rule and move to next rule
+                }
             }
         }
 
-        return $buffer;
+        return $critical;
     }
 
-    private function isSelectorCritical(string $selector): bool
+    private function minifyCritical(string $css): string
     {
-        $selector = strtolower($selector);
-
-        // Keep simple structural rules
-        foreach (self::CRITICAL_KEYWORDS as $keyword) {
-            if (str_contains($selector, $keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function minify(string $css): string
-    {
-        $css = preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $css);
-        $css = preg_replace('/\s+/', ' ', $css);
-        $css = str_replace([': ', '; ', ', ', ' {', '} '], [':', ';', ',', '{', '}'], $css);
-        return trim($css);
-    }
-
-    private function getLocalCSS(string $url): ?string
-    {
-        if (strpos($url, site_url()) === 0) {
-            $path = str_replace(site_url(), ABSPATH, $url);
-            $path = strtok($path, '?');
-            if (file_exists($path)) {
-                return file_get_contents($path);
-            }
-        }
-        return null;
+        // Basic stripping for the inline block
+        $css = preg_replace('/\/\*((?!\*\/).)*\*\//s', '', $css); // comments
+        $css = preg_replace('/\s+/', ' ', $css); // whitespace
+        return str_replace([': ', '; ', ', ', ' {', '} '], [':', ';', ',', '{', '}'], trim($css));
     }
 
     private function isExcluded(string $url): bool
     {
-        $excluded = $this->settings['excluded_css'] ?? [];
-        foreach ($excluded as $pattern) {
-            if (str_contains($url, $pattern)) return true;
+        $exclusions = $this->settings['excluded_css'] ?? [];
+        foreach ($exclusions as $pattern) {
+            if (!empty($pattern) && stripos($url, $pattern) !== false) {
+                return true;
+            }
         }
         return false;
     }

@@ -4,219 +4,141 @@ declare(strict_types=1);
 
 namespace WPSCache\Admin\Tools;
 
-use WPSCache\Cache\CacheManager;
-
 /**
- * Manages cache tools and maintenance operations
+ * Handles Maintenance Tools, Preloading, and Debug Information.
  */
 class ToolsManager
 {
-    private CacheManager $cache_manager;
-    private CacheTools $cache_tools;
-    private DiagnosticTools $diagnostic_tools;
-    private ImportExportTools $import_export_tools;
-
-    public function __construct(CacheManager $cache_manager)
+    public function __construct()
     {
-        $this->cache_manager = $cache_manager;
-        $this->initializeTools();
-        $this->initializeHooks();
+        add_action('wp_ajax_wpsc_preload_cache', [$this, 'handlePreloadRequest']);
     }
 
     /**
-     * Initializes tool components
+     * Renders the Tools Tab.
      */
-    private function initializeTools(): void
+    public function render(): void
     {
-        $this->cache_tools = new CacheTools($this->cache_manager);
-        $this->diagnostic_tools = new DiagnosticTools();
-        $this->import_export_tools = new ImportExportTools();
-    }
-
-    /**
-     * Sets up WordPress hooks
-     */
-    private function initializeHooks(): void
-    {
-        // Cache maintenance schedule
-        if (!wp_next_scheduled('wpsc_cache_maintenance')) {
-            wp_schedule_event(time(), 'daily', 'wpsc_cache_maintenance');
-        }
-        add_action('wpsc_cache_maintenance', [$this->cache_tools, 'performMaintenance']);
-    }
-
-    /**
-     * Renders the tools tab content
-     */
-    public function renderTab(): void
-    {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
 ?>
-        <div class="wpsc-tools-view">
-            <!-- Cache Management (Grid Layout) -->
-            <?php $this->cache_tools->renderCacheManagement(); ?>
-
-            <!-- Preloading (Card Layout) -->
-            <div class="wpsc-card">
-                <div class="wpsc-card-header">
-                    <h2><?php esc_html_e('Cache Preloading', 'wps-cache'); ?></h2>
-                </div>
-                <div class="wpsc-card-body">
-                    <?php $this->cache_tools->renderPreloadingTools(); ?>
-                </div>
+        <!-- Preloader Tool -->
+        <div class="wpsc-card">
+            <div class="wpsc-card-header">
+                <h2>Cache Preloader</h2>
             </div>
+            <div class="wpsc-card-body">
+                <p class="wpsc-setting-desc">
+                    Automatically crawl your site to generate static HTML files.
+                    This prevents the first visitor from experiencing a slow load time.
+                </p>
 
-            <!-- Import/Export (Grid Layout) -->
-            <?php $this->import_export_tools->renderImportExport(); ?>
+                <div id="wpsc-preload-progress" style="display:none; margin: 15px 0;">
+                    <progress value="0" max="100" style="width: 100%;"></progress>
+                    <div class="progress-text" style="text-align: center; font-size: 0.9em; margin-top: 5px;"></div>
+                </div>
 
-            <!-- Diagnostics (Card Layout) -->
-            <div class="wpsc-card">
-                <div class="wpsc-card-header">
-                    <h2><?php esc_html_e('System Diagnostics', 'wps-cache'); ?></h2>
-                </div>
-                <div class="wpsc-card-body">
-                    <?php $this->diagnostic_tools->renderDiagnostics(); ?>
-                </div>
+                <button type="button" id="wpsc-preload-cache" class="button button-primary wpsc-btn-primary">
+                    Start Preloading
+                </button>
+            </div>
+        </div>
+
+        <!-- Debug Info -->
+        <div class="wpsc-card">
+            <div class="wpsc-card-header">
+                <h2>System Status</h2>
+            </div>
+            <div class="wpsc-card-body">
+                <textarea readonly class="wpsc-textarea" rows="10" style="font-family: monospace; font-size: 12px;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                <p style="margin-top: 10px;">
+                    <button type="button" class="button wpsc-btn-secondary" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value)">
+                        Copy to Clipboard
+                    </button>
+                </p>
             </div>
         </div>
 <?php
     }
 
     /**
-     * Handles cache clear request
+     * AJAX Handler: Process a batch of URLs.
      */
-    public function handleCacheClear(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Insufficient permissions', 'wps-cache'));
-        }
-
-        check_admin_referer('wpsc_clear_cache');
-        $this->cache_tools->clearAllCaches();
-
-        wp_redirect(add_query_arg(
-            [
-                'page'         => 'wps-cache',
-                'tab'          => 'tools',
-                'cache_cleared' => 'success',
-                '_wpnonce'     => wp_create_nonce('wpsc_cache_cleared')
-            ],
-            admin_url('admin.php')
-        ));
-        exit;
-    }
-
-    /**
-     * Handles object cache installation
-     */
-    public function handleInstallObjectCache(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Insufficient permissions', 'wps-cache'));
-        }
-
-        check_admin_referer('wpsc_install_object_cache');
-        $result = $this->cache_tools->installObjectCache();
-
-        wp_redirect(add_query_arg(
-            [
-                'page'                   => 'wps-cache',
-                'tab'                    => 'tools',
-                'object_cache_installed' => $result['status'],
-                '_wpnonce'               => wp_create_nonce('wpsc_dropin_installed')
-            ],
-            admin_url('admin.php')
-        ));
-        exit;
-    }
-
-    /**
-     * Handles object cache removal
-     */
-    public function handleRemoveObjectCache(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Insufficient permissions', 'wps-cache'));
-        }
-
-        check_admin_referer('wpsc_remove_object_cache');
-        $result = $this->cache_tools->removeObjectCache();
-
-        wp_redirect(add_query_arg(
-            [
-                'page'                 => 'wps-cache',
-                'tab'                  => 'tools',
-                'object_cache_removed' => $result['status'],
-                '_wpnonce'             => wp_create_nonce('wpsc_dropin_removed')
-            ],
-            admin_url('admin.php')
-        ));
-        exit;
-    }
-
-    /**
-     * Handles settings export
-     */
-    public function handleExportSettings(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Insufficient permissions', 'wps-cache'));
-        }
-
-        check_admin_referer('wpsc_export_settings');
-        $this->import_export_tools->exportSettings();
-    }
-
-    /**
-     * Handles settings import
-     */
-    public function handleImportSettings(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Insufficient permissions', 'wps-cache'));
-        }
-
-        check_admin_referer('wpsc_import_settings');
-        $result = $this->import_export_tools->importSettings();
-
-        wp_redirect(add_query_arg(
-            $result['status'] === 'success'
-                ? ['settings_imported' => 'success']
-                : ['import_error' => $result['error']],
-            wp_get_referer()
-        ));
-        exit;
-    }
-
-    /**
-     * Handles AJAX cache preload request
-     */
-    public function handleAjaxPreloadCache(): void
+    public function handlePreloadRequest(): void
     {
         check_ajax_referer('wpsc_ajax_nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_send_json_error('Insufficient permissions');
+            wp_send_json_error('Permission denied');
         }
 
-        try {
-            $result = $this->cache_tools->preloadCache();
-            wp_send_json_success($result);
-        } catch (\Exception $e) {
-            wp_send_json_error([
-                'message' => $e->getMessage(),
-                'url'     => $result['current_url'] ?? ''
+        // Generate list if not provided
+        // In a real scenario, we might paginate this list. 
+        // For simplicity/robustness, we fetch top 50 pages here.
+        $urls = $this->getPreloadUrls();
+        $total = count($urls);
+        $success = 0;
+
+        foreach ($urls as $url) {
+            $response = wp_remote_get($url, [
+                'timeout'   => 5,
+                'sslverify' => false,
+                'cookies'   => [], // Ensure no login cookies are sent
+                'headers'   => ['User-Agent' => 'WPS-Cache-Preloader']
             ]);
+
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $success++;
+            }
         }
+
+        wp_send_json_success([
+            'total' => $total,
+            'success' => $success
+        ]);
     }
 
-    /**
-     * Gets diagnostic information
-     */
-    public function getDiagnosticInfo(): array
+    private function getPreloadUrls(): array
     {
-        return $this->diagnostic_tools->getDiagnosticInfo();
+        // 1. Home
+        $urls = [home_url('/')];
+
+        // 2. Pages
+        $pages = get_pages(['number' => 20]);
+        foreach ($pages as $p) {
+            $urls[] = get_permalink($p->ID);
+        }
+
+        // 3. Recent Posts
+        $posts = get_posts(['numberposts' => 20]);
+        foreach ($posts as $p) {
+            $urls[] = get_permalink($p->ID);
+        }
+
+        return array_unique($urls);
+    }
+
+    private function getSystemReport(): string
+    {
+        global $wp_version;
+
+        $report = "### WPS Cache System Report ###\n\n";
+        $report .= "WP Version: " . $wp_version . "\n";
+        $report .= "PHP Version: " . PHP_VERSION . "\n";
+        $report .= "Web Server: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown') . "\n";
+        $report .= "MySQL Version: " . $GLOBALS['wpdb']->db_version() . "\n\n";
+
+        $report .= "### Configuration ###\n";
+        $settings = get_option('wpsc_settings', []);
+        foreach ($settings as $k => $v) {
+            if (str_contains($k, 'password')) $v = '********';
+            if (is_array($v)) $v = implode(', ', $v);
+            $report .= "$k: $v\n";
+        }
+
+        $report .= "\n### Filesystem ###\n";
+        $cache_dir = defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR : 'Unknown';
+        $report .= "Cache Dir: $cache_dir\n";
+        $report .= "Writable: " . (is_writable($cache_dir) ? 'Yes' : 'No') . "\n";
+
+        return $report;
     }
 }

@@ -10,7 +10,7 @@ use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, Mini
 use WPSCache\Server\ServerConfigManager;
 
 /**
- * Main plugin class handling initialization and lifecycle management
+ * Main plugin class handling initialization, DI container, and lifecycle management.
  */
 final class Plugin
 {
@@ -39,16 +39,18 @@ final class Plugin
         'includes' => 'includes'
     ];
 
-    private const HTACCESS_CONTENT    = "Order Deny,Allow\nDeny from all";
-    private const CACHE_CLEANUP_HOOK  = 'wpsc_cache_cleanup';
+    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
+    private const CACHE_CLEANUP_HOOK = 'wpsc_cache_cleanup';
 
     private static ?self $instance = null;
-    private CacheManager $cache_manager;
-    private ServerConfigManager $server_manager;
-    private ?AdminPanelManager $admin_panel_manager = null;
+
+    // Service Container Properties
+    private ?CacheManager $cacheManager = null;
+    private ?ServerConfigManager $serverManager = null;
+    private ?AdminPanelManager $adminPanelManager = null;
 
     /**
-     * Gets singleton instance
+     * Singleton Accessor
      */
     public static function getInstance(): self
     {
@@ -59,106 +61,102 @@ final class Plugin
     private function __clone() {}
 
     /**
-     * Initializes the plugin
+     * Bootstraps the plugin.
      */
     public function initialize(): void
     {
         $this->setupConstants();
 
-        $this->cache_manager = new CacheManager();
-        $this->server_manager = new ServerConfigManager();
+        // Initialize Core Services
+        $this->cacheManager = new CacheManager();
+        $this->serverManager = new ServerConfigManager();
 
+        // Load Settings
         $settings = get_option('wpsc_settings', self::DEFAULT_SETTINGS);
+
+        // Ensure settings array has all defaults (merging prevents undefined index errors on updates)
+        $settings = array_merge(self::DEFAULT_SETTINGS, is_array($settings) ? $settings : []);
 
         $this->initializeCacheDrivers($settings);
         $this->setupHooks();
 
         if (is_admin()) {
-            $this->initializeAdmin();
+            $this->adminPanelManager = new AdminPanelManager($this->cacheManager);
         }
 
-        add_action('plugins_loaded', [$this->cache_manager, 'initializeCache'], 5);
-
-        // Hook for settings update to refresh server config (.htaccess/nginx)
+        // Initialize Cache Logic (Late binding)
+        add_action('plugins_loaded', [$this->cacheManager, 'initializeCache'], 5);
         add_action('wpscac_settings_updated', [$this, 'refreshServerConfig']);
     }
 
     /**
-     * Sets up required constants
+     * Defines plugin-wide constants.
      */
     private function setupConstants(): void
     {
-        $plugin_file = trailingslashit(dirname(__DIR__)) . 'wps-cache.php';
-
         if (!defined('WPSC_VERSION')) {
-            define('WPSC_VERSION', '0.0.3');
+            define('WPSC_VERSION', \WPSCache\VERSION);
         }
         if (!defined('WPSC_PLUGIN_FILE')) {
-            define('WPSC_PLUGIN_FILE', $plugin_file);
+            define('WPSC_PLUGIN_FILE', \WPSCache\FILE);
         }
         if (!defined('WPSC_PLUGIN_DIR')) {
-            define('WPSC_PLUGIN_DIR', plugin_dir_path($plugin_file));
+            define('WPSC_PLUGIN_DIR', plugin_dir_path(\WPSCache\FILE));
         }
         if (!defined('WPSC_PLUGIN_URL')) {
-            define('WPSC_PLUGIN_URL', plugin_dir_url($plugin_file));
+            define('WPSC_PLUGIN_URL', plugin_dir_url(\WPSCache\FILE));
         }
         if (!defined('WPSC_CACHE_DIR')) {
             define('WPSC_CACHE_DIR', WP_CONTENT_DIR . '/cache/wps-cache/');
         }
     }
 
-
-
     /**
-     * Initializes individual cache drivers based on settings
+     * Registers active drivers with the CacheManager.
      */
     private function initializeCacheDrivers(array $settings): void
     {
-        // HTML Cache
+        // 1. HTML Cache (Disk)
         if ($settings['html_cache']) {
-            $this->cache_manager->addDriver(new HTMLCache());
+            $this->cacheManager->addDriver(new HTMLCache());
         }
 
-        // Redis Cache
+        // 2. Redis Object Cache
         if ($settings['redis_cache']) {
-            $this->cache_manager->addDriver(new RedisCache(
-                $settings['redis_host'],
+            $this->cacheManager->addDriver(new RedisCache(
+                (string) $settings['redis_host'],
                 (int) $settings['redis_port'],
                 (int) $settings['redis_db'],
-                1.0,
-                1.0,
-                $settings['redis_password'],
-                $settings['redis_prefix']
+                1.0, // timeout
+                1.0, // read_timeout
+                (string) $settings['redis_password'],
+                (string) $settings['redis_prefix']
             ));
         }
 
-        // Varnish Cache
+        // 3. Varnish HTTP Cache
         if ($settings['varnish_cache']) {
-            $this->cache_manager->addDriver(new VarnishCache(
-                $settings['varnish_host'],
+            $this->cacheManager->addDriver(new VarnishCache(
+                (string) $settings['varnish_host'],
                 (int) $settings['varnish_port'],
-                604800 // 1 week
+                604800 // 1 week default
             ));
         }
 
-        // CSS Minification
+        // 4. Asset Minification (Optimization Drivers)
         if ($settings['css_minify']) {
-            $this->cache_manager->addDriver(new MinifyCSS());
+            $this->cacheManager->addDriver(new MinifyCSS());
         }
 
-        // JS Minification
         if ($settings['js_minify']) {
-            $this->cache_manager->addDriver(new MinifyJS());
+            $this->cacheManager->addDriver(new MinifyJS());
         }
     }
 
-    /**
-     * Sets up WordPress hooks
-     */
     private function setupHooks(): void
     {
-        // Cache clearing hooks
-        $clear_cache_hooks = [
+        // Auto-clear hooks
+        $clear_hooks = [
             'wpsc_clear_cache',
             'switch_theme',
             'customize_save',
@@ -167,302 +165,199 @@ final class Plugin
             'upgrader_process_complete'
         ];
 
-        foreach ($clear_cache_hooks as $hook) {
-            add_action($hook, [$this->cache_manager, 'clearAllCaches']);
+        foreach ($clear_hooks as $hook) {
+            add_action($hook, [$this->cacheManager, 'clearAllCaches']);
         }
 
-        // Lifecycle hooks
         register_activation_hook(WPSC_PLUGIN_FILE, [$this, 'activate']);
         register_deactivation_hook(WPSC_PLUGIN_FILE, [$this, 'deactivate']);
     }
 
     /**
-     * Initializes admin panel
-     */
-    private function initializeAdmin(): void
-    {
-        $this->admin_panel_manager = new AdminPanelManager($this->cache_manager);
-    }
-
-    /**
-     * Activates the plugin
+     * Activation Logic
      */
     public function activate(): void
     {
         $this->createRequiredDirectories();
-        $this->createHtaccessFile(); // Directory protection
-        $this->enableWPCache();
-        $this->copyAdvancedCache();
+        $this->secureCacheDirectory();
+        $this->enableWPCacheConstant();
+        $this->installAdvancedCache();
         $this->setupDefaultSettings();
-        $this->scheduleCacheCleanup();
+        $this->scheduleMaintenance();
 
-        // Apply Server-Level Caching Rules (Apache/LiteSpeed)
-        $this->server_manager->applyConfiguration();
+        // Apply .htaccess rules immediately
+        $this->serverManager->applyConfiguration();
 
+        // Flush permalinks
         flush_rewrite_rules();
     }
 
     /**
-     * Refreshes server configuration when settings are updated
+     * Deactivation Logic
+     */
+    public function deactivate(): void
+    {
+        $this->disableWPCacheConstant();
+        $this->cacheManager->clearAllCaches();
+        $this->removeDropIns();
+
+        wp_clear_scheduled_hook(self::CACHE_CLEANUP_HOOK);
+
+        // Remove .htaccess rules
+        $this->serverManager->removeConfiguration();
+    }
+
+    /**
+     * Refreshes server config on settings save.
      */
     public function refreshServerConfig(array $settings): void
     {
+        if (!$this->serverManager) {
+            return;
+        }
+
         if ($settings['html_cache'] ?? false) {
-            $this->server_manager->applyConfiguration();
+            $this->serverManager->applyConfiguration();
         } else {
-            $this->server_manager->removeConfiguration();
+            $this->serverManager->removeConfiguration();
         }
     }
 
     /**
-     * Creates required directories using the WP_Filesystem API
+     * Native PHP directory creation (faster/more reliable than WP_Filesystem for cache dirs).
      */
     private function createRequiredDirectories(): void
     {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        global $wp_filesystem;
-        if (empty($wp_filesystem)) {
-            WP_Filesystem();
-        }
         foreach (self::REQUIRED_DIRECTORIES as $dir) {
             $path = WPSC_PLUGIN_DIR . $dir;
-            if (!file_exists($path)) {
-                $wp_filesystem->mkdir($path, 0755, true);
+            if (!file_exists($path) && !mkdir($path, 0755, true) && !is_dir($path)) {
+                error_log("WPS Cache: Failed to create directory: $path");
             }
         }
     }
 
-    /**
-     * Creates .htaccess file for cache directory security
-     */
-    private function createHtaccessFile(): void
+    private function secureCacheDirectory(): void
     {
-        $htaccess_file = WPSC_CACHE_DIR . '.htaccess';
-        if (!file_exists($htaccess_file)) {
-            @file_put_contents($htaccess_file, self::HTACCESS_CONTENT);
+        $htaccess = WPSC_CACHE_DIR . '.htaccess';
+        if (!file_exists($htaccess)) {
+            @file_put_contents($htaccess, self::HTACCESS_CONTENT);
+        }
+    }
+
+    private function enableWPCacheConstant(): void
+    {
+        if (!$this->toggleWPCache(true)) {
+            error_log('WPS Cache: Failed to enable WP_CACHE in wp-config.php');
+        }
+    }
+
+    private function disableWPCacheConstant(): void
+    {
+        if (!$this->toggleWPCache(false)) {
+            error_log('WPS Cache: Failed to disable WP_CACHE in wp-config.php');
         }
     }
 
     /**
-     * Enables WP_CACHE constant in wp-config.php
+     * Atomic wp-config.php modification.
      */
-    private function enableWPCache(): void
-    {
-        if (!$this->setWPCache(true)) {
-            error_log('WPS Cache Warning: Failed to enable WP_CACHE in wp-config.php');
-        }
-    }
-
-    /**
-     * Copies advanced-cache.php template
-     */
-    private function copyAdvancedCache(): void
-    {
-        $template_file = WPSC_PLUGIN_DIR . 'includes/advanced-cache-template.php';
-        $target_file = WP_CONTENT_DIR . '/advanced-cache.php';
-
-        if (!@copy($template_file, $target_file)) {
-            error_log('WPS Cache Warning: Failed to create advanced-cache.php');
-        }
-    }
-
-    /**
-     * Sets up default settings
-     */
-    private function setupDefaultSettings(): void
-    {
-        if (!get_option('wpsc_settings')) {
-            update_option('wpsc_settings', self::DEFAULT_SETTINGS);
-        }
-    }
-
-    /**
-     * Schedules cache cleanup
-     */
-    private function scheduleCacheCleanup(): void
-    {
-        if (!wp_next_scheduled(self::CACHE_CLEANUP_HOOK)) {
-            wp_schedule_event(time(), 'daily', self::CACHE_CLEANUP_HOOK);
-        }
-    }
-
-    /**
-     * Deactivates the plugin
-     */
-    public function deactivate(): void
-    {
-        $this->disableWPCache();
-        $this->clearAllCaches();
-        $this->removeDropIns();
-        $this->clearScheduledEvents();
-
-        // Remove Server-Level Caching Rules
-        $this->server_manager->removeConfiguration();
-    }
-
-    /**
-     * Manages WP_CACHE constant in wp-config.php with atomic locking
-     */
-    private function setWPCache(bool $enabled): bool
+    private function toggleWPCache(bool $enable): bool
     {
         $config_file = ABSPATH . 'wp-config.php';
 
-        if (!$this->isConfigFileAccessible($config_file)) {
+        if (!file_exists($config_file) || !is_writable($config_file)) {
             return false;
         }
 
-        // Add a lock to prevent concurrent writes corrupting wp-config.php
+        // Lock file access
         $fp = fopen($config_file, 'r+');
         if (!flock($fp, LOCK_EX)) {
             fclose($fp);
             return false;
         }
 
-        $config_content = fread($fp, filesize($config_file));
-        if ($config_content === false) {
+        $content = fread($fp, filesize($config_file));
+        if ($content === false) {
             flock($fp, LOCK_UN);
             fclose($fp);
-            error_log('WPS Cache Error: Unable to read wp-config.php');
             return false;
         }
 
-        $updated_content = $this->updateWPCacheDefinition($config_content, $enabled);
+        $pattern = "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;/i";
 
-        // Rewind and write
-        ftruncate($fp, 0);
-        rewind($fp);
-        if (fwrite($fp, $updated_content) === false) {
-            flock($fp, LOCK_UN);
-            fclose($fp);
-            error_log('WPS Cache Error: Unable to update wp-config.php');
-            return false;
+        if ($enable) {
+            if (preg_match($pattern, $content)) {
+                $new_content = preg_replace($pattern, "define('WP_CACHE', true);", $content);
+            } else {
+                // Insert after <?php
+                $new_content = preg_replace('/^<\?php/m', "<?php\r\ndefine('WP_CACHE', true);", $content, 1);
+            }
+        } else {
+            // Remove the line entirely
+            $new_content = preg_replace("/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;\s*/i", "", $content);
+        }
+
+        if ($new_content !== null && $new_content !== $content) {
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, $new_content);
         }
 
         flock($fp, LOCK_UN);
         fclose($fp);
-
         return true;
     }
 
-    /**
-     * Checks if wp-config.php is accessible
-     */
-    private function isConfigFileAccessible(string $file): bool
+    private function installAdvancedCache(): void
     {
-        if (!file_exists($file)) {
-            error_log('WPS Cache Error: wp-config.php not found');
-            return false;
-        }
-        if (!is_writable($file)) {
-            error_log('WPS Cache Error: wp-config.php is not writable');
-            return false;
-        }
-        return true;
-    }
+        $src = WPSC_PLUGIN_DIR . 'includes/advanced-cache-template.php';
+        $dest = WP_CONTENT_DIR . '/advanced-cache.php';
 
-    /**
-     * Updates WP_CACHE definition in config content
-     */
-    private function updateWPCacheDefinition(string $content, bool $enabled): string
-    {
-        $pattern = "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;/i";
-        $wp_cache_defined = preg_match($pattern, $content);
-
-        if ($enabled) {
-            if ($wp_cache_defined) {
-                return preg_replace($pattern, "define('WP_CACHE', true);", $content);
-            }
-            return preg_replace('/<\?php/', "<?php\ndefine('WP_CACHE', true);", $content, 1);
-        }
-
-        if ($wp_cache_defined) {
-            return preg_replace("/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*(true|false)\s*\)\s*;\n?/i", "", $content);
-        }
-
-        return $content;
-    }
-
-    /**
-     * Disables WP_CACHE constant
-     */
-    private function disableWPCache(): void
-    {
-        if (!$this->setWPCache(false)) {
-            error_log('WPS Cache Warning: Failed to disable WP_CACHE in wp-config.php');
+        if (file_exists($src) && !file_exists($dest)) {
+            @copy($src, $dest);
         }
     }
 
-    /**
-     * Clears all caches
-     */
-    public function clearAllCaches(): void
-    {
-        $this->cache_manager->clearAllCaches();
-    }
-
-    /**
-     * Removes cache-related drop-ins
-     */
     private function removeDropIns(): void
     {
-        $this->removeObjectCache();
-        $this->removeAdvancedCache();
-    }
+        $files = [
+            WP_CONTENT_DIR . '/advanced-cache.php',
+            WP_CONTENT_DIR . '/object-cache.php'
+        ];
 
-    /**
-     * Removes object cache drop-in
-     */
-    private function removeObjectCache(): void
-    {
-        $file = WP_CONTENT_DIR . '/object-cache.php';
-        $signature = 'WPS Cache - Redis Object Cache Drop-in';
-        $this->removeDropIn($file, $signature);
-    }
-
-    /**
-     * Removes advanced cache drop-in
-     */
-    private function removeAdvancedCache(): void
-    {
-        $file = WP_CONTENT_DIR . '/advanced-cache.php';
-        $signature = 'WPS Cache - Advanced Cache Drop-in';
-        $this->removeDropIn($file, $signature);
-    }
-
-    /**
-     * Removes a drop-in file if it matches our signature using wp_delete_file()
-     */
-    private function removeDropIn(string $file, string $signature): void
-    {
-        if (file_exists($file)) {
-            $contents = file_get_contents($file);
-            if ($contents && strpos($contents, $signature) !== false) {
-                wp_delete_file($file);
+        foreach ($files as $file) {
+            if (file_exists($file)) {
+                $content = file_get_contents($file);
+                // Only delete if it belongs to us
+                if (str_contains($content, 'WPS-Cache') || str_contains($content, 'WPS Cache')) {
+                    @unlink($file);
+                }
             }
         }
     }
 
-    /**
-     * Clears scheduled events
-     */
-    private function clearScheduledEvents(): void
+    private function setupDefaultSettings(): void
     {
-        wp_clear_scheduled_hook(self::CACHE_CLEANUP_HOOK);
+        if (get_option('wpsc_settings') === false) {
+            update_option('wpsc_settings', self::DEFAULT_SETTINGS);
+        }
     }
 
-    /**
-     * Gets cache manager instance
-     */
+    private function scheduleMaintenance(): void
+    {
+        if (!wp_next_scheduled(self::CACHE_CLEANUP_HOOK)) {
+            wp_schedule_event(time(), 'daily', self::CACHE_CLEANUP_HOOK);
+        }
+    }
+
+    // Accessors for Service Container
     public function getCacheManager(): CacheManager
     {
-        return $this->cache_manager;
+        return $this->cacheManager;
     }
 
-    /**
-     * Gets server manager instance
-     */
     public function getServerManager(): ServerConfigManager
     {
-        return $this->server_manager;
+        return $this->serverManager;
     }
 }

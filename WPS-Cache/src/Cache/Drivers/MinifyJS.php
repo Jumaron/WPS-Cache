@@ -25,13 +25,12 @@ final class MinifyJS extends AbstractCacheDriver
     private const T_TEMPLATE   = 6;
 
     private string $cache_dir;
-    private array $settings;
 
     public function __construct()
     {
+        parent::__construct();
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
-        $this->settings = get_option('wpsc_settings', []);
-        $this->ensureCacheDirectory($this->cache_dir);
+        $this->ensureDirectory($this->cache_dir);
     }
 
     public function initialize(): void
@@ -44,12 +43,7 @@ final class MinifyJS extends AbstractCacheDriver
 
     public function isConnected(): bool
     {
-        if (!function_exists('WP_Filesystem')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
-        }
-        WP_Filesystem();
-        global $wp_filesystem;
-        return $wp_filesystem->is_writable($this->cache_dir);
+        return is_dir($this->cache_dir) && is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed
@@ -80,15 +74,7 @@ final class MinifyJS extends AbstractCacheDriver
 
     public function clear(): void
     {
-        $files = glob($this->cache_dir . '*.js');
-        if (!is_array($files)) {
-            return;
-        }
-        foreach ($files as $file) {
-            if (is_file($file) && !wp_delete_file($file)) {
-                $this->logError("Failed to delete JS file during clear: $file");
-            }
-        }
+        $this->recursiveDelete($this->cache_dir);
     }
 
     public function processScripts(): void
@@ -131,7 +117,7 @@ final class MinifyJS extends AbstractCacheDriver
             return;
         }
 
-        $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
+        $cache_key = $this->generateCacheKey($handle . md5($content) . filemtime($source));
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
@@ -187,12 +173,9 @@ final class MinifyJS extends AbstractCacheDriver
                         continue;
                     }
 
-                    // 2b. MISSING SEMICOLON FIX:
-                    // If we remove the newline, we might merge two statements (e.g. "{} window").
-                    // If the original code implied a semicolon via ASI, we must insert a real one now.
+                    // 2b. MISSING SEMICOLON FIX
                     if ($this->shouldInsertSemicolon($prevToken, $nextToken)) {
                         fwrite($output, ';');
-                        // Treat inserted semicolon as an operator for subsequent logic
                         $prevToken = ['type' => self::T_OPERATOR, 'value' => ';'];
                         $currToken = $nextToken;
                         continue;
@@ -203,7 +186,7 @@ final class MinifyJS extends AbstractCacheDriver
                 continue;
             }
 
-            // 3. Handle Insertion of necessary spaces (e.g. "var x", "10 .toString")
+            // 3. Handle Insertion of necessary spaces (e.g. "var x")
             if ($prevToken && $this->needsSpace($prevToken, $currToken)) {
                 fwrite($output, ' ');
             }
@@ -267,6 +250,7 @@ final class MinifyJS extends AbstractCacheDriver
                     continue;
                 }
 
+                // Regex Literal Detection
                 if ($this->isRegexStart($lastMeaningfulToken)) {
                     $start = $i;
                     $i++;
@@ -277,12 +261,8 @@ final class MinifyJS extends AbstractCacheDriver
                             $i += 2;
                             continue;
                         }
-                        if ($c === '[') {
-                            $inClass = true;
-                        }
-                        if ($c === ']') {
-                            $inClass = false;
-                        }
+                        if ($c === '[') $inClass = true;
+                        if ($c === ']') $inClass = false;
                         if ($c === '/' && !$inClass) {
                             $i++;
                             while ($i < $len && ctype_alpha($js[$i])) $i++;
@@ -359,7 +339,7 @@ final class MinifyJS extends AbstractCacheDriver
                 $c = $js[$i];
                 if ($c === '.' && $i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
                     $i++;
-                    continue;
+                    continue; // decimal number
                 }
                 if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) break;
                 $i++;
@@ -390,25 +370,7 @@ final class MinifyJS extends AbstractCacheDriver
         if ($lastToken['type'] !== self::T_WORD) return false;
         if (!empty($lastToken['is_property'])) return false;
 
-        $keywords = [
-            'case',
-            'else',
-            'return',
-            'throw',
-            'typeof',
-            'void',
-            'delete',
-            'do',
-            'await',
-            'yield',
-            'if',
-            'while',
-            'for',
-            'in',
-            'instanceof',
-            'new',
-            'export'
-        ];
+        $keywords = ['case', 'else', 'return', 'throw', 'typeof', 'void', 'delete', 'do', 'await', 'yield', 'if', 'while', 'for', 'in', 'instanceof', 'new', 'export'];
         return in_array($val, $keywords, true);
     }
 
@@ -424,58 +386,27 @@ final class MinifyJS extends AbstractCacheDriver
         return false;
     }
 
-    /**
-     * Determines if a semicolon must be inserted when a newline is removed.
-     */
     private function shouldInsertSemicolon(array $prev, array $next): bool
     {
-        // 1. Next token must be a Word (Keyword or Identifier)
-        if ($next['type'] !== self::T_WORD) {
-            return false;
-        }
-
-        // 2. Previous token must be the end of an expression/block/statement
-        // Words (variables/literals)
+        if ($next['type'] !== self::T_WORD) return false;
         if ($prev['type'] === self::T_WORD) return true;
-
-        // Strings/Regex/Templates
         if ($prev['type'] === self::T_STRING || $prev['type'] === self::T_REGEX || $prev['type'] === self::T_TEMPLATE) return true;
-
-        // Operators that can end an expression
         if ($prev['type'] === self::T_OPERATOR) {
-            // } = end of object or block
-            // ] = end of array or access
-            // ) = end of function call or grouping
-            // ++ / -- = postfix operators
             if (in_array($prev['value'], ['}', ']', ')', '++', '--'], true)) {
-
-                // EXCEPTION: Do not insert semicolon before these continuations
-                // 'instanceof' and 'in' are binary operators (infix).
-                // 'else', 'catch', 'finally' continue a control block.
                 $exceptions = ['else', 'catch', 'finally', 'instanceof', 'in'];
-
-                if (in_array($next['value'], $exceptions, true)) {
-                    return false;
-                }
-
+                if (in_array($next['value'], $exceptions, true)) return false;
                 return true;
             }
         }
-
         return false;
     }
 
     private function needsNewlineProtection(array $prev, array $next, string $whitespace): bool
     {
         if (!str_contains($whitespace, "\n") && !str_contains($whitespace, "\r")) return false;
-
-        // 1. Restricted Productions (return, throw, etc cannot have newline after them)
         if ($prev['type'] === self::T_WORD) {
-            $restricted = ['return', 'throw', 'break', 'continue', 'yield'];
-            if (in_array($prev['value'], $restricted, true)) return true;
+            if (in_array($prev['value'], ['return', 'throw', 'break', 'continue', 'yield'], true)) return true;
         }
-
-        // 2. Ambiguous Starts of next line
         if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
             $val = $next['value'];
             if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {

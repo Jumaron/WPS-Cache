@@ -8,262 +8,194 @@ use WPSCache\Optimization\JSOptimizer;
 use WPSCache\Optimization\AsyncCSS;
 
 /**
- * State-of-the-Art HTML Cache Writer.
- * Synchronized with advanced-cache.php for Path-Based caching.
+ * Handles Full Page Caching (Static HTML).
+ * Writes files to disk in a structure that allows Nginx/Apache to serve them directly.
  */
 final class HTMLCache extends AbstractCacheDriver
 {
-    private string $cache_dir;
-    private array $settings;
-    private array $placeholders = [];
+    private string $cacheDir;
+    private array $ignoredTags = [];
 
     public function __construct()
     {
-        $this->cache_dir = WPSC_CACHE_DIR . 'html/';
-        $this->settings = get_option('wpsc_settings', []);
-        $this->ensureCacheDirectory($this->cache_dir);
+        parent::__construct();
+        $this->cacheDir = defined('WPSC_CACHE_DIR')
+            ? WPSC_CACHE_DIR . 'html/'
+            : WP_CONTENT_DIR . '/cache/wps-cache/html/';
     }
 
     public function initialize(): void
     {
-        if (!$this->initialized && $this->shouldCache()) {
-            add_action('template_redirect', [$this, 'startOutputBuffering']);
-            add_action('shutdown', [$this, 'closeOutputBuffering']);
-            $this->initialized = true;
-        }
-    }
-
-    public function isConnected(): bool
-    {
-        if (!function_exists('WP_Filesystem')) {
-            require_once(ABSPATH . 'wp-admin/includes/file.php');
-        }
-        WP_Filesystem();
-        global $wp_filesystem;
-        return $wp_filesystem->is_writable($this->cache_dir);
-    }
-
-    /**
-     * Writes the HTML content to the cache file.
-     * $key is ignored in favor of strict path generation from $_SERVER.
-     */
-    public function set(string $key, mixed $value, int $ttl = 3600): void
-    {
-        if (!is_string($value) || empty(trim($value))) {
+        if ($this->initialized || !$this->shouldCacheRequest()) {
             return;
         }
 
-        // Generate strict path
-        $file = $this->getPathBasedCacheFile();
-
-        // Atomic write prevents race conditions/corruption
-        if (!$this->atomicWrite($file, $value)) {
-            $this->logError("Failed to write cache file: $file");
-        }
-    }
-
-    public function get(string $key): mixed
-    {
-        // Not used by the drop-in, but useful for admin stats/checks
-        $file = $this->getPathBasedCacheFile();
-        return (file_exists($file)) ? file_get_contents($file) : null;
-    }
-
-    public function delete(string $key): void
-    {
-        // Deleting single key via URL is complex with path-based.
-        // Use clear() for now.
-    }
-
-    public function clear(): void
-    {
-        if (!is_dir($this->cache_dir)) return;
-
-        // Recursive delete for path-based structure
-        $this->recursiveDelete($this->cache_dir);
-    }
-
-    private function recursiveDelete(string $dir): void
-    {
-        if (!is_dir($dir)) return;
-
-        $files = new \FilesystemIterator($dir, \FilesystemIterator::SKIP_DOTS);
-        foreach ($files as $file) {
-            if ($file->isDir()) {
-                $this->recursiveDelete($file->getPathname());
-                @rmdir($file->getPathname());
-            } else {
-                @unlink($file->getPathname());
-            }
-        }
-    }
-
-    public function startOutputBuffering(): void
-    {
+        // Start buffering immediately
         ob_start([$this, 'processOutput']);
-    }
-
-    public function closeOutputBuffering(): void
-    {
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
-    }
-
-    public function processOutput(string $content): string
-    {
-        if (empty($content)) return $content;
-
-        try {
-            // 1. Minify HTML first
-            $content = $this->minifyHTML($content);
-
-            // 2. Initialize Optimizers
-            $jsOptimizer = new JSOptimizer($this->settings);
-
-            // NEW SOTA APPROACH: Async CSS + Heuristic Critical Path
-            $cssOptimizer = new AsyncCSS($this->settings);
-
-            // 3. Process JS (Defer/Delay)
-            $content = $jsOptimizer->process($content);
-
-            // 4. Process CSS (Async Load)
-            $content = $cssOptimizer->process($content);
-
-            // 5. Add Cache Comment
-            $content .= $this->getCacheComment($content, $content);
-
-            $this->set('ignored', $content);
-
-            return $content;
-        } catch (\Throwable $e) {
-            $this->logError('HTML processing failed', $e);
-            return $content;
-        }
+        $this->initialized = true;
     }
 
     /**
-     * Generates path: /cache/wps-cache/html/hostname/path/to/page/index.html
-     * MUST MATCH advanced-cache.php EXACTLY.
+     * Determines if the current request is suitable for caching.
+     * fail-fast logic to avoid overhead.
      */
-    private function getPathBasedCacheFile(): string
+    private function shouldCacheRequest(): bool
     {
-        $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
+        // 1. Check Global Settings
+        if (empty($this->settings['html_cache'])) {
+            return false;
+        }
+
+        // 2. Method Check
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+            return false;
+        }
+
+        // 3. User & Admin Checks
+        if (is_user_logged_in() || is_admin()) {
+            return false;
+        }
+
+        // 4. Query Strings (Strict Mode: Don't cache if params exist)
+        if (!empty($_SERVER['QUERY_STRING'])) {
+            return false;
+        }
+
+        // 5. Special WP Requests
+        if (
+            (defined('DOING_CRON') && DOING_CRON) ||
+            (defined('WP_CLI') && WP_CLI) ||
+            (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) ||
+            is_feed() ||
+            is_trackback() ||
+            is_robots()
+        ) {
+            return false;
+        }
+
+        // 6. Exclusions from Settings
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        $path = parse_url($uri, PHP_URL_PATH);
-
-        // Handle homepage / or internal paths
-        if (substr($path, -1) !== '/') {
-            $path .= '/';
-        }
-
-        // CRITICAL: Sanitize hostname (removes : port separators)
-        $host = preg_replace('/[^a-zA-Z0-9\-\.]/', '', $host);
-
-        // Ensure subdirectories exist for deep paths
-        $fullPath = $this->cache_dir . $host . $path;
-
-        return $fullPath . 'index.html';
-    }
-
-    /**
-     * Override atomicWrite to handle deep directory creation for paths
-     */
-    protected function atomicWrite(string $file, string $content): bool
-    {
-        $dir = dirname($file);
-
-        // Ensure dir exists (recursively)
-        if (!is_dir($dir)) {
-            // Using native mkdir for speed, fallback to WP logic if needed
-            if (!@mkdir($dir, 0755, true) && !is_dir($dir)) {
-                $this->logError("Failed to create cache directory: $dir");
+        foreach ($this->settings['excluded_urls'] ?? [] as $pattern) {
+            if (!empty($pattern) && str_contains($uri, $pattern)) {
                 return false;
             }
         }
 
-        $temp_file = $dir . '/' . uniqid('wpsc_tmp_', true) . '.tmp';
-
-        if (@file_put_contents($temp_file, $content) === false) {
-            return false;
-        }
-
-        @chmod($temp_file, 0644);
-
-        if (@rename($temp_file, $file)) {
-            return true;
-        }
-
-        @unlink($temp_file);
-        return false;
+        return true;
     }
 
-    // --- Minification Logic (SOTA) ---
+    /**
+     * Callback for ob_start. Processes, optimizes, and writes HTML.
+     */
+    public function processOutput(string $buffer): string
+    {
+        // Safety: Don't cache errors or empty pages
+        if (empty($buffer) || http_response_code() !== 200) {
+            return $buffer;
+        }
 
+        // 1. Minify HTML (Safe Mode)
+        $content = $this->minifyHTML($buffer);
+
+        // 2. Add Signature
+        $signature = sprintf(
+            "\n<!-- Cached by WPS-Cache on %s - Compression: %.2f%% -->",
+            gmdate('Y-m-d H:i:s'),
+            (1 - (strlen($content) / strlen($buffer))) * 100
+        );
+        $content .= $signature;
+
+        // 3. Write to Disk
+        $this->writeCacheFile($content);
+
+        return $content;
+    }
+
+    /**
+     * Generates the path-based filename matching the URL structure.
+     * Schema: /cache/hostname/path/index.html
+     */
+    private function writeCacheFile(string $content): void
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
+        // Sanitize Host (prevent traversal)
+        $host = preg_replace('/[^a-zA-Z0-9\-\.]/', '', $host);
+
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+
+        // Ensure path ends with slash to create directory structure
+        if (substr($path, -1) !== '/') {
+            $path .= '/';
+        }
+
+        $fullPath = $this->cacheDir . $host . $path . 'index.html';
+
+        $this->atomicWrite($fullPath, $content);
+    }
+
+    /**
+     * Safe HTML Minifier.
+     * Protects <script>, <style>, <pre>, <textarea> before removing whitespace.
+     */
     private function minifyHTML(string $html): string
     {
-        $this->placeholders = [];
-        $html = $this->extractBlock('/<(script|style|pre|textarea|code)\b(?:[^>]*)?>(.*?)<\/\1>/si', $html);
-        $html = $this->extractBlock('/<!--\[if.+?<!\[endif\]-->/si', $html);
-        $html = $this->extractBlock('/<!--!.+?-->/s', $html);
-        $html = $this->extractBlock('/<!\[CDATA\[.*?\]\]>/s', $html);
+        // 1. Extract protected tags
+        $this->ignoredTags = [];
+        $html = preg_replace_callback(
+            '/<(script|style|pre|textarea|code)[^>]*>.*?<\/\1>/si',
+            function ($matches) {
+                $token = "<!--WPSC_PROTECT_" . count($this->ignoredTags) . "-->";
+                $this->ignoredTags[$token] = $matches[0];
+                return $token;
+            },
+            $html
+        );
 
+        // 2. Remove HTML comments (except IE conditionals)
         $html = preg_replace('/<!--(?!\s*(?:\[if [^\]]+]|<!|>))(?:(?!-->).)*-->/s', '', $html);
-        $html = preg_replace('/\s+/', ' ', $html);
-        $html = str_replace(' />', '/>', $html);
 
-        if (!empty($this->placeholders)) {
-            $html = strtr($html, $this->placeholders);
+        // 3. Collapse whitespace
+        $html = preg_replace('/\s+/', ' ', $html);
+        $html = preg_replace('/>\s+</', '><', $html);
+
+        // 4. Restore protected tags
+        if (!empty($this->ignoredTags)) {
+            $html = strtr($html, $this->ignoredTags);
         }
+
         return trim($html);
     }
 
-    private function extractBlock(string $pattern, string $content): string
+    /**
+     * CacheDriverInterface Implementations
+     */
+
+    public function set(string $key, mixed $value, int $ttl = 3600): void
     {
-        return preg_replace_callback($pattern, function ($matches) {
-            $key = '___WPSC_RAW_' . count($this->placeholders) . '___';
-            $this->placeholders[$key] = $matches[0];
-            return $key;
-        }, $content) ?? $content;
+        // HTML Cache uses automated URI mapping via processOutput.
+        // Direct set() is rarely used but implemented for interface compliance.
+        $this->atomicWrite($this->cacheDir . md5($key) . '.html', (string) $value);
     }
 
-    private function getCacheComment(string $raw, string $compressed): string
+    public function get(string $key): mixed
     {
-        $raw_size = strlen($raw);
-        $compressed_size = strlen($compressed);
-        $savings = $raw_size > 0 ? ($raw_size - $compressed_size) / $raw_size * 100 : 0;
-        return sprintf("\n<!-- Page cached by WPS-Cache. Size saved %.2f%%. -->", $savings);
+        $file = $this->cacheDir . md5($key) . '.html';
+        return file_exists($file) ? file_get_contents($file) : null;
     }
 
-    private function shouldCache(): bool
+    public function delete(string $key): void
     {
-        // Don't cache admin, logged in, non-GET, or query strings
-        // Nonce check warning is irrelevant here as we are reading state
-        $get_data = filter_input_array(INPUT_GET, FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: [];
-
-        if (is_admin() || is_user_logged_in() || !empty($get_data)) {
-            return false;
+        $file = $this->cacheDir . md5($key) . '.html';
+        if (file_exists($file)) {
+            @unlink($file);
         }
-
-        if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'GET') {
-            return false;
-        }
-
-        return !$this->isPageCached() && !$this->isExcludedUrl();
     }
 
-    private function isExcludedUrl(): bool
+    public function clear(): void
     {
-        $current_url = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
-        $excluded_urls = $this->settings['excluded_urls'] ?? [];
-        foreach ($excluded_urls as $pattern) {
-            if (fnmatch($pattern, $current_url)) return true;
+        // Clean the entire HTML cache directory
+        if (is_dir($this->cacheDir)) {
+            $this->recursiveDelete($this->cacheDir);
         }
-        return false;
-    }
-
-    private function isPageCached(): bool
-    {
-        return isset($_SERVER['HTTP_X_WPS_CACHE']) && (str_contains($_SERVER['HTTP_X_WPS_CACHE'], 'HIT'));
     }
 }
