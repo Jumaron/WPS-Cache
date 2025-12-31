@@ -2,204 +2,104 @@
 
 /**
  * WPS Cache - Advanced Cache Drop-in
- * 
- * This file is automatically deployed to wp-content/advanced-cache.php
- * It handles serving cached files and manages cache bypassing logic
+ * Supports Query Strings via hashed filenames.
  */
 
 if (!defined('ABSPATH')) {
     exit('Direct access not allowed.');
 }
 
+if (!defined('WP_CONTENT_DIR')) {
+    define('WP_CONTENT_DIR', dirname(__FILE__));
+}
+
 class WPSAdvancedCache
 {
-    private const CACHE_BYPASS_CONDITIONS = [
-        'WP_CLI',
-        'DOING_CRON',
-        'DOING_AJAX',
-        'REST_REQUEST',
-        'XMLRPC_REQUEST',
-        'WP_ADMIN',
-    ];
+    private const CACHE_LIFETIME = 3600;
+    private const COOKIE_HEADER = 'wordpress_logged_in_';
 
-    private const CONTENT_TYPES = [
-        'css'  => 'text/css; charset=UTF-8',
-        'js'   => 'application/javascript; charset=UTF-8',
-        'html' => 'text/html; charset=UTF-8'
-    ];
-
-    private const DEFAULT_CACHE_LIFETIME = 3600;
-    private const YEAR_IN_SECONDS = 31536000;
-
-    private string $request_uri;
-    private array $settings;
-    private int $cache_lifetime;
-
-    public function __construct()
-    {
-        $this->request_uri = isset($_SERVER['REQUEST_URI'])
-            ? filter_var($_SERVER['REQUEST_URI'], FILTER_SANITIZE_URL)
-            : '';
-        $this->settings = $this->getSettings();
-        $this->cache_lifetime = $this->settings['cache_lifetime'] ?? self::DEFAULT_CACHE_LIFETIME;
-    }
-
-    /**
-     * Main execution method
-     */
     public function execute(): void
     {
-        if ($this->shouldBypassCache()) {
-            $this->setHeader('BYPASS');
+        if ($this->shouldBypass()) {
             return;
         }
 
-        // Check for static asset caching (CSS/JS)
-        if ($this->handleStaticAsset()) {
-            return;
-        }
+        $file = $this->getCacheFilePath();
 
-        // Handle HTML caching
-        $this->handleHtmlCache();
+        if (file_exists($file)) {
+            $mtime = filemtime($file);
+            if ((time() - $mtime) > self::CACHE_LIFETIME) {
+                return;
+            }
+            $this->serve($file, $mtime);
+        }
     }
 
-    /**
-     * Checks if cache should be bypassed
-     */
-    private function shouldBypassCache(): bool
+    private function shouldBypass(): bool
     {
-        // Check PHP constants
-        foreach (self::CACHE_BYPASS_CONDITIONS as $condition) {
-            if (defined($condition) && constant($condition)) {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+            return true;
+        }
+
+        // Note: We removed the generic Query String bypass check here.
+        // We now rely on the file existence check. 
+        // If query params exist but no file matches the hash, it falls through to WP.
+
+        foreach ($_COOKIE as $key => $value) {
+            if (strpos($key, self::COOKIE_HEADER) === 0 || $key === 'wp-postpass_' || $key === 'comment_author_') {
                 return true;
             }
         }
 
-        // Check request conditions
-        return (
-            isset($_GET['preview']) ||
-            !empty($_POST) ||
-            is_admin() ||
-            (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') ||
-            !empty($_GET) || // Query parameters bypass cache
-            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
-                strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') // AJAX requests
-        );
-    }
-
-    /**
-     * Handles static asset caching (CSS/JS)
-     */
-    private function handleStaticAsset(): bool
-    {
-        if (!preg_match('/\.(?:css|js)\?.*ver=(\d+)$/', $this->request_uri, $matches)) {
-            return false;
-        }
-
-        $file_path = parse_url($this->request_uri, PHP_URL_PATH);
-        if (!$file_path) {
-            return false;
-        }
-
-        $extension = pathinfo($file_path, PATHINFO_EXTENSION);
-        $file_key = md5($file_path);
-        $cache_file = WP_CONTENT_DIR . "/cache/wps-cache/$extension/" . $file_key . ".$extension";
-
-        if (file_exists($cache_file) && $this->isCacheValid($cache_file)) {
-            return $this->serveCachedFile($cache_file, self::CONTENT_TYPES[$extension]);
+        // Special paths
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        if (strpos($uri, '/wp-admin') !== false || strpos($uri, '/xmlrpc.php') !== false) {
+            return true;
         }
 
         return false;
     }
 
-    /**
-     * Handles HTML page caching
-     */
-    private function handleHtmlCache(): void
+    private function getCacheFilePath(): string
     {
-        $cache_key = md5($this->request_uri);
-        $cache_file = WP_CONTENT_DIR . '/cache/wps-cache/html/' . $cache_key . '.html';
+        $host = preg_replace('/[^a-zA-Z0-9\-\.]/', '', $_SERVER['HTTP_HOST'] ?? 'unknown');
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
 
-        if (file_exists($cache_file) && $this->isCacheValid($cache_file)) {
-            $this->serveCachedFile($cache_file, self::CONTENT_TYPES['html']);
-            return;
+        $path = parse_url($uri, PHP_URL_PATH);
+        if (substr($path, -1) !== '/' && !preg_match('/\.[a-z0-9]{2,4}$/i', $path)) {
+            $path .= '/';
+        }
+        $path = str_replace('..', '', $path); // Security
+
+        // Determine Filename
+        $query = parse_url($uri, PHP_URL_QUERY);
+        if ($query) {
+            parse_str($query, $queryParams);
+            ksort($queryParams);
+            $filename = 'index-' . md5(http_build_query($queryParams)) . '.html';
+        } else {
+            $filename = 'index.html';
         }
 
-        $this->setHeader('MISS');
+        return WP_CONTENT_DIR . "/cache/wps-cache/html/" . $host . $path . $filename;
     }
 
-    /**
-     * Serves a cached file with appropriate headers
-     */
-    private function serveCachedFile(string $file, string $content_type): bool
+    private function serve(string $file, int $mtime): void
     {
-        // Instead of loading the file into a variable and echoing it,
-        // we use readfile() to output the file directly.
-        if (!file_exists($file)) {
-            return false;
-        }
-
-        $cache_time = filemtime($file);
-        $etag = '"' . md5_file($file) . '"';
-
-        // Check if-none-match for browser caching
+        $etag = '"' . $mtime . '"';
         if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
             header('HTTP/1.1 304 Not Modified');
             exit;
         }
 
-        // Set cache headers
-        header('Content-Type: ' . $content_type);
-        header('Cache-Control: public, max-age=' . self::YEAR_IN_SECONDS);
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Cache-Control: public, max-age=3600');
         header('ETag: ' . $etag);
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $cache_time) . ' GMT');
-
-        $this->setHeader('HIT');
+        header('X-WPS-Cache: HIT');
 
         readfile($file);
         exit;
     }
-
-    /**
-     * Checks if cache file is still valid
-     */
-    private function isCacheValid(string $file): bool
-    {
-        return (time() - filemtime($file)) < $this->cache_lifetime;
-    }
-
-    /**
-     * Sets WPS Cache header
-     */
-    private function setHeader(string $status): void
-    {
-        header('X-WPS-Cache: ' . $status);
-    }
-
-    /**
-     * Gets cache settings from WordPress options
-     */
-    private function getSettings(): array
-    {
-        if (!function_exists('get_option')) {
-            return [];
-        }
-
-        $settings = get_option('wpsc_settings');
-        return is_array($settings) ? $settings : [];
-    }
 }
 
-// Execute caching logic
-try {
-    $cache = new WPSAdvancedCache();
-    $cache->execute();
-} catch (Throwable $e) {
-    // Log error if debugging is enabled
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('WPS Cache Error: ' . $e->getMessage());
-    }
-
-    // Continue normal WordPress execution
-    header('X-WPS-Cache: ERROR');
-}
+(new WPSAdvancedCache())->execute();

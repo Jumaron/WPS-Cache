@@ -5,29 +5,32 @@ declare(strict_types=1);
 namespace WPSCache\Cache\Drivers;
 
 /**
- * Enhanced JavaScript minification implementation
+ * Enhanced JavaScript minification implementation.
+ * 
+ * Uses a Lexical Scanner (Tokenizer) to safely parse and minify JS.
+ * Handles ASI (Automatic Semicolon Insertion) by detecting where
+ * semicolons or newlines must be preserved.
  */
 final class MinifyJS extends AbstractCacheDriver
 {
-    private const MAX_FILE_SIZE = 500000; // 500KB
-    private const MIN_FILE_SIZE = 500;    // 500B
+    private const MAX_FILE_SIZE = 1024 * 1024; // 1MB limit
 
-    private const PRESERVE_PATTERNS = [
-        'template_literals' => '/`(?:\\\\.|[^\\\\`])*`/',  // Template literals with expressions
-        'regex_patterns'    => '/\/(?:\\\\.|[^\\/])*\/[gimuy]*(?=\s*(?:[)\].,;:\s]|$))/', // Regex patterns
-        'strings'           => '/([\'"])((?:\\\\.|(?!\1)[^\\\\])*)\1/', // String literals
-        'comments'          => '/\/\*![\s\S]*?\*\//',  // Important comments
-    ];
+    // Token Types
+    private const T_WHITESPACE = 0;
+    private const T_COMMENT    = 1;
+    private const T_STRING     = 2;
+    private const T_REGEX      = 3;
+    private const T_OPERATOR   = 4;
+    private const T_WORD       = 5; // Identifiers, Keywords, Numbers, Booleans
+    private const T_TEMPLATE   = 6;
 
     private string $cache_dir;
-    private array $settings;
-    private array $preserved = [];
 
     public function __construct()
     {
+        parent::__construct();
         $this->cache_dir = WPSC_CACHE_DIR . 'js/';
-        $this->settings = get_option('wpsc_settings', []);
-        $this->ensureCacheDirectory($this->cache_dir);
+        $this->ensureDirectory($this->cache_dir);
     }
 
     public function initialize(): void
@@ -40,12 +43,7 @@ final class MinifyJS extends AbstractCacheDriver
 
     public function isConnected(): bool
     {
-        global $wp_filesystem;
-        if (empty($wp_filesystem)) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
-            WP_Filesystem();
-        }
-        return $wp_filesystem->is_writable($this->cache_dir);
+        return is_dir($this->cache_dir) && is_writable($this->cache_dir);
     }
 
     public function get(string $key): mixed
@@ -61,7 +59,7 @@ final class MinifyJS extends AbstractCacheDriver
         }
 
         $file = $this->getCacheFile($key);
-        if (@file_put_contents($file, $value) === false) {
+        if (!$this->atomicWrite($file, $value)) {
             $this->logError("Failed to write JS cache file: $file");
         }
     }
@@ -76,153 +74,12 @@ final class MinifyJS extends AbstractCacheDriver
 
     public function clear(): void
     {
-        $files = glob($this->cache_dir . '*.js');
-        if (!is_array($files)) {
-            return;
-        }
-
-        foreach ($files as $file) {
-            if (is_file($file) && !wp_delete_file($file)) {
-                $this->logError("Failed to delete JS file during clear: $file");
-            }
-        }
-    }
-
-    private function minifyJS(string $js): string|false
-    {
-        if (empty($js)) {
-            return false;
-        }
-
-        try {
-            // Reset preserved content
-            $this->preserved = [];
-
-            // Preserve special content
-            $js = $this->preserveContent($js);
-
-            // Remove comments (except preserved ones)
-            $js = preg_replace([
-                '#^\s*//[^\n]*$#m',     // Single line comments
-                '#^\s*/\*[^!][^*]*\*+([^/*][^*]*\*+)*/\s*#m' // Multi-line comments (non-important)
-            ], '', $js);
-
-            // Safe whitespace removal
-            $js = preg_replace(
-                [
-                    '/\s+/',                            // Multiple whitespace to single
-                    '/\s*([\[\]{}(:,=+\-*\/])\s*/',      // Space around specific operators
-                    '/\s*;+\s*([\]}])\s*/',              // Remove unnecessary semicolons
-                    '/;\s*;/',                         // Multiple semicolons to single
-                    '/\)\s*{/',                        // Space between ) and {
-                    '/}\s*(\w+)/',                     // Add newline after } followed by word
-                    '/}\s*(else|catch|finally)/',      // No space before else/catch/finally
-                    '/[\r\n\t]+/',                     // Remove newlines/tabs
-                ],
-                [
-                    ' ',       // Single space
-                    '$1',      // Just the operator
-                    '$1',      // Just the bracket
-                    ';',       // Single semicolon
-                    '){',      // No space
-                    "}\n$1",   // Newline between
-                    "}$1",     // No space
-                    '',        // Remove completely
-                ],
-                $js
-            );
-
-            // Add missing semicolons only where needed
-            $js = preg_replace(
-                '/(\}|\++|\-+|\*+|\/+|%+|=+|\w+|\)+|\'+|\"+|`+)\s*\n\s*(?=[\w({\'"[`])/i',
-                '$1;',
-                $js
-            );
-
-            // Restore preserved content
-            $js = strtr($js, $this->preserved);
-
-            // Final cleanup
-            $js = trim($js);
-
-            return empty($js) ? false : $js;
-        } catch (\Throwable $e) {
-            $this->logError("JS minification failed", $e);
-            return false;
-        }
-    }
-
-    private function preserveContent(string $js): string
-    {
-        if (empty($js)) {
-            return '';
-        }
-
-        foreach (self::PRESERVE_PATTERNS as $type => $pattern) {
-            $js = (string)preg_replace_callback(
-                $pattern,
-                function ($matches) use ($type) {
-                    if (!isset($matches[0])) {
-                        return '';
-                    }
-                    $key = '___' . strtoupper($type) . '_' . count($this->preserved) . '___';
-                    $this->preserved[$key] = $matches[0];
-                    return $key;
-                },
-                $js
-            ) ?? $js;
-        }
-
-        return $js;
-    }
-
-    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void
-    {
-        if (!isset($wp_scripts->registered[$handle])) {
-            return;
-        }
-
-        $script = $wp_scripts->registered[$handle];
-
-        // Skip if script should not be processed
-        if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
-            return;
-        }
-
-        // Get the source file path
-        $source = $this->getSourcePath($script);
-        if (!$this->isValidSource($source)) {
-            return;
-        }
-
-        // Read and process content
-        $content = @file_get_contents($source);
-        if ($content === false || empty(trim($content))) {
-            return;
-        }
-
-        // Generate cache key and path
-        $cache_key = $this->generateCacheKey($handle . $content . filemtime($source));
-        $cache_file = $this->getCacheFile($cache_key);
-
-        // Process and cache if needed
-        if (!file_exists($cache_file)) {
-            $minified = $this->minifyJS($content);
-            if ($minified !== false) {
-                $this->set($cache_key, $minified);
-            }
-        }
-
-        // Update WordPress script registration
-        if (file_exists($cache_file)) {
-            $this->updateScriptRegistration($script, $cache_file);
-        }
+        $this->recursiveDelete($this->cache_dir);
     }
 
     public function processScripts(): void
     {
         global $wp_scripts;
-
         if (empty($wp_scripts->queue)) {
             return;
         }
@@ -238,12 +95,332 @@ final class MinifyJS extends AbstractCacheDriver
         }
     }
 
-    private function shouldProcessScript($script, string $handle, array $excluded_js): bool
+    private function processScript(string $handle, \WP_Scripts $wp_scripts, array $excluded_js): void
     {
-        if (!isset($script->src) || empty($script->src)) {
-            return false;
+        if (!isset($wp_scripts->registered[$handle])) {
+            return;
         }
 
+        $script = $wp_scripts->registered[$handle];
+
+        if (!$this->shouldProcessScript($script, $handle, $excluded_js)) {
+            return;
+        }
+
+        $source = $this->getSourcePath($script);
+        if (!$this->isValidSource($source)) {
+            return;
+        }
+
+        $content = @file_get_contents($source);
+        if ($content === false || empty(trim($content))) {
+            return;
+        }
+
+        $cache_key = $this->generateCacheKey($handle . md5($content) . filemtime($source));
+        $cache_file = $this->getCacheFile($cache_key);
+
+        if (!file_exists($cache_file)) {
+            try {
+                $minified = $this->minifyJS($content);
+                $this->set($cache_key, $minified);
+            } catch (\Throwable $e) {
+                $this->logError("JS Minification failed for $handle", $e);
+                return;
+            }
+        }
+
+        if (file_exists($cache_file)) {
+            $this->updateScriptRegistration($script, $cache_file);
+        }
+    }
+
+    /**
+     * Core Minification Logic using Lexical Analysis.
+     */
+    private function minifyJS(string $js): string
+    {
+        $output = fopen('php://memory', 'r+');
+        $prevToken = null;
+
+        $iterator = $this->tokenize($js);
+        $currToken = $iterator->current();
+
+        while ($currToken !== null) {
+            $iterator->next();
+            $nextToken = $iterator->valid() ? $iterator->current() : null;
+
+            // 1. Handle Comments: Skip them
+            if ($currToken['type'] === self::T_COMMENT) {
+                if (str_starts_with($currToken['value'], '/*!')) {
+                    fwrite($output, $currToken['value'] . "\n");
+                    $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
+                }
+                $currToken = $nextToken;
+                continue;
+            }
+
+            // 2. Handle Whitespace
+            if ($currToken['type'] === self::T_WHITESPACE) {
+                $hasNewline = str_contains($currToken['value'], "\n") || str_contains($currToken['value'], "\r");
+
+                if ($prevToken && $nextToken && $hasNewline) {
+                    // 2a. ASI Protection: Preserve Newline if strictly necessary for syntax (e.g. return \n val)
+                    if ($this->needsNewlineProtection($prevToken, $nextToken, $currToken['value'])) {
+                        fwrite($output, "\n");
+                        $prevToken = ['type' => self::T_WHITESPACE, 'value' => "\n"];
+                        $currToken = $nextToken;
+                        continue;
+                    }
+
+                    // 2b. MISSING SEMICOLON FIX
+                    if ($this->shouldInsertSemicolon($prevToken, $nextToken)) {
+                        fwrite($output, ';');
+                        $prevToken = ['type' => self::T_OPERATOR, 'value' => ';'];
+                        $currToken = $nextToken;
+                        continue;
+                    }
+                }
+
+                $currToken = $nextToken;
+                continue;
+            }
+
+            // 3. Handle Insertion of necessary spaces (e.g. "var x")
+            if ($prevToken && $this->needsSpace($prevToken, $currToken)) {
+                fwrite($output, ' ');
+            }
+
+            fwrite($output, $currToken['value']);
+            $prevToken = $currToken;
+            $currToken = $nextToken;
+        }
+
+        rewind($output);
+        $result = stream_get_contents($output);
+        fclose($output);
+
+        return $result ?: $js;
+    }
+
+    /**
+     * Generator that yields tokens from the raw JS string.
+     */
+    private function tokenize(string $js): \Generator
+    {
+        $len = strlen($js);
+        $i = 0;
+        $lastMeaningfulToken = null;
+
+        while ($i < $len) {
+            $char = $js[$i];
+
+            // Whitespace
+            if (ctype_space($char)) {
+                $start = $i;
+                while ($i < $len && ctype_space($js[$i])) {
+                    $i++;
+                }
+                yield ['type' => self::T_WHITESPACE, 'value' => substr($js, $start, $i - $start)];
+                continue;
+            }
+
+            // Comments / Regex / Division
+            if ($char === '/') {
+                $next = $js[$i + 1] ?? '';
+
+                if ($next === '/') { // Line Comment
+                    $start = $i;
+                    $i += 2;
+                    while ($i < $len && $js[$i] !== "\n" && $js[$i] !== "\r") $i++;
+                    yield ['type' => self::T_COMMENT, 'value' => substr($js, $start, $i - $start)];
+                    continue;
+                }
+                if ($next === '*') { // Block Comment
+                    $start = $i;
+                    $i += 2;
+                    while ($i < $len - 1) {
+                        if ($js[$i] === '*' && $js[$i + 1] === '/') {
+                            $i += 2;
+                            break;
+                        }
+                        $i++;
+                    }
+                    yield ['type' => self::T_COMMENT, 'value' => substr($js, $start, $i - $start)];
+                    continue;
+                }
+
+                // Regex Literal Detection
+                if ($this->isRegexStart($lastMeaningfulToken)) {
+                    $start = $i;
+                    $i++;
+                    $inClass = false;
+                    while ($i < $len) {
+                        $c = $js[$i];
+                        if ($c === '\\') {
+                            $i += 2;
+                            continue;
+                        }
+                        if ($c === '[') $inClass = true;
+                        if ($c === ']') $inClass = false;
+                        if ($c === '/' && !$inClass) {
+                            $i++;
+                            while ($i < $len && ctype_alpha($js[$i])) $i++;
+                            break;
+                        }
+                        if ($c === "\n" || $c === "\r") break;
+                        $i++;
+                    }
+                    yield $lastMeaningfulToken = ['type' => self::T_REGEX, 'value' => substr($js, $start, $i - $start)];
+                    continue;
+                }
+
+                yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => '/'];
+                $i++;
+                continue;
+            }
+
+            // Strings
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $start = $i;
+                $i++;
+                while ($i < $len) {
+                    if ($js[$i] === '\\') {
+                        $i += 2;
+                        continue;
+                    }
+                    if ($js[$i] === $quote) {
+                        $i++;
+                        break;
+                    }
+                    if ($js[$i] === "\n" || $js[$i] === "\r") break;
+                    $i++;
+                }
+                yield $lastMeaningfulToken = ['type' => self::T_STRING, 'value' => substr($js, $start, $i - $start)];
+                continue;
+            }
+
+            // Template Literals
+            if ($char === '`') {
+                $start = $i;
+                $i++;
+                while ($i < $len) {
+                    if ($js[$i] === '\\') {
+                        $i += 2;
+                        continue;
+                    }
+                    if ($js[$i] === '`') {
+                        $i++;
+                        break;
+                    }
+                    $i++;
+                }
+                yield $lastMeaningfulToken = ['type' => self::T_TEMPLATE, 'value' => substr($js, $start, $i - $start)];
+                continue;
+            }
+
+            // Operators
+            if (str_contains('{}()[],:;?^~', $char)) {
+                yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => $char];
+                $i++;
+                continue;
+            }
+            if (str_contains('.!<>=+-*%&|', $char)) {
+                $start = $i;
+                while ($i < $len && str_contains('.!<>=+-*%&|', $js[$i])) $i++;
+                yield $lastMeaningfulToken = ['type' => self::T_OPERATOR, 'value' => substr($js, $start, $i - $start)];
+                continue;
+            }
+
+            // Words
+            $start = $i;
+            while ($i < $len) {
+                $c = $js[$i];
+                if ($c === '.' && $i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
+                    $i++;
+                    continue; // decimal number
+                }
+                if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) break;
+                $i++;
+            }
+
+            $isProperty = false;
+            if ($lastMeaningfulToken !== null && $lastMeaningfulToken['type'] === self::T_OPERATOR && $lastMeaningfulToken['value'] === '.') {
+                $isProperty = true;
+            }
+
+            yield $lastMeaningfulToken = [
+                'type' => self::T_WORD,
+                'value' => substr($js, $start, $i - $start),
+                'is_property' => $isProperty
+            ];
+        }
+    }
+
+    private function isRegexStart(?array $lastToken): bool
+    {
+        if ($lastToken === null) return true;
+        $val = $lastToken['value'];
+        if ($val === ')' || $val === ']') return false;
+        if ($lastToken['type'] === self::T_OPERATOR) {
+            if ($val === '++' || $val === '--') return false;
+            return true;
+        }
+        if ($lastToken['type'] !== self::T_WORD) return false;
+        if (!empty($lastToken['is_property'])) return false;
+
+        $keywords = ['case', 'else', 'return', 'throw', 'typeof', 'void', 'delete', 'do', 'await', 'yield', 'if', 'while', 'for', 'in', 'instanceof', 'new', 'export'];
+        return in_array($val, $keywords, true);
+    }
+
+    private function needsSpace(array $prev, array $curr): bool
+    {
+        if ($prev['type'] === self::T_WORD && $curr['type'] === self::T_WORD) return true;
+        if ($prev['type'] === self::T_WORD && is_numeric($prev['value'][0]) && $curr['value'] === '.') return true;
+        if ($prev['type'] === self::T_OPERATOR && $curr['type'] === self::T_OPERATOR) {
+            if (($prev['value'] === '+' && str_starts_with($curr['value'], '+')) ||
+                ($prev['value'] === '-' && str_starts_with($curr['value'], '-'))
+            ) return true;
+        }
+        return false;
+    }
+
+    private function shouldInsertSemicolon(array $prev, array $next): bool
+    {
+        if ($next['type'] !== self::T_WORD) return false;
+        if ($prev['type'] === self::T_WORD) return true;
+        if ($prev['type'] === self::T_STRING || $prev['type'] === self::T_REGEX || $prev['type'] === self::T_TEMPLATE) return true;
+        if ($prev['type'] === self::T_OPERATOR) {
+            if (in_array($prev['value'], ['}', ']', ')', '++', '--'], true)) {
+                $exceptions = ['else', 'catch', 'finally', 'instanceof', 'in'];
+                if (in_array($next['value'], $exceptions, true)) return false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function needsNewlineProtection(array $prev, array $next, string $whitespace): bool
+    {
+        if (!str_contains($whitespace, "\n") && !str_contains($whitespace, "\r")) return false;
+        if ($prev['type'] === self::T_WORD) {
+            if (in_array($prev['value'], ['return', 'throw', 'break', 'continue', 'yield'], true)) return true;
+        }
+        if ($next['type'] === self::T_OPERATOR || $next['type'] === self::T_TEMPLATE) {
+            $val = $next['value'];
+            if ($val === '[' || $val === '(' || $val === '`' || $val === '+' || $val === '-' || $val === '/') {
+                $safeTerminators = [';', '}', ':'];
+                if (!in_array($prev['value'], $safeTerminators, true)) return true;
+            }
+        }
+        return false;
+    }
+
+    // --- Helpers ---
+    private function shouldProcessScript($script, string $handle, array $excluded_js): bool
+    {
+        if (!isset($script->src) || empty($script->src)) return false;
         $src = $script->src;
         return strpos($src, '.min.js') === false
             && strpos($src, '//') !== 0
@@ -254,43 +431,21 @@ final class MinifyJS extends AbstractCacheDriver
 
     private function getSourcePath($script): ?string
     {
-        if (!isset($script->src)) {
-            return null;
-        }
-
+        if (!isset($script->src)) return null;
         $src = $script->src;
-
-        // Convert relative URL to absolute
-        if (strpos($src, 'http') !== 0) {
-            $src = site_url($src);
-        }
-
-        // Convert URL to file path
-        return str_replace(
-            [site_url(), 'wp-content'],
-            [ABSPATH, 'wp-content'],
-            $src
-        );
+        if (strpos($src, 'http') !== 0) $src = site_url($src);
+        return str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
     }
 
     private function isValidSource(?string $source): bool
     {
-        return $source
-            && is_readable($source)
-            && filesize($source) <= self::MAX_FILE_SIZE;
+        return $source && is_readable($source) && filesize($source) <= self::MAX_FILE_SIZE;
     }
 
     private function updateScriptRegistration($script, string $cache_file): void
     {
-        if (!isset($script->src)) {
-            return;
-        }
-
-        $script->src = str_replace(
-            ABSPATH,
-            site_url('/'),
-            $cache_file
-        );
+        if (!isset($script->src)) return;
+        $script->src = str_replace(ABSPATH, site_url('/'), $cache_file);
         $script->ver = filemtime($cache_file);
     }
 
@@ -302,9 +457,7 @@ final class MinifyJS extends AbstractCacheDriver
     private function isExcluded(string $url, array $excluded_patterns): bool
     {
         foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url)) {
-                return true;
-            }
+            if (fnmatch($pattern, $url)) return true;
         }
         return false;
     }

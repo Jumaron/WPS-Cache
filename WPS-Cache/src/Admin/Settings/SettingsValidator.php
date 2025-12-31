@@ -5,237 +5,130 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Settings;
 
 /**
- * Validates and sanitizes settings for WPS Cache
+ * Handles security, validation, and sanitization of user inputs.
+ * FIX: Implements "Patch" logic to prevent overwriting settings from other tabs.
  */
 class SettingsValidator
 {
     /**
-     * Sanitizes the entire settings array
-     *
-     * @param array $input Raw settings array
-     * @return array Sanitized settings
+     * Sanitizes the settings array.
+     * Merges input with existing DB values to support partial form submissions.
      */
-    public function sanitizeSettings($input): array
+    public function sanitizeSettings(array $input): array
     {
-        // If input is not an array, initialize it
-        if (!is_array($input)) {
-            $input = [];
+        // 1. Fetch current DB state to preserve values from other tabs
+        $current = get_option('wpsc_settings', []);
+        if (!is_array($current)) {
+            $current = [];
         }
 
-        // Extract settings from the wpsc_settings wrapper if present
-        $settings = isset($input['wpsc_settings']) ? $input['wpsc_settings'] : $input;
+        $clean = [];
 
-        return [
-            // Basic settings
-            'html_cache' => (bool)($settings['html_cache'] ?? false),
-            'redis_cache' => (bool)($settings['redis_cache'] ?? false),
-            'varnish_cache' => (bool)($settings['varnish_cache'] ?? false),
-            'css_minify' => (bool)($settings['css_minify'] ?? false),
-            'js_minify' => (bool)($settings['js_minify'] ?? false),
-            'cache_lifetime' => $this->sanitizeCacheLifetime($settings['cache_lifetime'] ?? 3600),
-
-            // URL and CSS settings
-            'excluded_urls' => $this->sanitizeUrls($settings['excluded_urls'] ?? []),
-            'excluded_css' => $this->sanitizeCssSelectors($settings['excluded_css'] ?? []),
-            'excluded_js' => $this->sanitizeJsSelectors($settings['excluded_js'] ?? []),
-
-            // Redis settings
-            'redis_host' => $this->sanitizeHost($settings['redis_host'] ?? '127.0.0.1'),
-            'redis_port' => $this->sanitizePort($settings['redis_port'] ?? 6379),
-            'redis_db' => $this->sanitizeRedisDb($settings['redis_db'] ?? 0),
-            'redis_password' => $this->sanitizeRedisPassword($settings),
-            'redis_prefix' => $this->sanitizeRedisPrefix($settings['redis_prefix'] ?? 'wpsc:'),
-            'redis_persistent' => (bool)($settings['redis_persistent'] ?? false),
-            'redis_compression' => (bool)($settings['redis_compression'] ?? true),
-
-            // Varnish settings
-            'varnish_host' => $this->sanitizeHost($settings['varnish_host'] ?? '127.0.0.1'),
-            'varnish_port' => $this->sanitizePort($settings['varnish_port'] ?? 6081),
-
-            // Preload settings
-            'preload_urls' => $this->sanitizeUrls($settings['preload_urls'] ?? []),
-            'preload_interval' => $this->sanitizeInterval($settings['preload_interval'] ?? 'daily'),
-
-            // Metrics settings
-            'enable_metrics' => (bool)($settings['enable_metrics'] ?? true),
-            'metrics_retention' => $this->sanitizeMetricsRetention($settings['metrics_retention'] ?? 30),
-
-            // Advanced settings
-            'advanced_settings' => $this->sanitizeAdvancedSettings($settings['advanced_settings'] ?? [])
+        // --- 1. Boolean Switches ---
+        // Note: The Renderer outputs a hidden "0" field before the checkbox.
+        // So if the field is on screen, we receive "0" or "1".
+        // If the field is NOT on screen (different tab), the key is missing entirely.
+        $booleans = [
+            'html_cache',
+            'enable_metrics',
+            'redis_cache',
+            'varnish_cache',
+            'css_minify',
+            'css_async',
+            'js_minify',
+            'js_defer',
+            'js_delay',
+            'redis_persistent',
+            'redis_compression'
         ];
-    }
 
-    /**
-     * Sanitizes cache lifetime value
-     */
-    private function sanitizeCacheLifetime(mixed $lifetime): int
-    {
-        $lifetime = (int)$lifetime;
-        return max(60, min(2592000, $lifetime)); // Between 1 minute and 30 days
-    }
-
-    /**
-     * Sanitizes URLs array or string
-     */
-    private function sanitizeUrls(array|string $urls): array
-    {
-        if (is_string($urls)) {
-            $urls = explode("\n", $urls);
+        foreach ($booleans as $key) {
+            if (array_key_exists($key, $input)) {
+                // Field was present in form -> update it
+                $clean[$key] = (string)$input[$key] === '1';
+            } else {
+                // Field missing -> keep existing DB value
+                $clean[$key] = isset($current[$key]) ? (bool)$current[$key] : false;
+            }
         }
 
-        return array_filter(array_map(function ($url) {
-            $url = trim($url);
-            return filter_var($url, FILTER_VALIDATE_URL) ? esc_url_raw($url) : '';
-        }, $urls));
-    }
+        // --- 2. Numeric Values ---
+        $numerics = [
+            'cache_lifetime'    => [60, 31536000],
+            'metrics_retention' => [1, 365],
+            'redis_port'        => [1, 65535],
+            'redis_db'          => [0, 15],
+            'varnish_port'      => [1, 65535]
+        ];
 
-    /**
-     * Sanitizes CSS selectors
-     */
-    private function sanitizeCssSelectors(array|string $selectors): array
-    {
-        if (is_string($selectors)) {
-            $selectors = explode("\n", $selectors);
+        foreach ($numerics as $key => [$min, $max]) {
+            if (isset($input[$key])) {
+                $clean[$key] = $this->sanitizeInt($input[$key], $min, $max);
+            } else {
+                $clean[$key] = isset($current[$key]) ? (int)$current[$key] : 0;
+            }
         }
 
-        return array_filter(array_map(function ($selector) {
-            return sanitize_text_field(trim($selector));
-        }, $selectors));
-    }
-
-    /**
-     *  Sanitizes JS selectors
-     */
-    private function sanitizeJsSelectors(array|string $selectors): array
-    {
-        if (is_string($selectors)) {
-            $selectors = explode("\n", $selectors);
+        // --- 3. Strings ---
+        $strings = ['redis_host', 'redis_prefix', 'varnish_host', 'preload_interval'];
+        foreach ($strings as $key) {
+            if (isset($input[$key])) {
+                if ($key === 'redis_host' || $key === 'varnish_host') {
+                    $clean[$key] = $this->sanitizeHost($input[$key]);
+                } else {
+                    $clean[$key] = sanitize_text_field($input[$key]);
+                }
+            } else {
+                $clean[$key] = $current[$key] ?? '';
+            }
         }
 
-        return array_filter(array_map(function ($selector) {
-            return sanitize_text_field(trim($selector));
-        }, $selectors));
+        // --- 4. Password (Masking Handling) ---
+        if (isset($input['redis_password'])) {
+            // Only update if it's not empty/masked.
+            // If user clears it, we might need logic, but usually empty = no change for passwords in admin
+            if (!empty($input['redis_password'])) {
+                $clean['redis_password'] = sanitize_text_field($input['redis_password']);
+            } else {
+                $clean['redis_password'] = $current['redis_password'] ?? '';
+            }
+        } else {
+            $clean['redis_password'] = $current['redis_password'] ?? '';
+        }
+
+        // --- 5. Arrays (Textarea Lines) ---
+        $arrays = ['excluded_urls', 'excluded_css', 'excluded_js', 'preload_urls'];
+        foreach ($arrays as $key) {
+            if (isset($input[$key])) {
+                $clean[$key] = $this->sanitizeLines($input[$key]);
+            } else {
+                $clean[$key] = $current[$key] ?? [];
+            }
+        }
+
+        return $clean;
     }
 
-    /**
-     * Sanitizes host address
-     */
+    private function sanitizeInt(mixed $value, int $min, int $max): int
+    {
+        $val = absint($value);
+        return max($min, min($max, $val));
+    }
+
     private function sanitizeHost(string $host): string
     {
-        $host = trim($host);
+        $host = sanitize_text_field(trim($host));
+        return preg_replace('/[^a-zA-Z0-9\-\.:]/', '', $host);
+    }
 
-        // Allow localhost
-        if ($host === 'localhost') {
-            return $host;
+    private function sanitizeLines(array|string $input): array
+    {
+        if (is_string($input)) {
+            $input = explode("\n", $input);
         }
 
-        // Validate IP address or hostname
-        if (filter_var($host, FILTER_VALIDATE_IP) || filter_var($host, FILTER_VALIDATE_DOMAIN)) {
-            return $host;
-        }
-
-        return '127.0.0.1';
-    }
-
-    /**
-     * Sanitizes port number
-     */
-    private function sanitizePort(mixed $port): int
-    {
-        $port = (int)$port;
-        return max(1, min(65535, $port));
-    }
-
-    /**
-     * Sanitizes Redis database index
-     */
-    private function sanitizeRedisDb(mixed $db): int
-    {
-        $db = (int)$db;
-        return max(0, min(15, $db)); // Redis typically supports 16 databases (0-15)
-    }
-
-    /**
-     * Sanitizes Redis password
-     */
-    private function sanitizeRedisPassword(array $settings): string
-    {
-        // Handle password updates
-        if (isset($settings['redis_password'])) {
-            if ($settings['redis_password'] === '••••••••') {
-                // Password unchanged, retain existing password
-                $old_settings = get_option('wpsc_settings', []);
-                return $old_settings['redis_password'] ?? '';
-            }
-            return sanitize_text_field($settings['redis_password']);
-        }
-        return '';
-    }
-
-    /**
-     * Sanitizes Redis prefix
-     */
-    private function sanitizeRedisPrefix(string $prefix): string
-    {
-        $prefix = sanitize_text_field($prefix);
-        return empty($prefix) ? 'wpsc:' : $prefix;
-    }
-
-    /**
-     * Sanitizes preload interval
-     */
-    private function sanitizeInterval(string $interval): string
-    {
-        return in_array($interval, ['hourly', 'daily', 'weekly']) ? $interval : 'daily';
-    }
-
-    /**
-     * Sanitizes metrics retention period
-     */
-    private function sanitizeMetricsRetention(mixed $days): int
-    {
-        $days = (int)$days;
-        return max(1, min(90, $days)); // Between 1 and 90 days
-    }
-
-    /**
-     * Sanitizes advanced settings
-     */
-    private function sanitizeAdvancedSettings(array $settings): array
-    {
-        return [
-            'object_cache_alloptions_limit' => $this->sanitizeAllOptionsLimit($settings['object_cache_alloptions_limit'] ?? 1000),
-            'max_ttl' => $this->sanitizeMaxTTL($settings['max_ttl'] ?? 86400),
-            'cache_groups' => $this->sanitizeCacheGroups($settings['cache_groups'] ?? []),
-            'ignored_groups' => $this->sanitizeCacheGroups($settings['ignored_groups'] ?? [])
-        ];
-    }
-
-    /**
-     * Sanitizes alloptions limit
-     */
-    private function sanitizeAllOptionsLimit(mixed $limit): int
-    {
-        $limit = (int)$limit;
-        return max(100, min(5000, $limit));
-    }
-
-    /**
-     * Sanitizes maximum TTL
-     */
-    private function sanitizeMaxTTL(mixed $ttl): int
-    {
-        $ttl = (int)$ttl;
-        return max(3600, min(2592000, $ttl)); // Between 1 hour and 30 days
-    }
-
-    /**
-     * Sanitizes cache groups array
-     */
-    private function sanitizeCacheGroups(array $groups): array
-    {
-        return array_filter(array_map(function ($group) {
-            return sanitize_text_field(trim($group));
-        }, $groups));
+        $lines = array_map('trim', $input);
+        $lines = array_filter($lines);
+        return array_map('sanitize_text_field', $lines);
     }
 }
