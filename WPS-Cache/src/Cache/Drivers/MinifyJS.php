@@ -24,6 +24,10 @@ final class MinifyJS extends AbstractCacheDriver
     private const T_WORD       = 5; // Identifiers, Keywords, Numbers, Booleans
     private const T_TEMPLATE   = 6;
 
+    // Mask: Whitespace + Special Chars + Operators
+    // Used for strcspn optimization in tokenizer
+    private const TOKENIZER_MASK = " \t\n\r\v\f/\"'`{}()[],:;?^~.!<>=+-*%&|";
+
     private string $cache_dir;
 
     public function __construct()
@@ -343,14 +347,25 @@ final class MinifyJS extends AbstractCacheDriver
 
             // Words
             $start = $i;
+            // Optimization: Use strcspn to skip over non-break characters
+
             while ($i < $len) {
+                $len_chunk = strcspn($js, self::TOKENIZER_MASK, $i);
+                $i += $len_chunk;
+
+                if ($i >= $len) break;
+
                 $c = $js[$i];
-                if ($c === '.' && $i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
-                    $i++;
-                    continue; // decimal number
+
+                // Handle decimal number case: 1.5
+                if ($c === '.') {
+                    if ($i > $start && ctype_digit($js[$i - 1]) && isset($js[$i + 1]) && ctype_digit($js[$i + 1])) {
+                        $i++;
+                        continue; // decimal number
+                    }
                 }
-                if (ctype_space($c) || str_contains('/"\'`{}()[],:;?^~.!<>=+-*%&|', $c)) break;
-                $i++;
+
+                break;
             }
 
             $isProperty = false;
