@@ -143,18 +143,13 @@ final class CacheManager
         global $wpdb;
 
         try {
-            // Delete transient data
+            // Delete transient data (covers both data and timeouts)
+            // _transient_% covers _transient_timeout_%
+            // _site_transient_% covers _site_transient_timeout_%
             $wpdb->query(
                 "DELETE FROM {$wpdb->options} 
                  WHERE option_name LIKE '\_transient\_%' 
                  OR option_name LIKE '\_site\_transient\_%'"
-            );
-
-            // Delete transient timeouts (cleanup)
-            $wpdb->query(
-                "DELETE FROM {$wpdb->options} 
-                 WHERE option_name LIKE '\_transient\_timeout\_%' 
-                 OR option_name LIKE '\_site\_transient\_timeout\_%'"
             );
         } catch (Throwable $e) {
             $this->errorLog['db'] = $e->getMessage();
