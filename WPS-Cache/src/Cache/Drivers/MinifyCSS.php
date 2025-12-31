@@ -407,12 +407,26 @@ final class MinifyCSS extends AbstractCacheDriver
                 'nth-last-child',
                 'nth-of-type',
                 'nth-last-of-type',
+                'nth-col',
+                'nth-last-col',
                 'dir',
                 'lang',
                 'host',
                 'host-context',
                 'part',
-                'slotted'
+                'slotted',
+                'matches',
+                '-webkit-any',
+                '-moz-any',
+                'cue',
+                'current',
+                'past',
+                'future',
+                'state',
+                'view-transition-group',
+                'view-transition-image-pair',
+                'view-transition-old',
+                'view-transition-new'
             ];
 
             if ($lastClosedFunc && in_array($lastClosedFunc, $selector_pseudos, true)) {
