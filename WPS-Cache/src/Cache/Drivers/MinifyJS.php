@@ -112,15 +112,23 @@ final class MinifyJS extends AbstractCacheDriver
             return;
         }
 
-        $content = @file_get_contents($source);
-        if ($content === false || empty(trim($content))) {
+        $mtime = @filemtime($source);
+        $size = @filesize($source);
+
+        if ($mtime === false || $size === false) {
             return;
         }
 
-        $cache_key = $this->generateCacheKey($handle . md5($content) . filemtime($source));
+        // Optimization: Generate cache key based on metadata to avoid reading content
+        $cache_key = $this->generateCacheKey($handle . $source . $mtime . $size);
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
+            $content = @file_get_contents($source);
+            if ($content === false || empty(trim($content))) {
+                return;
+            }
+
             try {
                 $minified = $this->minifyJS($content);
                 $this->set($cache_key, $minified);
