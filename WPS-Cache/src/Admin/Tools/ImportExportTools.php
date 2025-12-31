@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace WPSCache\Admin\Tools;
+use WPSCache\Admin\Settings\SettingsValidator;
 
 /**
  * Handles settings import and export functionality
@@ -125,8 +126,13 @@ class ImportExportTools
             // Read and validate file contents
             $import_data = $this->readImportFile($file['tmp_name']);
 
-            // Validate and sanitize settings
-            $settings = $this->validateImportData($import_data);
+            // Validate structure
+            $raw_settings = $this->validateImportData($import_data);
+
+            // Sentinel Fix: Strictly sanitize imported settings to prevent injection
+            // Use the same validator as the settings form to ensure consistency and security.
+            $validator = new SettingsValidator();
+            $settings = $validator->sanitizeSettings($raw_settings);
 
             // Create a backup before import
             $this->createSettingsBackup();
