@@ -4,171 +4,317 @@ declare(strict_types=1);
 
 namespace WPSCache\Optimization;
 
-use WPSCache\Cache\Drivers\MinifyCSS;
-
 class CSSOptimizer
 {
     private array $settings;
-    private array $used_selectors = [];
+    private array $used_classes = [];
+    private array $used_ids = [];
+    private array $used_tags = [];
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
     }
 
-    public function process(string $html, string $merged_css): string
+    public function process(string $html, string $css): string
     {
         if (empty($this->settings['remove_unused_css'])) {
-            return $merged_css; // Or return HTML with link tags if we aren't merging
+            return $css;
         }
 
-        // 1. Extract all Classes and IDs from HTML
+        // 1. Build the lookup table from HTML
         $this->extractUsedSelectors($html);
 
-        // 2. Parse CSS and Filter
-        return $this->filterCSS($merged_css);
+        // 2. Parse and Filter the CSS
+        return $this->parseAndFilter($css);
     }
 
-    /**
-     * Scans HTML for 'class="..."' and 'id="..."'
-     */
     private function extractUsedSelectors(string $html): void
     {
-        // Match class="foo bar"
+        // Extract Classes
         if (preg_match_all('/class=["\']([^"\']*)["\']/i', $html, $matches)) {
             foreach ($matches[1] as $classString) {
-                $classes = explode(' ', $classString);
+                $classes = preg_split('/\s+/', trim($classString));
                 foreach ($classes as $c) {
-                    if (!empty($c)) $this->used_selectors['.' . trim($c)] = true;
+                    if ($c) $this->used_classes[$c] = true;
                 }
             }
         }
 
-        // Match id="header"
+        // Extract IDs
         if (preg_match_all('/id=["\']([^"\']*)["\']/i', $html, $matches)) {
             foreach ($matches[1] as $id) {
-                if (!empty($id)) $this->used_selectors['#' . trim($id)] = true;
+                if ($id) $this->used_ids[$id] = true;
             }
         }
 
-        // Add standard tag selectors that are always safe to keep
-        $tags = ['html', 'body', 'div', 'span', 'p', 'a', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img', 'header', 'footer', 'nav', 'section', 'article', 'main'];
-        foreach ($tags as $tag) {
-            $this->used_selectors[$tag] = true;
-        }
+        // Standard HTML5 tags are always "used"
+        $this->used_tags = array_flip([
+            'html',
+            'body',
+            'div',
+            'span',
+            'applet',
+            'object',
+            'iframe',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'p',
+            'blockquote',
+            'pre',
+            'a',
+            'abbr',
+            'acronym',
+            'address',
+            'big',
+            'cite',
+            'code',
+            'del',
+            'dfn',
+            'em',
+            'img',
+            'ins',
+            'kbd',
+            'q',
+            's',
+            'samp',
+            'small',
+            'strike',
+            'strong',
+            'sub',
+            'sup',
+            'tt',
+            'var',
+            'b',
+            'u',
+            'i',
+            'center',
+            'dl',
+            'dt',
+            'dd',
+            'ol',
+            'ul',
+            'li',
+            'fieldset',
+            'form',
+            'label',
+            'legend',
+            'table',
+            'caption',
+            'tbody',
+            'tfoot',
+            'thead',
+            'tr',
+            'th',
+            'td',
+            'article',
+            'aside',
+            'canvas',
+            'details',
+            'embed',
+            'figure',
+            'figcaption',
+            'footer',
+            'header',
+            'hgroup',
+            'menu',
+            'nav',
+            'output',
+            'ruby',
+            'section',
+            'summary',
+            'time',
+            'mark',
+            'audio',
+            'video',
+            'main',
+            'svg',
+            'path'
+        ]);
     }
 
     /**
-     * A lightweight tokenizer that skips unused blocks.
-     * Reuses concepts from MinifyCSS but focused on filtering.
+     * The Core Logic: A recursive parser that handles @media nesting
      */
-    private function filterCSS(string $css): string
+    private function parseAndFilter(string $css): string
     {
-        $buffer = '';
-        $keepBlock = true;
-        $inBlock = false;
-        $currentSelector = '';
-
-        // 1. Remove Comments first to simplify parsing
+        // Remove comments to simplify parsing
         $css = preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $css);
 
-        // Simple State Machine
-        $len = strlen($css);
-        for ($i = 0; $i < $len; $i++) {
+        $buffer = '';
+        $length = strlen($css);
+        $i = 0;
+
+        while ($i < $length) {
             $char = $css[$i];
 
-            if ($char === '{') {
-                $inBlock = true;
-                // Check if selector matches known used selectors
-                $keepBlock = $this->isSelectorUsed($currentSelector);
-
-                if ($keepBlock) {
-                    $buffer .= $currentSelector . '{';
+            // 1. Handle @-rules (media, keyframes, etc)
+            if ($char === '@') {
+                $blockStart = $i;
+                // Read until we find '{' or ';'
+                while ($i < $length && $css[$i] !== '{' && $css[$i] !== ';') {
+                    $i++;
                 }
-                $currentSelector = '';
+
+                if ($i >= $length) break;
+
+                // If it's a statement like @import or @charset (ends with ;)
+                if ($css[$i] === ';') {
+                    $buffer .= substr($css, $blockStart, $i - $blockStart + 1);
+                    $i++;
+                    continue;
+                }
+
+                // It's a block (@media, @keyframes, @supports)
+                $header = substr($css, $blockStart, $i - $blockStart);
+                $isMedia = (stripos($header, '@media') === 0 || stripos($header, '@supports') === 0);
+
+                // Extract the block content
+                $i++; // skip '{'
+                $depth = 1;
+                $innerContentStart = $i;
+
+                while ($i < $length && $depth > 0) {
+                    if ($css[$i] === '{') $depth++;
+                    else if ($css[$i] === '}') $depth--;
+                    $i++;
+                }
+
+                $innerContent = substr($css, $innerContentStart, $i - $innerContentStart - 1);
+
+                if ($isMedia) {
+                    // RECURSION: Filter the content INSIDE the @media block
+                    $filteredInner = $this->parseAndFilter($innerContent);
+                    if (trim($filteredInner) !== '') {
+                        $buffer .= $header . '{' . $filteredInner . '}';
+                    }
+                } else {
+                    // For @keyframes, @font-face, keep them whole (safe mode)
+                    $buffer .= $header . '{' . $innerContent . '}';
+                }
                 continue;
             }
 
-            if ($char === '}') {
-                $inBlock = false;
-                if ($keepBlock) {
-                    $buffer .= '}';
+            // 2. Handle Standard CSS Rules
+            // Scan for the start of a selector
+            if (!ctype_space($char) && $char !== '}') {
+                $selectorStart = $i;
+                while ($i < $length && $css[$i] !== '{') {
+                    $i++;
                 }
-                $keepBlock = false;
+
+                $selectorString = substr($css, $selectorStart, $i - $selectorStart);
+
+                // Extract body
+                $i++; // skip '{'
+                $depth = 1;
+                $bodyStart = $i;
+                while ($i < $length && $depth > 0) {
+                    if ($css[$i] === '{') $depth++;
+                    else if ($css[$i] === '}') $depth--;
+                    $i++;
+                }
+
+                $body = substr($css, $bodyStart, $i - $bodyStart - 1);
+
+                // FILTER: Check if selectors are used
+                $validSelectors = [];
+                $selectors = explode(',', $selectorString);
+
+                foreach ($selectors as $sel) {
+                    if ($this->isSelectorUsed(trim($sel))) {
+                        $validSelectors[] = trim($sel);
+                    }
+                }
+
+                if (!empty($validSelectors)) {
+                    $buffer .= implode(',', $validSelectors) . '{' . $body . '}';
+                }
                 continue;
             }
 
-            if ($inBlock) {
-                if ($keepBlock) {
-                    $buffer .= $char;
-                }
-            } else {
-                $currentSelector .= $char;
-            }
+            $i++;
         }
 
         return $buffer;
     }
 
     /**
-     * Determines if a CSS selector (e.g. ".header .nav") is used.
-     * Safe Mode: If it contains :hover, ::before, @media, or unknown complex selectors, keep it.
+     * Determines if a CSS selector is relevant to the current HTML.
      */
     private function isSelectorUsed(string $selector): bool
     {
-        $selector = trim($selector);
-
-        // Always keep @rules (media queries, keyframes, font-face)
-        if (str_starts_with($selector, '@')) {
-            return true;
-        }
-
-        // Always keep pseudo-classes/elements as we can't detect state from static HTML
+        // 1. Always keep pseudo-elements/classes that imply dynamic state
+        // (We can't detect hover/focus/before state from static HTML)
         if (str_contains($selector, ':')) {
-            return true;
+            // Strip the pseudo part to check the base element
+            // e.g. "a:hover" -> check if "a" exists
+            $baseSelector = preg_split('/:+/', $selector)[0];
+            if (empty($baseSelector)) return true; // Safety
+            return $this->checkSimpleSelector($baseSelector);
         }
 
-        // Split multiple selectors (comma separated)
-        $parts = explode(',', $selector);
-        $anyUsed = false;
+        // 2. Complex Selectors: "div.container > span.active"
+        // Heuristic: Check if the *right-most* (key) part exists.
+        // This is a trade-off. Full DOM tree matching is too slow for PHP.
+        // We assume if the target class exists, the rule is likely relevant.
+        $parts = preg_split('/[\s>+~]+/', $selector);
+        $keyPart = end($parts);
 
-        foreach ($parts as $part) {
-            $part = trim($part);
+        return $this->checkSimpleSelector($keyPart);
+    }
 
-            // Analyze the *last* part of the selector chain (the target)
-            // e.g. "div .container > p.active" -> we check "p.active"
-            // Simple heuristic: If any class/id in the selector exists in our list, keep it.
+    /**
+     * Checks a single component (e.g. "div#id.class")
+     */
+    private function checkSimpleSelector(string $part): bool
+    {
+        // Remove attribute selectors [type="text"] as they are hard to match via regex
+        $part = preg_replace('/\[.*?\]/', '', $part);
 
-            // Extract classes (.name)
-            if (preg_match_all('/\.([a-zA-Z0-9_\-]+)/', $part, $matches)) {
-                foreach ($matches[0] as $class) {
-                    if (isset($this->used_selectors[$class])) {
-                        $anyUsed = true;
-                        break;
-                        2;
-                    }
-                }
-            }
-
-            // Extract IDs (#name)
-            if (preg_match_all('/#([a-zA-Z0-9_\-]+)/', $part, $matches)) {
-                foreach ($matches[0] as $id) {
-                    if (isset($this->used_selectors[$id])) {
-                        $anyUsed = true;
-                        break;
-                        2;
-                    }
-                }
-            }
-
-            // Keep generic tag selectors if they are simple (e.g. "body")
-            if (isset($this->used_selectors[$part])) {
-                $anyUsed = true;
-                break;
-                2;
+        // Check ID
+        if (str_contains($part, '#')) {
+            $segments = explode('#', $part);
+            $id = $segments[1] ?? '';
+            // If ID is not in our list, rule is unused
+            if (!empty($id) && !isset($this->used_ids[$id])) {
+                return false;
             }
         }
 
-        return $anyUsed;
+        // Check Classes
+        if (str_contains($part, '.')) {
+            $classes = explode('.', $part);
+            array_shift($classes); // remove empty or tag part
+
+            $foundAny = false;
+            foreach ($classes as $cls) {
+                // If ANY class in the chain exists, we consider it a potential match.
+                // Strict mode would require ALL, but that breaks multi-class logic often in PHP.
+                if (isset($this->used_classes[$cls])) {
+                    $foundAny = true;
+                    break;
+                }
+            }
+            if (!$foundAny && !empty($classes)) {
+                return false;
+            }
+        }
+
+        // Check Tag (if no ID and no Class present)
+        if (!str_contains($part, '.') && !str_contains($part, '#')) {
+            $tag = strtolower($part);
+            // Universal selector
+            if ($tag === '*') return true;
+            if (!isset($this->used_tags[$tag]) && !empty($tag)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
