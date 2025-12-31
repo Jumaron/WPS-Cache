@@ -84,16 +84,14 @@ class ToolsManager
         ]);
 
         $urls = [];
-        $urls[] = home_url('/'); // Always preload home
+        $urls[home_url('/')] = true; // Always preload home
 
         foreach ($query->posts as $id) {
             $link = get_permalink($id);
-            if ($link) $urls[] = $link;
+            if ($link) $urls[$link] = true;
         }
 
-        // CRITICAL FIX: array_values() re-indexes the array (0,1,2...)
-        // ensuring json_encode outputs an Array [...], not an Object {"0":...}
-        wp_send_json_success(array_values(array_unique($urls)));
+        wp_send_json_success(array_keys($urls));
     }
 
     /**
