@@ -123,20 +123,27 @@ final class MinifyCSS extends AbstractCacheDriver
         }
 
         $source = $this->getSourcePath($style);
-        if (!$source || !is_readable($source) || filesize($source) > self::MAX_FILE_SIZE) {
+        if (!$source || !is_readable($source)) {
             return;
         }
 
-        $content = file_get_contents($source);
-        if ($content === false || empty(trim($content))) {
+        $size = filesize($source);
+        if ($size === false || $size > self::MAX_FILE_SIZE) {
             return;
         }
 
-        // Generate cache key based on content hash + mtime
-        $cache_key = $this->generateCacheKey($handle . md5($content) . filemtime($source));
+        // Generate cache key based on handle + path + mtime + size (No content read)
+        // Optimization: Avoid reading file content on every request if cache exists.
+        $mtime = filemtime($source);
+        $cache_key = $this->generateCacheKey($handle . $source . $mtime . $size);
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
+            $content = file_get_contents($source);
+            if ($content === false || empty(trim($content))) {
+                return;
+            }
+
             try {
                 $minified = $this->minifyCSS($content);
                 $this->set($cache_key, $minified);
