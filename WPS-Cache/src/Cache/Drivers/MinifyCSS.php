@@ -397,12 +397,31 @@ final class MinifyCSS extends AbstractCacheDriver
 
             // Words / Identifiers
             $start = $i;
+            // Optimization: Use strcspn to skip over non-break characters
+            // Mask: Whitespace + Special Chars + Operators + /
+            $mask = " \t\n\r\v\f{}():;,'\">+~/";
+
             while ($i < $len) {
+                $len_chunk = strcspn($css, $mask, $i);
+                $i += $len_chunk;
+
+                if ($i >= $len) {
+                    break;
+                }
+
                 $c = $css[$i];
-                // Break on special chars
-                if (ctype_space($c) || str_contains('{}():;,\'"', $c) || ($c === '/' && ($css[$i + 1] ?? '') === '*')) break;
-                if (str_contains('>+~', $c)) break;
-                $i++;
+
+                // If stopped at /, check if it's a comment start (/*)
+                if ($c === '/') {
+                    if (($css[$i + 1] ?? '') === '*') {
+                        break; // Comment start detected, let main loop handle it
+                    }
+                    $i++; // Consume / as part of the word/identifier (e.g. url(/img.png))
+                    continue;
+                }
+
+                // Any other match in mask is a break character
+                break;
             }
 
             $val = substr($css, $start, $i - $start);
