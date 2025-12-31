@@ -8,391 +8,137 @@ use WPSCache\Cache\CacheManager;
 use WPSCache\Cache\Drivers\RedisCache;
 
 /**
- * Collects and processes cache metrics
+ * Service responsible for gathering performance data.
+ * Caches results in Transients to prevent admin panel slowdowns.
  */
 class MetricsCollector
 {
-    private CacheManager $cache_manager;
-    private const METRICS_RETENTION = 30; // Days to keep historical metrics
-    private const METRICS_TRANSIENT = 'wpsc_metrics_data';
-    private const HISTORICAL_OPTION = 'wpsc_historical_metrics';
+    private CacheManager $cacheManager;
 
-    public function __construct(CacheManager $cache_manager)
+    public function __construct(CacheManager $cacheManager)
     {
-        $this->cache_manager = $cache_manager;
+        $this->cacheManager = $cacheManager;
     }
 
     /**
-     * Collects current metrics from all cache types
+     * Aggregates stats from all active drivers.
      */
-    public function collectMetrics(): void
+    public function getStats(): array
     {
-        try {
-            $metrics = [
-                'timestamp' => current_time('timestamp'),
-                'html'      => $this->getHtmlCacheStats(),
-                'redis'     => $this->getRedisMetrics(),
-                'varnish'   => $this->getVarnishStats(),
-                'system'    => $this->getSystemMetrics()
+        $settings = get_option('wpsc_settings', []);
+
+        // FIX: Check toggle. If disabled, return dummy data.
+        if (empty($settings['enable_metrics'])) {
+            return [
+                'timestamp' => current_time('mysql'),
+                'html'      => ['enabled' => false, 'files' => 0, 'size' => '0 B'],
+                'redis'     => ['enabled' => false],
+                'system'    => $this->getSystemStats()
             ];
-
-            // Store current metrics
-            set_transient(self::METRICS_TRANSIENT, $metrics, HOUR_IN_SECONDS);
-
-            // Store historical data
-            $this->storeHistoricalMetrics($metrics);
-
-            // Cleanup old data
-            $this->cleanupHistoricalMetrics();
-        } catch (\Exception $e) {
-            // Removed error_log() call for production.
         }
+
+        $cached = get_transient('wpsc_stats_cache');
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $stats = [
+            'timestamp' => current_time('mysql'),
+            'html'      => $this->getHtmlStats(),
+            'redis'     => $this->getRedisStats(),
+            'system'    => $this->getSystemStats()
+        ];
+
+        set_transient('wpsc_stats_cache', $stats, 5 * MINUTE_IN_SECONDS);
+
+        return $stats;
     }
 
     /**
-     * Gets current metrics data
+     * efficient directory counting using Iterators.
      */
-    public function getCurrentMetrics(): array
+    private function getHtmlStats(): array
     {
-        $metrics = get_transient(self::METRICS_TRANSIENT);
+        $dir = defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR . 'html/' : WP_CONTENT_DIR . '/cache/wps-cache/html/';
 
-        if (!$metrics) {
-            $this->collectMetrics();
-            $metrics = get_transient(self::METRICS_TRANSIENT);
-        }
+        $count = 0;
+        $size = 0;
 
-        return $metrics ?: [];
-    }
-
-    /**
-     * Gets historical metrics data
-     */
-    public function getHistoricalMetrics(): array
-    {
-        $historical = get_option(self::HISTORICAL_OPTION, []);
-        $intervals = ['hourly', 'daily', 'weekly'];
-        $aggregated = [];
-
-        foreach ($intervals as $interval) {
-            $aggregated[$interval] = $this->aggregateMetrics($historical, $interval);
-        }
-
-        return $aggregated;
-    }
-
-    /**
-     * Gets HTML cache statistics
-     */
-    public function getHtmlCacheStats(): array
-    {
-        $cache_dir = WPSC_CACHE_DIR . 'html/';
-        $total_size = 0;
-        $file_count = 0;
-        $expired_count = 0;
-
-        $settings = get_option('wpsc_settings');
-        $lifetime = isset($settings['cache_lifetime']) ? absint($settings['cache_lifetime']) : 3600;
-        $now = time();
-
-        // Performance Fix: Use FilesystemIterator instead of glob() to avoid memory issues with large file counts
-        if (is_dir($cache_dir)) {
+        // NOTE: We cannot track "Hits" for HTML cache because Apache serves the file 
+        // before PHP starts. We can only track "Files Created" and "Disk Usage".
+        if (is_dir($dir)) {
             try {
-                $iterator = new \FilesystemIterator($cache_dir, \FilesystemIterator::SKIP_DOTS);
-                foreach ($iterator as $fileInfo) {
-                    if ($fileInfo->isFile() && $fileInfo->getExtension() === 'html') {
-                        $file_count++;
-                        $total_size += $fileInfo->getSize();
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+                );
 
-                        if (($now - $fileInfo->getMTime()) >= $lifetime) {
-                            $expired_count++;
-                        }
+                foreach ($iterator as $file) {
+                    if ($file->isFile() && $file->getExtension() === 'html') {
+                        $count++;
+                        $size += $file->getSize();
                     }
                 }
             } catch (\Exception $e) {
-                // Handle permission or filesystem errors gracefully
-                $file_count = 0;
+                // Permissions error or path issue
+                $count = -1;
             }
         }
 
-        // Calculate hit ratio
-        $hits = (int)get_transient('wpsc_html_cache_hits') ?: 0;
-        $misses = (int)get_transient('wpsc_html_cache_misses') ?: 0;
-        $total_requests = $hits + $misses;
-        $hit_ratio = $total_requests > 0 ? ($hits / $total_requests) * 100 : 0;
-
         return [
-            'total_files'   => $file_count,
-            'expired_files' => $expired_count,
-            'total_size'    => $total_size,
-            'hits'          => $hits,
-            'misses'        => $misses,
-            'hit_ratio'     => round($hit_ratio, 2),
-            'cache_dir'     => $cache_dir,
+            'enabled' => (bool) get_option('wpsc_settings')['html_cache'] ?? false,
+            'files'   => $count,
+            'size'    => size_format($size),
         ];
     }
 
     /**
-     * Gets Redis metrics
+     * Fetches low-level Redis info.
      */
-    private function getRedisMetrics(): ?array
+    private function getRedisStats(): array
     {
-        $redis_driver = $this->cache_manager->getDriver('redis');
-        if (!$redis_driver instanceof RedisCache) {
-            return null;
+        $driver = $this->cacheManager->getDriver('redis');
+
+        if (!$driver || !method_exists($driver, 'getConnection')) {
+            return ['enabled' => false];
         }
 
         try {
-            $info = $redis_driver->getStats();
-            $stats = $this->processRedisStats($info);
+            /** @var \Redis $redis */
+            $redis = $driver->getConnection();
 
-            // Calculate trends
-            $previous_stats = get_transient('wpsc_previous_redis_stats');
-            if ($previous_stats) {
-                $stats['trends'] = $this->calculateMetricsTrends($stats, $previous_stats);
+            if (!$redis) {
+                return ['enabled' => true, 'connected' => false];
             }
-            set_transient('wpsc_previous_redis_stats', $stats, 5 * MINUTE_IN_SECONDS);
 
-            return $stats;
-        } catch (\Exception $e) {
-            // Removed error_log() call for production.
-            return null;
-        }
-    }
+            $info = $redis->info();
 
-    /**
-     * Processes Redis statistics
-     */
-    private function processRedisStats(array $info): array
-    {
-        // Calculate hit ratio
-        $hits = $info['keyspace_hits'] ?? 0;
-        $misses = $info['keyspace_misses'] ?? 0;
-        $total_ops = $hits + $misses;
-        $hit_ratio = $total_ops > 0 ? ($hits / $total_ops) * 100 : 0;
-
-        return [
-            'connected'               => true,
-            'version'                 => $info['redis_version'] ?? 'unknown',
-            'uptime'                  => $info['uptime_in_seconds'] ?? 0,
-            'memory_used'             => $info['used_memory'] ?? 0,
-            'memory_peak'             => $info['used_memory_peak'] ?? 0,
-            'hit_ratio'               => round($hit_ratio, 2),
-            'hits'                    => $hits,
-            'misses'                  => $misses,
-            'total_connections'       => $info['total_connections_received'] ?? 0,
-            'connected_clients'       => $info['connected_clients'] ?? 0,
-            'evicted_keys'            => $info['evicted_keys'] ?? 0,
-            'expired_keys'            => $info['expired_keys'] ?? 0,
-            'last_save_time'          => $info['last_save_time'] ?? 0,
-            'total_commands_processed' => $info['total_commands_processed'] ?? 0
-        ];
-    }
-
-    /**
-     * Gets Varnish statistics.
-     *
-     * This function connects to an external Varnish caching service using wp_remote_get.
-     * It sends a GET request to the configured Varnish server to check its connection status,
-     * and a test request to the site's home URL with a custom header to detect Varnish-related headers.
-     * No sensitive user data is transmitted. For details on this external service,
-     * please refer to the plugin's readme documentation.
-     *
-     * @return array|null Varnish stats if available, otherwise null.
-     */
-    public function getVarnishStats(): ?array
-    {
-        $settings = get_option('wpsc_settings');
-        if (empty($settings['varnish_cache'])) {
-            return null;
-        }
-
-        // Sanitize the Varnish host and port options.
-        $varnish_host = sanitize_text_field($settings['varnish_host'] ?? '127.0.0.1');
-        $varnish_port = absint($settings['varnish_port'] ?? 6081);
-
-        try {
-            // Send a request to the Varnish server to check connection.
-            $url = "http://{$varnish_host}:{$varnish_port}";
-            $response = wp_remote_get($url, ['timeout' => 1]);
-            $is_active = !is_wp_error($response);
-
-            // Send a test request to the home URL with a custom header to detect Varnish-related headers.
-            $test_response = wp_remote_get(home_url(), [
-                'headers' => ['X-WPSC-Cache-Check' => '1'],
-                'timeout' => 5,
-            ]);
-
-            $varnish_headers = [];
-            if (!is_wp_error($test_response)) {
-                $headers = wp_remote_retrieve_headers($test_response);
-                foreach ($headers as $key => $value) {
-                    if (stripos($key, 'x-varnish') === 0 || stripos($key, 'via') === 0) {
-                        $varnish_headers[$key] = $value;
-                    }
-                }
-            }
+            // Calculate Hit Ratio
+            $hits = $info['keyspace_hits'] ?? 0;
+            $misses = $info['keyspace_misses'] ?? 0;
+            $total = $hits + $misses;
+            $ratio = $total > 0 ? round(($hits / $total) * 100, 2) : 0;
 
             return [
-                'connected'  => $is_active,
-                'is_varnish' => !empty($varnish_headers),
-                'status'     => $is_active ? 'Active' : 'Inactive',
-                'host'       => $varnish_host,
-                'port'       => $varnish_port,
-                'headers'    => $varnish_headers,
+                'enabled'     => true,
+                'connected'   => true,
+                'memory_used' => $info['used_memory_human'] ?? '0B',
+                'hit_ratio'   => $ratio, // THIS is the valid Hit Ratio (Redis Only)
+                'hits'        => $hits,
+                'misses'      => $misses,
+                'uptime'      => $info['uptime_in_days'] ?? 0
             ];
-        } catch (\Exception $e) {
-            // Removed error_log() call for production.
-            return null;
+        } catch (\Throwable $e) {
+            return ['enabled' => true, 'connected' => false, 'error' => $e->getMessage()];
         }
     }
 
-    /**
-     * Gets system metrics
-     */
-    private function getSystemMetrics(): array
+    private function getSystemStats(): array
     {
         return [
-            'memory_usage'   => memory_get_usage(true),
-            'memory_peak'    => memory_get_peak_usage(true),
-            'opcache_enabled' => function_exists('opcache_get_status') &&
-                opcache_get_status() !== false,
-            'opcache_stats'  => $this->getOpcacheStats(),
+            'php_version' => PHP_VERSION,
+            'server'      => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'memory_limit' => ini_get('memory_limit'),
+            'max_exec'    => ini_get('max_execution_time')
         ];
-    }
-
-    /**
-     * Gets OPcache statistics if available
-     */
-    private function getOpcacheStats(): ?array
-    {
-        if (!function_exists('opcache_get_status')) {
-            return null;
-        }
-
-        $stats = opcache_get_status(false);
-        if (!$stats) {
-            return null;
-        }
-
-        return [
-            'hits'           => $stats['opcache_statistics']['hits'] ?? 0,
-            'misses'         => $stats['opcache_statistics']['misses'] ?? 0,
-            'memory_used'    => $stats['memory_usage']['used_memory'] ?? 0,
-            'memory_free'    => $stats['memory_usage']['free_memory'] ?? 0,
-            'cached_scripts' => $stats['opcache_statistics']['num_cached_scripts'] ?? 0,
-        ];
-    }
-
-    /**
-     * Stores metrics in historical data
-     */
-    private function storeHistoricalMetrics(array $metrics): void
-    {
-        $settings = get_option('wpsc_settings');
-        if (empty($settings['enable_metrics'])) {
-            return;
-        }
-
-        $historical = get_option(self::HISTORICAL_OPTION, []);
-        $timestamp = current_time('timestamp');
-
-        // Store essential metrics
-        $historical[$timestamp] = [
-            'hit_ratio'     => $metrics['redis']['hit_ratio'] ?? 0,
-            'memory_used'   => $metrics['redis']['memory_used'] ?? 0,
-            'total_ops'     => ($metrics['redis']['hits'] ?? 0) +
-                ($metrics['redis']['misses'] ?? 0),
-            'system_memory' => $metrics['system']['memory_usage'] ?? 0,
-        ];
-
-        update_option(self::HISTORICAL_OPTION, $historical);
-    }
-
-    /**
-     * Cleans up old historical metrics
-     */
-    private function cleanupHistoricalMetrics(): void
-    {
-        $historical = get_option(self::HISTORICAL_OPTION, []);
-        $retention = self::METRICS_RETENTION * DAY_IN_SECONDS;
-        $cutoff = current_time('timestamp') - $retention;
-
-        $historical = array_filter(
-            $historical,
-            fn($time) => $time >= $cutoff,
-            ARRAY_FILTER_USE_KEY
-        );
-
-        update_option(self::HISTORICAL_OPTION, $historical);
-    }
-
-    /**
-     * Aggregates metrics for different time intervals
-     */
-    private function aggregateMetrics(array $metrics, string $interval): array
-    {
-        $now = current_time('timestamp');
-        $period = match ($interval) {
-            'hourly' => HOUR_IN_SECONDS,
-            'daily'  => DAY_IN_SECONDS,
-            'weekly' => WEEK_IN_SECONDS,
-            default  => DAY_IN_SECONDS
-        };
-
-        $aggregated = [];
-        foreach ($metrics as $timestamp => $data) {
-            if ($timestamp >= $now - $period) {
-                $bucket = floor($timestamp / $period) * $period;
-                if (!isset($aggregated[$bucket])) {
-                    $aggregated[$bucket] = [
-                        'count' => 0,
-                        'total' => array_fill_keys(array_keys($data), 0)
-                    ];
-                }
-
-                foreach ($data as $key => $value) {
-                    $aggregated[$bucket]['total'][$key] += $value;
-                }
-                $aggregated[$bucket]['count']++;
-            }
-        }
-
-        // Calculate averages
-        $result = [];
-        foreach ($aggregated as $bucket => $data) {
-            $result[$bucket] = [];
-            foreach ($data['total'] as $key => $total) {
-                $result[$bucket][$key] = $total / $data['count'];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Calculates trends between current and previous metrics
-     */
-    private function calculateMetricsTrends(array $current, array $previous): array
-    {
-        $trends = [];
-        $trend_metrics = [
-            'hits',
-            'misses',
-            'memory_used',
-            'evicted_keys',
-            'expired_keys',
-            'total_connections'
-        ];
-
-        foreach ($trend_metrics as $metric) {
-            if (isset($current[$metric], $previous[$metric]) && $previous[$metric] > 0) {
-                $change = (($current[$metric] - $previous[$metric]) / $previous[$metric]) * 100;
-                $trends[$metric] = round($change, 2);
-            } else {
-                $trends[$metric] = 0;
-            }
-        }
-
-        return $trends;
     }
 }
