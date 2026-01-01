@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace WPSCache\Optimization;
 
+use DOMDocument;
+use DOMElement;
+
 /**
- * Handles Asynchronous CSS Loading and Heuristic Critical CSS Generation.
- *
- * SOTA Strategy:
- * 1. Convert blocking <link> tags to non-blocking preload links.
- * 2. Generate lightweight Critical CSS in-line to prevent FOUC (Flash of Unstyled Content).
- * 3. Provide <noscript> fallbacks.
+ * Handles Asynchronous CSS Loading.
+ * Now uses DOMDocument to prevent Regex/HTML conflicts.
  */
 class AsyncCSS
 {
     private array $settings;
     private ?string $exclusionRegex = null;
 
-    // Structural selectors to hunt for in local CSS files for "Heuristic Critical CSS"
     private const CRITICAL_KEYWORDS = [
         "body",
         "html",
@@ -31,16 +29,15 @@ class AsyncCSS
         ".container",
         ".wrapper",
         "display: none",
-        "visibility: hidden", // Important for layout stability
+        "visibility: hidden",
     ];
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
 
-        // Compile exclusions into a single regex for O(1) matching
         $exclusions = $this->settings["excluded_css"] ?? [];
-        $exclusions = array_filter($exclusions); // Remove empty
+        $exclusions = array_filter($exclusions);
 
         if (!empty($exclusions)) {
             $quoted = array_map(fn($s) => preg_quote($s, "/"), $exclusions);
@@ -48,98 +45,92 @@ class AsyncCSS
         }
     }
 
-    public function process(string $html): string
+    public function processDom(DOMDocument $dom): void
     {
-        if (empty($this->settings["css_async"])) {
-            return $html;
-        }
+        $links = $dom->getElementsByTagName("link");
+        $criticalBuffer = "";
 
-        // 1. Find all CSS <link> tags
-        if (
-            !preg_match_all(
-                '/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\'](.*?)["\'][^>]*>/i',
-                $html,
-                $matches,
-                PREG_SET_ORDER,
-            )
-        ) {
-            return $html;
-        }
+        // Loop backwards because we might insert nodes (noscript) after current node
+        for ($i = $links->length - 1; $i >= 0; $i--) {
+            /** @var DOMElement $link */
+            $link = $links->item($i);
 
-        $critical_buffer = "";
-        $processed_html = $html;
+            // Validate it's a stylesheet
+            if ($link->getAttribute("rel") !== "stylesheet") {
+                continue;
+            }
+            if ($link->hasAttribute("data-wpsc-async")) {
+                continue;
+            } // Already processed
 
-        foreach ($matches as $match) {
-            $original_tag = $match[0];
-            $url = $match[1];
+            $href = $link->getAttribute("href");
 
-            // Skip exclusions
-            if ($this->isExcluded($url)) {
+            // Check Exclusions
+            if ($this->isExcluded($href)) {
                 continue;
             }
 
-            // 2. Generate Critical CSS (if local file)
-            // We accumulate this to inject it in the <head> later
-            $critical_buffer .= $this->generateHeuristicCriticalCSS($url);
+            // Generate Critical CSS
+            $criticalBuffer .= $this->generateHeuristicCriticalCSS($href);
 
-            // 3. Convert to Async Load
-            // Strategy: preload -> onload -> switch to stylesheet
-            $async_tag = str_replace(
-                ['rel="stylesheet"', "rel='stylesheet'"],
-                'rel="preload" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" data-wpsc-async="1"',
-                $original_tag,
+            // Modify Attributes for Async Load
+            // This is the SOTA pattern: preload -> onload=stylesheet
+            $link->setAttribute("rel", "preload");
+            $link->setAttribute("as", "style");
+            $link->setAttribute("data-wpsc-async", "1");
+
+            // DOMDocument automatically escapes this attribute value correctly, fixing the crash!
+            $link->setAttribute(
+                "onload",
+                "this.onload=null;this.rel='stylesheet'",
             );
 
-            // 4. Add Noscript Fallback
-            $noscript = "<noscript><link rel='stylesheet' href='{$url}'></noscript>";
+            // Create Noscript Fallback
+            $noscript = $dom->createElement("noscript");
+            $fallbackLink = $dom->createElement("link");
+            $fallbackLink->setAttribute("rel", "stylesheet");
+            $fallbackLink->setAttribute("href", $href);
+            $noscript->appendChild($fallbackLink);
 
-            $processed_html = str_replace(
-                $original_tag,
-                $async_tag . $noscript,
-                $processed_html,
-            );
+            // Insert noscript after the link
+            if ($link->nextSibling) {
+                $link->parentNode->insertBefore($noscript, $link->nextSibling);
+            } else {
+                $link->parentNode->appendChild($noscript);
+            }
         }
 
-        // 5. Inject Critical CSS Block
-        if (!empty($critical_buffer)) {
-            $style_block = sprintf(
-                '<style id="wpsc-critical-css">%s</style>',
-                $this->minifyCritical($critical_buffer),
-            );
-            $processed_html = preg_replace(
-                "/(<head[^>]*>)/i",
-                '$1' . $style_block,
-                $processed_html,
-                1,
-            );
-        }
+        // Inject Critical CSS Block
+        if (!empty($criticalBuffer)) {
+            $head = $dom->getElementsByTagName("head")->item(0);
+            if ($head) {
+                $style = $dom->createElement("style");
+                $style->setAttribute("id", "wpsc-critical-css");
+                $style->nodeValue = $this->minifyCritical($criticalBuffer);
 
-        return $processed_html;
+                // Prepend to head
+                if ($head->firstChild) {
+                    $head->insertBefore($style, $head->firstChild);
+                } else {
+                    $head->appendChild($style);
+                }
+            }
+        }
     }
 
-    /**
-     * Attempts to read local CSS files and extract structural rules.
-     * This is faster than Puppeteer/API and prevents FOUC for 80% of themes.
-     */
     private function generateHeuristicCriticalCSS(string $url): string
     {
-        // Only process local files
         if (strpos($url, site_url()) !== 0) {
             return "";
         }
 
-        // 1. Check Transient Cache
-        // We use the full URL (including version query strings) for the key
-        // This ensures that if the file version changes, we regenerate the cache.
         $cache_key = "wpsc_ccss_" . md5($url);
         $cached_css = get_transient($cache_key);
-
         if ($cached_css !== false) {
             return $cached_css;
         }
 
         $path = str_replace(site_url(), ABSPATH, $url);
-        // Remove query strings (ver=1.2.3)
         $path = strtok($path, "?");
 
         if (!file_exists($path)) {
@@ -152,37 +143,28 @@ class AsyncCSS
         }
 
         $critical = "";
-
-        // Simple tokenizer to find rules
-        // We look for selectors containing our keywords
-        // This is a rough heuristic, but effective for initial paint stability
         $parts = explode("}", $css);
         foreach ($parts as $part) {
             foreach (self::CRITICAL_KEYWORDS as $keyword) {
-                // Check if selector contains keyword (before the { )
                 $check = explode("{", $part);
                 if (
                     isset($check[0]) &&
                     stripos($check[0], $keyword) !== false
                 ) {
                     $critical .= $part . "}";
-                    break; // Found one keyword, add rule and move to next rule
+                    break;
                 }
             }
         }
 
-        // 2. Set Transient Cache (1 Week)
-        // Even if empty, we cache it to avoid re-reading/re-parsing the file.
         set_transient($cache_key, $critical, WEEK_IN_SECONDS);
-
         return $critical;
     }
 
     private function minifyCritical(string $css): string
     {
-        // Basic stripping for the inline block
-        $css = preg_replace("/\/\*((?!\*\/).)*\*\//s", "", $css); // comments
-        $css = preg_replace("/\s+/", " ", $css); // whitespace
+        $css = preg_replace("/\/\*((?!\*\/).)*\*\//s", "", $css);
+        $css = preg_replace("/\s+/", " ", $css);
         return str_replace(
             [": ", "; ", ", ", " {", "} "],
             [":", ";", ",", "{", "}"],

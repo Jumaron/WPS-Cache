@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
 
+use DOMDocument;
 use WPSCache\Optimization\JSOptimizer;
 use WPSCache\Optimization\AsyncCSS;
 use WPSCache\Optimization\MediaOptimizer;
 use WPSCache\Optimization\FontOptimizer;
 use WPSCache\Optimization\CdnManager;
+use WPSCache\Optimization\CriticalCSSManager;
 use WPSCache\Compatibility\CommerceManager;
 
 final class HTMLCache extends AbstractCacheDriver
@@ -28,18 +30,14 @@ final class HTMLCache extends AbstractCacheDriver
             : WP_CONTENT_DIR . "/cache/wps-cache/html/";
         $this->ensureDirectory($this->cacheDir);
 
-        // Compile exclusion patterns into a single regex for O(1) matching
         $excluded = $this->settings["excluded_urls"] ?? [];
         if (!empty($excluded)) {
-            // Filter empty strings to prevent "match all" regex (e.g. "foo|")
             $excluded = array_filter($excluded);
             if (!empty($excluded)) {
-                // Deduplicate and escape for regex
                 $quoted = array_map(
                     fn($s) => preg_quote($s, "/"),
                     array_unique($excluded),
                 );
-                // Use case-sensitive matching to align with str_contains behavior
                 $this->exclusionRegex = "/" . implode("|", $quoted) . "/";
             }
         }
@@ -66,7 +64,6 @@ final class HTMLCache extends AbstractCacheDriver
             return false;
         }
 
-        // WooCommerce Compatibility Check (New)
         if ($this->commerceManager && $this->commerceManager->shouldBypass()) {
             return false;
         }
@@ -81,7 +78,6 @@ final class HTMLCache extends AbstractCacheDriver
         }
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
 
-        // Optimized: Single regex match instead of loop + str_contains (O(1) vs O(N))
         if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
             return false;
         }
@@ -95,50 +91,84 @@ final class HTMLCache extends AbstractCacheDriver
             return $buffer;
         }
 
+        // --- PHASE 1: DOM MANIPULATION (Robust & Safe) ---
+        // We load the DOM once and pass it to all structure-modifying optimizers.
+
+        $useDomPipeline =
+            !empty($this->settings["remove_unused_css"]) ||
+            !empty($this->settings["js_delay"]) ||
+            !empty($this->settings["js_defer"]) ||
+            !empty($this->settings["css_async"]);
+
         $content = $buffer;
 
-        // --- OPTIMIZATION PIPELINE ---
+        if ($useDomPipeline) {
+            libxml_use_internal_errors(true);
+            $dom = new DOMDocument();
+            // Hack: force UTF-8
+            @$dom->loadHTML(
+                '<?xml encoding="utf-8" ?>' . $content,
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
+            );
+            libxml_clear_errors();
 
-        // 1. CDN Rewrite
+            // 1. Remove Unused CSS
+            if (!empty($this->settings["remove_unused_css"])) {
+                try {
+                    $cssShaker = new CriticalCSSManager($this->settings);
+                    $cssShaker->processDom($dom);
+                } catch (\Throwable $e) {
+                }
+            }
+
+            // 2. JS Optimization (Delay/Defer)
+            if (
+                !empty($this->settings["js_delay"]) ||
+                !empty($this->settings["js_defer"])
+            ) {
+                try {
+                    $jsOpt = new JSOptimizer($this->settings);
+                    $jsOpt->processDom($dom);
+                } catch (\Throwable $e) {
+                }
+            }
+
+            // 3. Async CSS
+            if (!empty($this->settings["css_async"])) {
+                try {
+                    $cssOpt = new AsyncCSS($this->settings);
+                    $cssOpt->processDom($dom);
+                } catch (\Throwable $e) {
+                }
+            }
+
+            $content = $dom->saveHTML();
+            // Remove UTF-8 hack
+            $content = str_replace('<?xml encoding="utf-8" ?>', "", $content);
+        }
+
+        // --- PHASE 2: STRING/REGEX MANIPULATION ---
+        // These are safer as regex or don't require full DOM awareness
+
+        // 4. CDN Rewrite
         try {
             $cdnManager = new CdnManager($this->settings);
             $content = $cdnManager->process($content);
         } catch (\Throwable $e) {
         }
 
-        // 2. Font Optimization
+        // 5. Font Optimization
         try {
             $fontOpt = new FontOptimizer($this->settings);
             $content = $fontOpt->process($content);
         } catch (\Throwable $e) {
         }
 
-        // 3. Media Optimization
+        // 6. Media Optimization
         try {
             $mediaOpt = new MediaOptimizer($this->settings);
             $content = $mediaOpt->process($content);
         } catch (\Throwable $e) {
-        }
-
-        // 4. JS Delay/Defer
-        if (
-            !empty($this->settings["js_delay"]) ||
-            !empty($this->settings["js_defer"])
-        ) {
-            try {
-                $jsOpt = new JSOptimizer($this->settings);
-                $content = $jsOpt->process($content);
-            } catch (\Throwable $e) {
-            }
-        }
-
-        // 5. CSS Async
-        if (!empty($this->settings["css_async"])) {
-            try {
-                $cssOpt = new AsyncCSS($this->settings);
-                $content = $cssOpt->process($content);
-            } catch (\Throwable $e) {
-            }
         }
 
         // Add Timestamp & Signature
@@ -149,7 +179,6 @@ final class HTMLCache extends AbstractCacheDriver
             $deviceType,
         );
 
-        // Write to Disk
         $this->writeCacheFile($content);
 
         return $content;
@@ -177,14 +206,12 @@ final class HTMLCache extends AbstractCacheDriver
             $path .= "/";
         }
 
-        // Detect Mobile Suffix
         $suffix = $this->getMobileSuffix();
-
         $query = parse_url($uri, PHP_URL_QUERY);
+
         if ($query) {
             parse_str($query, $queryParams);
             ksort($queryParams);
-            // SOTA: Use separate cache files for mobile to support mobile-specific themes/assets
             $filename =
                 "index" .
                 $suffix .
@@ -203,18 +230,12 @@ final class HTMLCache extends AbstractCacheDriver
         $this->atomicWrite($fullPath . $filename, $content);
     }
 
-    /**
-     * Efficiently detects mobile devices based on User-Agent.
-     * Matches common mobile identifiers.
-     */
     private function getMobileSuffix(): string
     {
         $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
         if (empty($ua)) {
             return "";
         }
-
-        // Regex covers: iPhone, Android, various mobile browsers
         if (
             preg_match(
                 "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
@@ -223,7 +244,6 @@ final class HTMLCache extends AbstractCacheDriver
         ) {
             return "-mobile";
         }
-
         return "";
     }
 
@@ -232,7 +252,6 @@ final class HTMLCache extends AbstractCacheDriver
         $path = str_replace(chr(0), "", $path);
         $parts = explode("/", $path);
         $safeParts = [];
-
         foreach ($parts as $part) {
             if ($part === "" || $part === ".") {
                 continue;
@@ -243,7 +262,6 @@ final class HTMLCache extends AbstractCacheDriver
                 $safeParts[] = $part;
             }
         }
-
         return "/" . implode("/", $safeParts);
     }
 

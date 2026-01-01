@@ -19,7 +19,7 @@ use WPSCache\Optimization\SpeculativeLoader;
 use WPSCache\Optimization\DatabaseOptimizer;
 use WPSCache\Optimization\BloatOptimizer;
 use WPSCache\Optimization\CdnManager;
-use WPSCache\Compatibility\CommerceManager; // Added
+use WPSCache\Compatibility\CommerceManager;
 
 final class Plugin
 {
@@ -29,6 +29,7 @@ final class Plugin
         "varnish_cache" => false,
         "css_minify" => false,
         "css_async" => false,
+        "remove_unused_css" => false, // New Setting
         "js_minify" => false,
         "js_defer" => false,
         "js_delay" => false,
@@ -42,7 +43,7 @@ final class Plugin
         "font_localize_google" => true,
         "font_display_swap" => true,
 
-        // CDN & Cloudflare (New)
+        // CDN & Cloudflare
         "cdn_enable" => false,
         "cdn_url" => "",
         "cf_enable" => false,
@@ -93,7 +94,7 @@ final class Plugin
         "db_clean_optimize_tables" => true,
 
         // Compatibility
-        "woo_support" => true, // Default ON
+        "woo_support" => true,
     ];
 
     private const REQUIRED_DIRECTORIES = [
@@ -116,7 +117,7 @@ final class Plugin
     private ?DatabaseOptimizer $databaseOptimizer = null;
     private ?BloatOptimizer $bloatOptimizer = null;
     private ?CdnManager $cdnManager = null;
-    private ?CommerceManager $commerceManager = null; // Added
+    private ?CommerceManager $commerceManager = null;
 
     public static function getInstance(): self
     {
@@ -140,12 +141,7 @@ final class Plugin
             is_array($settings) ? $settings : [],
         );
 
-        // Initialize Compatibility Layer FIRST (Logic might be needed by Drivers)
         $this->commerceManager = new CommerceManager($settings);
-
-        // Pass commerceManager to HTMLCache via constructor or setter if needed,
-        // OR HTMLCache can access Plugin singleton.
-        // Ideally, we pass it via initializeCacheDrivers logic below.
 
         $this->initializeCacheDrivers($settings);
         $this->setupHooks();
@@ -208,7 +204,6 @@ final class Plugin
 
     private function initializeCacheDrivers(array $settings): void
     {
-        // Inject CommerceManager into HTMLCache
         if ($settings["html_cache"]) {
             $this->cacheManager->addDriver(
                 new HTMLCache($this->commerceManager),

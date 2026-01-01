@@ -4,212 +4,146 @@ declare(strict_types=1);
 
 namespace WPSCache\Optimization;
 
+use DOMDocument;
+use DOMElement;
+
 /**
  * Handles JavaScript Delaying and Deferring (SOTA Web Vitals Optimization).
- * Can delay execution until user interaction (scroll/click).
+ * Uses DOMDocument for robust parsing.
  */
 class JSOptimizer
 {
     private array $settings;
     private string $exclusionRegex;
 
-    // Critical scripts that should usually be excluded from delay
     private const CRITICAL_EXCLUSIONS = [
         "jquery.js",
         "jquery.min.js",
         "jquery-core",
-        "wps-cache", // exclude self
+        "wps-cache",
     ];
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
 
-        // Compile exclusions into a single regex for O(1) matching
         $exclusions = array_merge(
             self::CRITICAL_EXCLUSIONS,
             $this->settings["excluded_js"] ?? [],
         );
-        $exclusions = array_unique($exclusions); // Deduplicate
+        $exclusions = array_unique($exclusions);
 
-        // Escape for regex and join
         $quoted = array_map(fn($s) => preg_quote($s, "/"), $exclusions);
         $this->exclusionRegex = "/" . implode("|", $quoted) . "/i";
     }
 
+    // New shared method
+    public function processDom(DOMDocument $dom): void
+    {
+        $scripts = $dom->getElementsByTagName("script");
+        $modified = false;
+
+        for ($i = $scripts->length - 1; $i >= 0; $i--) {
+            /** @var DOMElement $script */
+            $script = $scripts->item($i);
+            $this->processScriptNode($script);
+            if (
+                $script->hasAttribute("type") &&
+                $script->getAttribute("type") === "wpsc-delayed"
+            ) {
+                $modified = true;
+            }
+        }
+
+        if ($modified && !empty($this->settings["js_delay"])) {
+            $this->injectBootloader($dom);
+        }
+    }
+
+    // Kept for backward compat or standalone usage (wraps processDom)
     public function process(string $html): string
     {
-        // 1. Check if feature is enabled
         if (
             empty($this->settings["js_delay"]) &&
             empty($this->settings["js_defer"])
         ) {
             return $html;
         }
-
-        // 2. Parse Scripts
-        // SOTA Regex: Uses non-greedy matching and handles attributes spanning lines.
-        $html = preg_replace_callback(
-            "/<script\s*(.*?)>(.*?)<\/script>/is",
-            [$this, "processScriptTag"],
-            $html,
+        libxml_use_internal_errors(true);
+        $dom = new DOMDocument();
+        @$dom->loadHTML(
+            '<?xml encoding="utf-8" ?>' . $html,
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
         );
+        libxml_clear_errors();
 
-        // 3. Inject Bootloader if delaying is active
-        if (!empty($this->settings["js_delay"])) {
-            $html = str_replace(
-                "</body>",
-                $this->getBootloader() . "</body>",
-                $html,
-            );
-        }
+        $this->processDom($dom);
 
-        return $html;
+        $output = $dom->saveHTML();
+        return str_replace('<?xml encoding="utf-8" ?>', "", $output);
     }
 
-    private function processScriptTag(array $matches): string
+    private function processScriptNode(DOMElement $script): void
     {
-        $attrs = $matches[1];
-        $content = $matches[2];
-        $fullTag = $matches[0];
+        $type = $script->getAttribute("type");
+        $src = $script->getAttribute("src");
 
-        // Skip non-JS (e.g., JSON-LD, template)
         if (
-            preg_match(
-                '/type=["\'](?!text\/javascript|application\/javascript|module)[^"\']*["\']/i',
-                $attrs,
+            $type &&
+            !preg_match(
+                '/^(text\/javascript|application\/javascript|module)$/i',
+                $type,
             )
         ) {
-            return $fullTag;
+            return;
         }
 
-        // Skip Excluded Scripts
-        if ($this->isExcluded($attrs)) {
-            return $fullTag;
+        $checkStr = $src . ($script->nodeValue ?? "");
+        if ($this->isExcluded($checkStr)) {
+            return;
         }
 
-        // Strategy A: DELAY (User Interaction)
+        // Delay Strategy
         if (!empty($this->settings["js_delay"])) {
-            // Change type to prevent execution
-            $newAttrs = preg_replace('/type=["\'][^"\']*["\']/', "", $attrs);
-
-            // Handle src -> data-src
-            if (stripos($newAttrs, "src=") !== false) {
-                $newAttrs = str_replace("src=", "data-wpsc-src=", $newAttrs);
+            $script->setAttribute("type", "wpsc-delayed");
+            if ($src) {
+                $script->setAttribute("data-wpsc-src", $src);
+                $script->removeAttribute("src");
             }
-
-            return sprintf(
-                '<script %s type="wpsc-delayed">%s</script>',
-                trim($newAttrs),
-                $content,
-            );
+            return;
         }
 
-        // Strategy B: DEFER (Standard)
+        // Defer Strategy
         if (!empty($this->settings["js_defer"])) {
-            // Only defer external scripts that aren't already deferred/async
             if (
-                stripos($attrs, "src=") !== false &&
-                stripos($attrs, "defer") === false &&
-                stripos($attrs, "async") === false
+                $src &&
+                !$script->hasAttribute("defer") &&
+                !$script->hasAttribute("async")
             ) {
-                return str_replace("<script ", "<script defer ", $fullTag);
+                $script->setAttribute("defer", "defer");
             }
         }
-
-        return $fullTag;
     }
 
-    private function isExcluded(string $attributes): bool
+    private function injectBootloader(DOMDocument $dom): void
     {
-        // Optimized: Single regex match instead of loop + array_merge
-        return preg_match($this->exclusionRegex, $attributes) === 1;
-    }
+        $body = $dom->getElementsByTagName("body")->item(0);
+        if (!$body) {
+            return;
+        }
 
-    /**
-     * SOTA Bootloader:
-     * 1. Uses requestIdleCallback to avoid Main Thread Blocking (Mobile friendly).
-     * 2. Loads scripts sequentially to maintain dependency order.
-     * 3. Wakes up on interaction OR timeout.
-     */
-    private function getBootloader(): string
-    {
-        return <<<'JS'
-        <script id="wpsc-bootloader">
-        (function() {
-            let triggered = false;
-            // Interaction events that signal user intent
-            const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-
-            function wakeUp() {
-                if (triggered) return;
-                triggered = true;
-
-                // Cleanup listeners
-                events.forEach(e => window.removeEventListener(e, wakeUp, {passive: true}));
-
-                // Fetch all delayed scripts
-                const scripts = document.querySelectorAll('script[type="wpsc-delayed"]');
-
-                // Helper to load next script
-                const loadScript = (i) => {
-                    if (i >= scripts.length) return;
-
-                    // SOTA: Use requestIdleCallback if available to unblock UI threads
-                    // This creates gaps for the browser to render frames/handle input
-                    if ('requestIdleCallback' in window) {
-                        requestIdleCallback(() => injectScript(i), { timeout: 1000 });
-                    } else {
-                        // Fallback for Safari/Older browsers: tiny timeout to break call stack
-                        setTimeout(() => injectScript(i), 10);
-                    }
-                };
-
-                const injectScript = (i) => {
-                    const original = scripts[i];
-                    const next = () => loadScript(i + 1);
-
-                    const clone = document.createElement('script');
-
-                    // Copy attributes mapping data-wpsc-src back to src
-                    [...original.attributes].forEach(attr => {
-                        let name = attr.name;
-                        let val = attr.value;
-                        if (name === 'type') {
-                            name = 'type'; val = 'text/javascript';
-                        }
-                        if (name === 'data-wpsc-src') {
-                            name = 'src';
-                        }
-                        clone.setAttribute(name, val);
-                    });
-
-                    clone.text = original.text;
-
-                    // Attach load handlers for external scripts to maintain order
-                    if (clone.src) {
-                        clone.onload = next;
-                        clone.onerror = next;
-                    } else {
-                        // Inline scripts run immediately, move to next
-                        next();
-                    }
-
-                    original.parentNode.insertBefore(clone, original);
-                    original.remove();
-                };
-
-                // Start the chain
-                loadScript(0);
-            }
-
-            // Attach Passive Listeners
-            events.forEach(e => window.addEventListener(e, wakeUp, {passive: true}));
-
-            // Safety Fallback: Wake up after 8s if no interaction occurs
-            setTimeout(wakeUp, 8000);
-        })();
-        </script>
+        $script = $dom->createElement("script");
+        $script->setAttribute("id", "wpsc-bootloader");
+        // SOTA Bootloader Code
+        $code = <<<'JS'
+        (function(){let t=!1;const e=["mousedown","mousemove","keydown","scroll","touchstart"];function n(){if(t)return;t=!0,e.forEach(t=>window.removeEventListener(t,n,{passive:!0}));const o=document.querySelectorAll('script[type="wpsc-delayed"]'),c=t=>{if(t>=o.length)return;"requestIdleCallback"in window?requestIdleCallback(()=>r(t),{timeout:1e3}):setTimeout(()=>r(t),10)},r=t=>{const e=o[t],n=()=>c(t+1),r=document.createElement("script");[...e.attributes].forEach(t=>{let e=t.name,o=t.value;"type"===e&&(e="type",o="text/javascript"),"data-wpsc-src"===e&&(e="src"),r.setAttribute(e,o)}),r.text=e.text,r.src?(r.onload=n,r.onerror=n):n(),e.parentNode.insertBefore(r,e),e.remove()};c(0)}e.forEach(t=>window.addEventListener(t,n,{passive:!0})),setTimeout(n,8e3)})();
         JS;
+        $script->nodeValue = $code;
+        $body->appendChild($script);
+    }
+
+    private function isExcluded(string $str): bool
+    {
+        return preg_match($this->exclusionRegex, $str) === 1;
     }
 }

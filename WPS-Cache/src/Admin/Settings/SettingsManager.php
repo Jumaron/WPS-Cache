@@ -74,7 +74,7 @@ class SettingsManager
     public function renderCdnTab(): void
     {
         $this->renderCdnTabContent($this->getSettings());
-    } // New
+    }
     public function renderOptimizationTab(): void
     {
         $this->renderOptimizationTabContent($this->getSettings());
@@ -163,7 +163,6 @@ class SettingsManager
             },
         );
 
-        // UPDATED: Compatibility Card
         if (class_exists("WooCommerce")) {
             $this->renderer->renderCard(
                 "eCommerce Compatibility",
@@ -395,6 +394,12 @@ class SettingsManager
                     "css_async",
                     "Async CSS",
                     "Load non-critical CSS later.",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "remove_unused_css",
+                    "Remove Unused CSS",
+                    "Automatically strip unused rules (Inline Styles & Theme). SOTA Tree Shaking.",
                     $settings,
                 );
                 $this->renderer->renderTextarea(
