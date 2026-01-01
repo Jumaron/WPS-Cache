@@ -18,20 +18,15 @@ class AsyncCSS
     private ?string $exclusionRegex = null;
 
     // Structural selectors to hunt for in local CSS files for "Heuristic Critical CSS"
-    private const CRITICAL_KEYWORDS = [
-        'body',
-        'html',
-        ':root',
-        'header',
-        'nav',
-        'menu',
-        '.site-header',
-        '.main-navigation',
-        '#masthead',
-        '.container',
-        '.wrapper',
-        'display: none',
-        'visibility: hidden' // Important for layout stability
+    private const CRITICAL_SELECTORS = [
+        'body', 'html', ':root', 'header', 'nav', 'menu',
+        '.site-header', '.main-navigation', '#masthead',
+        '.container', '.wrapper'
+    ];
+
+    private const CRITICAL_PROPERTIES = [
+        'display:\s*none',
+        'visibility:\s*hidden' // Important for layout stability
     ];
 
     public function __construct(array $settings)
@@ -132,17 +127,28 @@ class AsyncCSS
 
         $critical = '';
 
-        // Simple tokenizer to find rules
-        // We look for selectors containing our keywords
-        // This is a rough heuristic, but effective for initial paint stability
-        $parts = explode('}', $css);
-        foreach ($parts as $part) {
-            foreach (self::CRITICAL_KEYWORDS as $keyword) {
-                // Check if selector contains keyword (before the { )
-                $check = explode('{', $part);
-                if (isset($check[0]) && stripos($check[0], $keyword) !== false) {
-                    $critical .= $part . '}';
-                    break; // Found one keyword, add rule and move to next rule
+        // Prepare Regexes
+        $selectorRegex = '/' . implode('|', array_map(fn($s) => preg_quote($s, '/'), self::CRITICAL_SELECTORS)) . '/i';
+        $propertyRegex = '/' . implode('|', self::CRITICAL_PROPERTIES) . '/i';
+
+        // Optimized: Use preg_match_all to find blocks instead of explode + nested loops
+        // This avoids creating a massive array of strings and checks keywords efficiently.
+        // Pattern matches: [selector] { [body] }
+        if (preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $fullMatch = $match[0]; // "selector { body }"
+                $selector = $match[1];
+                $body = $match[2];
+
+                // Check Selector
+                if (preg_match($selectorRegex, $selector)) {
+                    $critical .= $fullMatch;
+                    continue;
+                }
+
+                // Check Properties (Fixes bug where properties were searched in selector)
+                if (preg_match($propertyRegex, $body)) {
+                    $critical .= $fullMatch;
                 }
             }
         }
