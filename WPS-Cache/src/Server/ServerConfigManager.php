@@ -6,7 +6,7 @@ namespace WPSCache\Server;
 
 /**
  * Manages .htaccess rules to allow direct file serving.
- * This effectively makes WordPress run as a static site generator for cached pages.
+ * SOTA Update: Implements Device-Aware rewriting to prevent Cache Poisoning.
  */
 class ServerConfigManager
 {
@@ -14,6 +14,9 @@ class ServerConfigManager
 
     // The relative path from document root to cache dir
     private string $cachePathRel = "wp-content/cache/wps-cache/html/";
+
+    // Must match the Regex in HTMLCache.php and WPSAdvancedCache
+    private const MOBILE_AGENT_REGEX = "Mobile|Android|Silk/|Kindle|BlackBerry|Opera Mini|Opera Mobi";
 
     public function __construct()
     {
@@ -50,8 +53,6 @@ class ServerConfigManager
             !file_exists($this->htaccessPath) ||
             !is_writable($this->htaccessPath)
         ) {
-            // If .htaccess doesn't exist, we can try to create it, but usually WP handles this.
-            // Logging error is appropriate here.
             error_log("WPS Cache: .htaccess is not writable.");
             return;
         }
@@ -97,15 +98,16 @@ class ServerConfigManager
 
     /**
      * Generates SOTA mod_rewrite rules.
-     * 1. Checks constraints (Not POST, Not Query String, Not Logged In).
-     * 2. Maps %{REQUEST_URI} to the physical file on disk.
-     * 3. Sets default MIME types and Headers.
+     * 1. Checks constraints.
+     * 2. Tries to match Mobile Cache first.
+     * 3. Tries to match Desktop Cache (EXCLUDING Mobile agents) second.
      */
     private function getRules(): string
     {
         // Sanitize cache path for Regex
         $base = parse_url(get_home_url(), PHP_URL_PATH) ?? "/";
         $cache_path = "/" . trim($this->cachePathRel, "/"); // ensure leading slash
+        $mobile_agents = self::MOBILE_AGENT_REGEX;
 
         return <<<EOT
         # BEGIN WPS Cache
@@ -115,30 +117,38 @@ class ServerConfigManager
 
         # 1. Bypass if method is POST
         RewriteCond %{REQUEST_METHOD} POST
-        RewriteRule .* - [S=2]
+        RewriteRule .* - [S=3]
 
         # 2. Bypass if Query String exists
         RewriteCond %{QUERY_STRING} !^$
-        RewriteRule .* - [S=1]
+        RewriteRule .* - [S=2]
 
         # 3. Bypass if logged in or special WP cookies
         RewriteCond %{HTTP_COOKIE} (wp-postpass|wordpress_logged_in|comment_author)_ [NC]
         RewriteRule .* - [S=1]
 
-        # 4. Check if HTML file exists
-        # We map: domain.com/about/ -> /cache/path/domain.com/about/index.html
+        # 4. MOBILE CACHE RULE
+        # Only if User-Agent matches Mobile AND index-mobile.html exists
+        RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
+        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html -f
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html [L]
+
+        # 5. DESKTOP CACHE RULE
+        # Critical: Explicitly EXCLUDE Mobile Agents here.
+        # If we don't exclude them, a mobile user visiting an uncached page
+        # (where index-mobile.html doesn't exist yet) would be served the Desktop index.html.
+        RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
         RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html -f
         RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
 
         </IfModule>
 
-        <IfModule mod_headers.c>F
+        <IfModule mod_headers.c>
             # Serve correct headers for cached HTML
-            <FilesMatch "index\.html$">
+            <FilesMatch "index(-mobile)?\.html$">
                 Header set Content-Type "text/html; charset=UTF-8"
                 Header set Cache-Control "max-age=3600, public"
                 Header set X-WPS-Cache "HIT"
-                # Sentinel: Security Headers for static content
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
