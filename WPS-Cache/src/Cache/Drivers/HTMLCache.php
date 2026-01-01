@@ -21,6 +21,32 @@ final class HTMLCache extends AbstractCacheDriver
     private ?CommerceManager $commerceManager;
     private const BYPASS_PARAMS = ["add-to-cart", "wp_nonce", "preview", "s"];
 
+    // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
+    // This prevents the "purify.min.js.map/index.html" bug.
+    private const IGNORED_EXTENSIONS = [
+        "xml",
+        "json",
+        "map",
+        "css",
+        "js",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "ico",
+        "svg",
+        "webp",
+        "avif",
+        "woff",
+        "woff2",
+        "ttf",
+        "eot",
+        "otf",
+        "txt",
+        "md",
+        "xsl",
+    ];
+
     public function __construct(?CommerceManager $commerceManager = null)
     {
         parent::__construct();
@@ -64,6 +90,14 @@ final class HTMLCache extends AbstractCacheDriver
             return false;
         }
 
+        // 1. EXTENSION GUARD (The Fix)
+        // If the URL looks like a file, never cache it as HTML.
+        $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if (in_array($ext, self::IGNORED_EXTENSIONS, true)) {
+            return false;
+        }
+
         if ($this->commerceManager && $this->commerceManager->shouldBypass()) {
             return false;
         }
@@ -76,9 +110,11 @@ final class HTMLCache extends AbstractCacheDriver
                 }
             }
         }
-        $uri = $_SERVER["REQUEST_URI"] ?? "/";
 
-        if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
+        if (
+            $this->exclusionRegex &&
+            preg_match($this->exclusionRegex, $_SERVER["REQUEST_URI"] ?? "/")
+        ) {
             return false;
         }
 
@@ -92,7 +128,6 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         // --- PHASE 1: DOM MANIPULATION (Robust & Safe) ---
-        // We load the DOM once and pass it to all structure-modifying optimizers.
 
         $useDomPipeline =
             !empty($this->settings["remove_unused_css"]) ||
@@ -133,7 +168,7 @@ final class HTMLCache extends AbstractCacheDriver
                 }
             }
 
-            // 3. Async CSS
+            // 3. Async CSS (DOM Based - Safe)
             if (!empty($this->settings["css_async"])) {
                 try {
                     $cssOpt = new AsyncCSS($this->settings);
@@ -143,12 +178,10 @@ final class HTMLCache extends AbstractCacheDriver
             }
 
             $content = $dom->saveHTML();
-            // Remove UTF-8 hack
             $content = str_replace('<?xml encoding="utf-8" ?>', "", $content);
         }
 
         // --- PHASE 2: STRING/REGEX MANIPULATION ---
-        // These are safer as regex or don't require full DOM awareness
 
         // 4. CDN Rewrite
         try {
