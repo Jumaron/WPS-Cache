@@ -10,6 +10,7 @@ use WPSCache\Optimization\AsyncCSS;
 final class HTMLCache extends AbstractCacheDriver
 {
     private string $cacheDir;
+    private ?string $exclusionRegex = null;
 
     private const BYPASS_PARAMS = ['add-to-cart', 'wp_nonce', 'preview', 's'];
 
@@ -18,6 +19,19 @@ final class HTMLCache extends AbstractCacheDriver
         parent::__construct();
         $this->cacheDir = defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR . 'html/' : WP_CONTENT_DIR . '/cache/wps-cache/html/';
         $this->ensureDirectory($this->cacheDir);
+
+        // Compile exclusion patterns into a single regex for O(1) matching
+        $excluded = $this->settings['excluded_urls'] ?? [];
+        if (!empty($excluded)) {
+            // Filter empty strings to prevent "match all" regex (e.g. "foo|")
+            $excluded = array_filter($excluded);
+            if (!empty($excluded)) {
+                // Deduplicate and escape for regex
+                $quoted = array_map(fn($s) => preg_quote($s, '/'), array_unique($excluded));
+                // Use case-sensitive matching to align with str_contains behavior
+                $this->exclusionRegex = '/' . implode('|', $quoted) . '/';
+            }
+        }
     }
 
     public function initialize(): void
@@ -43,8 +57,10 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        foreach ($this->settings['excluded_urls'] ?? [] as $pattern) {
-            if (!empty($pattern) && str_contains($uri, $pattern)) return false;
+
+        // Optimized: Single regex match instead of loop + str_contains (O(1) vs O(N))
+        if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
+            return false;
         }
 
         return true;

@@ -17,3 +17,7 @@
 ## 2024-05-30 - [Regex over Iterative Search]
 **Learning:** Repeating `array_merge` and `stripos` loops for every tag (script/style) creates O(N*M) complexity in hot paths.
 **Action:** Pre-compile exclusion lists into a single Regex in the constructor. This reduces per-tag checks to a single O(1) (amortized) `preg_match` call, significantly reducing CPU overhead on pages with many assets.
+
+## 2024-05-30 - [Regex over Iterative Search in HTMLCache]
+**Learning:** Checking excluded URLs using a loop with `str_contains` is O(N) and runs on every request.
+**Action:** Pre-compiled exclusions into a single Regex in `HTMLCache` constructor. This matches the optimization in `JSOptimizer` and provides O(1) (amortized) lookup performance for URL exclusions.
