@@ -15,6 +15,7 @@ namespace WPSCache\Optimization;
 class AsyncCSS
 {
     private array $settings;
+    private ?string $exclusionRegex = null;
 
     // Structural selectors to hunt for in local CSS files for "Heuristic Critical CSS"
     private const CRITICAL_KEYWORDS = [
@@ -36,6 +37,15 @@ class AsyncCSS
     public function __construct(array $settings)
     {
         $this->settings = $settings;
+
+        // Compile exclusions into a single regex for O(1) matching
+        $exclusions = $this->settings['excluded_css'] ?? [];
+        $exclusions = array_filter($exclusions); // Remove empty
+
+        if (!empty($exclusions)) {
+            $quoted = array_map(fn($s) => preg_quote($s, '/'), $exclusions);
+            $this->exclusionRegex = '/' . implode('|', $quoted) . '/i';
+        }
     }
 
     public function process(string $html): string
@@ -154,12 +164,9 @@ class AsyncCSS
 
     private function isExcluded(string $url): bool
     {
-        $exclusions = $this->settings['excluded_css'] ?? [];
-        foreach ($exclusions as $pattern) {
-            if (!empty($pattern) && stripos($url, $pattern) !== false) {
-                return true;
-            }
+        if ($this->exclusionRegex === null) {
+            return false;
         }
-        return false;
+        return preg_match($this->exclusionRegex, $url) === 1;
     }
 }
