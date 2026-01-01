@@ -32,6 +32,10 @@ final class MinifyCSS extends AbstractCacheDriver
     private const T_OPERATOR   = 9; // , > + ~
     private const T_WORD       = 10; // Selectors, properties, values
 
+    // Mask: Whitespace + Special Chars + Operators + /
+    // Used for strcspn optimization in tokenizer
+    private const TOKENIZER_MASK = " \t\n\r\v\f{}():;,'\">+~/";
+
     private const SELECTOR_PSEUDOS = [
         'not' => true,
         'is' => true,
@@ -322,8 +326,9 @@ final class MinifyCSS extends AbstractCacheDriver
 
             // Whitespace
             if (ctype_space($char)) {
-                $start = $i;
-                while ($i < $len && ctype_space($css[$i])) $i++;
+                // Optimization: Use strspn to skip all whitespace at once (much faster than loop)
+                $len_ws = strspn($css, " \t\n\r\v\f", $i);
+                $i += $len_ws;
                 yield ['type' => self::T_WHITESPACE, 'value' => ' '];
                 continue;
             }
@@ -352,14 +357,14 @@ final class MinifyCSS extends AbstractCacheDriver
             // Comments (/* ... */)
             if ($char === '/' && ($css[$i + 1] ?? '') === '*') {
                 $start = $i;
-                $i += 2;
-                while ($i < $len - 1) {
-                    if ($css[$i] === '*' && $css[$i + 1] === '/') {
-                        $i += 2;
-                        break;
-                    }
-                    $i++;
+                $end = strpos($css, '*/', $i + 2);
+
+                if ($end === false) {
+                    $i = $len; // Unterminated comment
+                } else {
+                    $i = $end + 2;
                 }
+
                 yield ['type' => self::T_COMMENT, 'value' => substr($css, $start, $i - $start)];
                 continue;
             }
@@ -406,11 +411,9 @@ final class MinifyCSS extends AbstractCacheDriver
             // Words / Identifiers
             $start = $i;
             // Optimization: Use strcspn to skip over non-break characters
-            // Mask: Whitespace + Special Chars + Operators + /
-            $mask = " \t\n\r\v\f{}():;,'\">+~/";
 
             while ($i < $len) {
-                $len_chunk = strcspn($css, $mask, $i);
+                $len_chunk = strcspn($css, self::TOKENIZER_MASK, $i);
                 $i += $len_chunk;
 
                 if ($i >= $len) {
