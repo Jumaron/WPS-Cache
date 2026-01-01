@@ -51,9 +51,12 @@ class ToolsManager
         <div class="wpsc-card">
             <div class="wpsc-card-header">
                 <h2>System Status</h2>
+                <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-system-status">
+                    <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy Report
+                </button>
             </div>
             <div class="wpsc-card-body">
-                <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                <textarea id="wpsc-system-status" readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
             </div>
         </div>
 <?php
