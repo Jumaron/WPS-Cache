@@ -22,3 +22,8 @@
 **Vulnerability:** When serving cached HTML files via `.htaccess` (mod_rewrite), the web server bypasses PHP entirely. This means security headers (like `X-Frame-Options`, `X-Content-Type-Options`) added by WordPress or plugins in PHP are NOT sent to the client, leaving the static versions of the site vulnerable to clickjacking and MIME sniffing.
 **Learning:** Performance optimizations that bypass the application layer (PHP) also bypass application-layer security controls.
 **Prevention:** Explicitly configure the web server (Apache/Nginx) to send critical security headers for static assets. In Apache, use `Header set` within `<FilesMatch>` directives in the `.htaccess` file generated for the cache.
+
+## 2024-05-28 - Host Header Cache Poisoning & Disk Exhaustion
+**Vulnerability:** The `HTMLCache` driver trusted the `HTTP_HOST` header to determine the cache directory. Even with directory traversal protection, this allowed attackers to send requests with arbitrary `Host` headers (e.g., `Host: evil.com`), filling the disk with directories for unlimited fake domains. If the server was misconfigured to serve any host, it could also lead to serving poisoned content to other users.
+**Learning:** "Sanitization" (making a string safe for a filesystem) is not the same as "Validation" (checking if the value is allowed). Just because a path is safe to write doesn't mean it *should* be written.
+**Prevention:** Always validate the `HTTP_HOST` against the configured `home_url()` or a strictly allowed list of domains before using it to generate file paths or cache keys.

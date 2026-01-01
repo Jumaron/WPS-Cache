@@ -122,6 +122,14 @@ final class HTMLCache extends AbstractCacheDriver
         // 4. Trim leading/trailing dots
         $host = trim($host, '.');
 
+        // Sentinel Fix: Prevent Cache Poisoning & Disk Exhaustion
+        // Verify that the request Host matches the Site URL Host.
+        // This prevents attackers from filling disk with fake domains (e.g. Host: evil.com)
+        $allowed_host = parse_url(home_url(), PHP_URL_HOST);
+        if ($host !== $allowed_host) {
+            return;
+        }
+
         if (empty($host)) {
             $host = 'unknown';
         }
