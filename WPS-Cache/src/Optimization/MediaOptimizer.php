@@ -70,7 +70,7 @@ class MediaOptimizer
 
         $this->imageCount++;
 
-        // SOTA: Skip the first X images to protect LCP (Largest Contentful Paint)
+        // Skip the first X images to protect LCP (Largest Contentful Paint)
         // Usually the Logo and the Hero Image.
         $skipCount =
             (int) ($this->settings["media_lazy_load_exclude_count"] ?? 3);
