@@ -47,7 +47,8 @@ final class Plugin
         'includes' => 'includes'
     ];
 
-    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
+    // Sentinel: Whitelist public assets while blocking everything else (e.g. .php, .log)
+    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all\n<FilesMatch \"\.(css|js|html|xml|txt)$\">\n    Order Allow,Deny\n    Allow from all\n</FilesMatch>";
     private const CACHE_CLEANUP_HOOK = 'wpsc_cache_cleanup';
 
     private static ?self $instance = null;
