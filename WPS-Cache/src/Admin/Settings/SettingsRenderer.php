@@ -83,6 +83,16 @@ class SettingsRenderer
 
         $class = ($type === 'number') ? 'wpsc-input-number' : 'wpsc-input-text';
         $descId = $description ? 'wpsc_' . esc_attr($key) . '_desc' : '';
+        $statusId = 'wpsc_' . esc_attr($key) . '_status';
+
+        $ariaDescribedBy = [];
+        if ($description) {
+            $ariaDescribedBy[] = $descId;
+        }
+        if ($isPasswordSet) {
+            $ariaDescribedBy[] = $statusId;
+        }
+        $ariaDescribedByStr = implode(' ', $ariaDescribedBy);
 
         // Build attributes string
         $attrStr = '';
@@ -105,11 +115,11 @@ class SettingsRenderer
                     id="wpsc_<?php echo esc_attr($key); ?>"
                     name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                     value="<?php echo esc_attr($value); ?>"
-                    <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>
+                    <?php echo !empty($ariaDescribedByStr) ? 'aria-describedby="' . esc_attr($ariaDescribedByStr) . '"' : ''; ?>
                     <?php echo $attrStr; ?>>
                 <?php if ($isPasswordSet): ?>
-                    <div style="margin-top: 5px; font-size: 12px; color: #10b981; display: flex; align-items: center; gap: 4px;">
-                        <span class="dashicons dashicons-yes" style="font-size: 16px; width: 16px; height: 16px;"></span>
+                    <div id="<?php echo esc_attr($statusId); ?>" style="margin-top: 5px; font-size: 12px; color: var(--wpsc-success); display: flex; align-items: center; gap: 4px;">
+                        <span class="dashicons dashicons-yes" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px;"></span>
                         <?php esc_html_e('Password is set. Leave blank to keep unchanged.', 'wps-cache'); ?>
                     </div>
                 <?php endif; ?>
