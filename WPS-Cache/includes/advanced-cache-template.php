@@ -3,6 +3,7 @@
 /**
  * WPS Cache - Advanced Cache Drop-in
  * Supports Query Strings via hashed filenames.
+ * Supports Mobile Cache Separation.
  */
 
 if (!defined("ABSPATH")) {
@@ -85,15 +86,24 @@ class WPSAdvancedCache
         }
         $path = str_replace("..", "", $path); // Security
 
+        // Determine Mobile Suffix
+        $suffix = $this->getMobileSuffix();
+
         // Determine Filename
         $query = parse_url($uri, PHP_URL_QUERY);
         if ($query) {
             parse_str($query, $queryParams);
             ksort($queryParams);
+            // Append suffix to query-string based filenames
             $filename =
-                "index-" . md5(http_build_query($queryParams)) . ".html";
+                "index" .
+                $suffix .
+                "-" .
+                md5(http_build_query($queryParams)) .
+                ".html";
         } else {
-            $filename = "index.html";
+            // Append suffix to standard filenames
+            $filename = "index" . $suffix . ".html";
         }
 
         return WP_CONTENT_DIR .
@@ -101,6 +111,27 @@ class WPSAdvancedCache
             $host .
             $path .
             $filename;
+    }
+
+    /**
+     * Efficiently detects mobile devices based on User-Agent.
+     * Must match logic in HTMLCache.php
+     */
+    private function getMobileSuffix(): string
+    {
+        $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
+        if (empty($ua)) {
+            return "";
+        }
+        if (
+            preg_match(
+                "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
+                $ua,
+            )
+        ) {
+            return "-mobile";
+        }
+        return "";
     }
 
     private function serve(string $file, int $mtime): void
