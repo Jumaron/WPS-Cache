@@ -9,17 +9,26 @@ namespace WPSCache\Admin\Tools;
  */
 class ToolsManager
 {
-    private const OBJECT_CACHE_TEMPLATE = 'object-cache.php';
+    private const OBJECT_CACHE_TEMPLATE = "object-cache.php";
 
     public function __construct()
     {
         // Preloader AJAX
-        add_action('wp_ajax_wpsc_get_preload_urls', [$this, 'handleGetUrls']);
-        add_action('wp_ajax_wpsc_process_preload_url', [$this, 'handleProcessUrl']);
+        add_action("wp_ajax_wpsc_get_preload_urls", [$this, "handleGetUrls"]);
+        add_action("wp_ajax_wpsc_process_preload_url", [
+            $this,
+            "handleProcessUrl",
+        ]);
 
         // Object Cache Handling (POST Actions)
-        add_action('admin_post_wpsc_install_object_cache', [$this, 'handleInstallObjectCache']);
-        add_action('admin_post_wpsc_remove_object_cache', [$this, 'handleRemoveObjectCache']);
+        add_action("admin_post_wpsc_install_object_cache", [
+            $this,
+            "handleInstallObjectCache",
+        ]);
+        add_action("admin_post_wpsc_remove_object_cache", [
+            $this,
+            "handleRemoveObjectCache",
+        ]);
     }
 
     /**
@@ -27,8 +36,9 @@ class ToolsManager
      */
     public function render(): void
     {
-        $object_cache_installed = file_exists(WP_CONTENT_DIR . '/object-cache.php');
-        ?>
+        $object_cache_installed = file_exists(
+            WP_CONTENT_DIR . "/object-cache.php",
+        ); ?>
         <!-- Object Cache Management -->
         <div class="wpsc-card">
             <div class="wpsc-card-header">
@@ -45,8 +55,10 @@ class ToolsManager
                         <div class="wpsc-notice success" style="display:inline-flex; margin-bottom: 15px;">
                             <span class="dashicons dashicons-yes" style="margin-right:8px;"></span> Installed & Active
                         </div>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                            <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
+                        <form method="post" action="<?php echo esc_url(
+                            admin_url("admin-post.php"),
+                        ); ?>">
+                            <?php wp_nonce_field("wpsc_remove_object_cache"); ?>
                             <input type="hidden" name="action" value="wpsc_remove_object_cache">
                             <button type="submit" class="button wpsc-btn-secondary"
                                 style="color: var(--wpsc-danger); border-color: var(--wpsc-danger);">
@@ -57,8 +69,12 @@ class ToolsManager
                         <div class="wpsc-notice warning" style="display:inline-flex; margin-bottom: 15px;">
                             <span class="dashicons dashicons-warning" style="margin-right:8px;"></span> Not Installed
                         </div>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                            <?php wp_nonce_field('wpsc_install_object_cache'); ?>
+                        <form method="post" action="<?php echo esc_url(
+                            admin_url("admin-post.php"),
+                        ); ?>">
+                            <?php wp_nonce_field(
+                                "wpsc_install_object_cache",
+                            ); ?>
                             <input type="hidden" name="action" value="wpsc_install_object_cache">
                             <button type="submit" class="button button-primary wpsc-btn-primary">
                                 Install Drop-in
@@ -104,7 +120,9 @@ class ToolsManager
             </div>
             <div class="wpsc-card-body">
                 <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8"
-                    style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                    style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea(
+                        $this->getSystemReport(),
+                    ); ?></textarea>
             </div>
         </div>
         <?php
@@ -115,24 +133,31 @@ class ToolsManager
      */
     public function handleInstallObjectCache(): void
     {
-        check_admin_referer('wpsc_install_object_cache');
-        if (!current_user_can('manage_options'))
-            wp_die('Unauthorized');
+        check_admin_referer("wpsc_install_object_cache");
+        if (!current_user_can("manage_options")) {
+            wp_die("Unauthorized");
+        }
 
-        $source = WPSC_PLUGIN_DIR . 'includes/' . self::OBJECT_CACHE_TEMPLATE;
-        $destination = WP_CONTENT_DIR . '/object-cache.php';
+        $source = WPSC_PLUGIN_DIR . "includes/" . self::OBJECT_CACHE_TEMPLATE;
+        $destination = WP_CONTENT_DIR . "/object-cache.php";
 
         if (file_exists($destination)) {
-            $this->redirectWithNotice('Drop-in already exists.', 'error');
+            $this->redirectWithNotice("Drop-in already exists.", "error");
             return;
         }
 
         if (@copy($source, $destination)) {
             // Fix permissions if WP_Filesystem is needed
             @chmod($destination, 0644);
-            $this->redirectWithNotice('Object Cache Drop-in installed successfully.', 'success');
+            $this->redirectWithNotice(
+                "Object Cache Drop-in installed successfully.",
+                "success",
+            );
         } else {
-            $this->redirectWithNotice('Failed to copy object-cache.php. Check permissions.', 'error');
+            $this->redirectWithNotice(
+                "Failed to copy object-cache.php. Check permissions.",
+                "error",
+            );
         }
     }
 
@@ -141,18 +166,22 @@ class ToolsManager
      */
     public function handleRemoveObjectCache(): void
     {
-        check_admin_referer('wpsc_remove_object_cache');
-        if (!current_user_can('manage_options'))
-            wp_die('Unauthorized');
+        check_admin_referer("wpsc_remove_object_cache");
+        if (!current_user_can("manage_options")) {
+            wp_die("Unauthorized");
+        }
 
-        $file = WP_CONTENT_DIR . '/object-cache.php';
+        $file = WP_CONTENT_DIR . "/object-cache.php";
 
         if (file_exists($file)) {
             @unlink($file);
             wp_cache_flush(); // Clear memory cache
-            $this->redirectWithNotice('Object Cache Drop-in removed.', 'success');
+            $this->redirectWithNotice(
+                "Object Cache Drop-in removed.",
+                "success",
+            );
         } else {
-            $this->redirectWithNotice('File does not exist.', 'warning');
+            $this->redirectWithNotice("File does not exist.", "warning");
         }
     }
 
@@ -160,9 +189,13 @@ class ToolsManager
     {
         // Simple notice implementation relying on transient or query arg
         // Ideally use NoticeManager, but keeping dependencies light here.
-        set_transient('wpsc_admin_notices', [['message' => $message, 'type' => $type]], 60);
-        wp_redirect(remove_query_arg(['action', '_wpnonce'], wp_get_referer()));
-        exit;
+        set_transient(
+            "wpsc_admin_notices",
+            [["message" => $message, "type" => $type]],
+            60,
+        );
+        wp_redirect(remove_query_arg(["action", "_wpnonce"], wp_get_referer()));
+        exit();
     }
 
     /**
@@ -170,32 +203,34 @@ class ToolsManager
      */
     public function handleGetUrls(): void
     {
-        check_ajax_referer('wpsc_ajax_nonce');
-        if (!current_user_can('manage_options'))
+        check_ajax_referer("wpsc_ajax_nonce");
+        if (!current_user_can("manage_options")) {
             wp_send_json_error();
+        }
 
-        $post_types = ['page', 'post'];
-        if (class_exists('WooCommerce')) {
-            $post_types[] = 'product';
+        $post_types = ["page", "post"];
+        if (class_exists("WooCommerce")) {
+            $post_types[] = "product";
         }
 
         $query = new \WP_Query([
-            'post_type' => $post_types,
-            'post_status' => 'publish',
-            'posts_per_page' => 200,
-            'fields' => 'ids',
-            'no_found_rows' => true,
-            'update_post_meta_cache' => false,
-            'update_post_term_cache' => false,
+            "post_type" => $post_types,
+            "post_status" => "publish",
+            "posts_per_page" => 200,
+            "fields" => "ids",
+            "no_found_rows" => true,
+            "update_post_meta_cache" => false,
+            "update_post_term_cache" => false,
         ]);
 
         $urls = [];
-        $urls[home_url('/')] = true;
+        $urls[home_url("/")] = true;
 
         foreach ($query->posts as $id) {
             $link = get_permalink($id);
-            if ($link)
+            if ($link) {
                 $urls[$link] = true;
+            }
         }
 
         wp_send_json_success(array_values(array_keys($urls)));
@@ -206,25 +241,27 @@ class ToolsManager
      */
     public function handleProcessUrl(): void
     {
-        check_ajax_referer('wpsc_ajax_nonce');
-        if (!current_user_can('manage_options'))
+        check_ajax_referer("wpsc_ajax_nonce");
+        if (!current_user_can("manage_options")) {
             wp_send_json_error();
+        }
 
-        $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
-        if (empty($url))
-            wp_send_json_error('No URL provided');
+        $url = isset($_POST["url"]) ? esc_url_raw($_POST["url"]) : "";
+        if (empty($url)) {
+            wp_send_json_error("No URL provided");
+        }
 
-        if (!str_starts_with($url, home_url('/'))) {
-            wp_send_json_error('External URLs are not allowed');
+        if (!str_starts_with($url, home_url("/"))) {
+            wp_send_json_error("External URLs are not allowed");
         }
 
         $response = wp_safe_remote_get($url, [
-            'timeout' => 10,
-            'blocking' => true,
-            'cookies' => [],
-            'headers' => [
-                'User-Agent' => 'WPS-Cache-Preloader/1.0; ' . home_url()
-            ]
+            "timeout" => 10,
+            "blocking" => true,
+            "cookies" => [],
+            "headers" => [
+                "User-Agent" => "WPS-Cache-Preloader/1.0; " . home_url(),
+            ],
         ]);
 
         if (is_wp_error($response)) {
@@ -243,8 +280,11 @@ class ToolsManager
     {
         global $wp_version;
         $report = "WP: $wp_version | PHP: " . PHP_VERSION . "\n";
-        $report .= "Server: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'N/A') . "\n";
-        $report .= "Cache Dir: " . (defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR : 'N/A') . "\n";
+        $report .= "Server: " . ($_SERVER["SERVER_SOFTWARE"] ?? "N/A") . "\n";
+        $report .=
+            "Cache Dir: " .
+            (defined("WPSC_CACHE_DIR") ? WPSC_CACHE_DIR : "N/A") .
+            "\n";
         return $report;
     }
 }

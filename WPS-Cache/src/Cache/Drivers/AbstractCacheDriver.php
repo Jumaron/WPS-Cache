@@ -17,7 +17,7 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
     public function __construct()
     {
         // Load settings once per driver instance
-        $this->settings = get_option('wpsc_settings', []);
+        $this->settings = get_option("wpsc_settings", []);
     }
 
     /**
@@ -38,12 +38,17 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
      */
     protected function logError(string $message, ?Throwable $e = null): void
     {
-        $context = $e ? " [Exception: {$e->getMessage()}]" : '';
-        $log = sprintf('[WPS-Cache] %s: %s%s', static::class, $message, $context);
+        $context = $e ? " [Exception: {$e->getMessage()}]" : "";
+        $log = sprintf(
+            "[WPS-Cache] %s: %s%s",
+            static::class,
+            $message,
+            $context,
+        );
 
         error_log($log);
 
-        if (defined('WP_DEBUG') && WP_DEBUG) {
+        if (defined("WP_DEBUG") && WP_DEBUG) {
             trigger_error($log, E_USER_WARNING);
         }
     }
@@ -64,7 +69,7 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
         }
 
         // Add index.php silence file
-        @file_put_contents($dir . '/index.php', '<?php // Silence is golden');
+        @file_put_contents($dir . "/index.php", "<?php // Silence is golden");
 
         return true;
     }
@@ -82,7 +87,7 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
         }
 
         // Create temp file in the SAME directory to ensure atomic rename (same partition)
-        $temp_file = tempnam($dir, 'wpsc_tmp_');
+        $temp_file = tempnam($dir, "wpsc_tmp_");
 
         if ($temp_file === false) {
             $this->logError("Failed to create temp file in $dir");
@@ -115,12 +120,16 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
      */
     protected function recursiveDelete(string $dir): void
     {
-        if (!is_dir($dir))
+        if (!is_dir($dir)) {
             return;
+        }
 
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
+            new \RecursiveDirectoryIterator(
+                $dir,
+                \RecursiveDirectoryIterator::SKIP_DOTS,
+            ),
+            \RecursiveIteratorIterator::CHILD_FIRST,
         );
 
         foreach ($iterator as $file) {
@@ -137,7 +146,11 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
     // Abstract method stubs for strict typing
     abstract public function initialize(): void;
     abstract public function get(string $key): mixed;
-    abstract public function set(string $key, mixed $value, int $ttl = 3600): void;
+    abstract public function set(
+        string $key,
+        mixed $value,
+        int $ttl = 3600,
+    ): void;
     abstract public function delete(string $key): void;
     abstract public function clear(): void;
 }

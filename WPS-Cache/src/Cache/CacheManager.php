@@ -41,7 +41,13 @@ final class CacheManager
             try {
                 $driver->initialize();
             } catch (Throwable $e) {
-                error_log(sprintf('WPS Cache: Driver %s failed to init: %s', get_class($driver), $e->getMessage()));
+                error_log(
+                    sprintf(
+                        "WPS Cache: Driver %s failed to init: %s",
+                        get_class($driver),
+                        $e->getMessage(),
+                    ),
+                );
             }
         }
 
@@ -52,13 +58,13 @@ final class CacheManager
     private function setupCacheHooks(): void
     {
         // Content updates: Clear data caches only (No OpCache reset)
-        add_action('save_post', [$this, 'clearContentCaches']);
-        add_action('comment_post', [$this, 'clearContentCaches']);
+        add_action("save_post", [$this, "clearContentCaches"]);
+        add_action("comment_post", [$this, "clearContentCaches"]);
 
         // System updates: Clear everything including OpCache
-        add_action('switched_theme', [$this, 'clearAllCaches']);
-        add_action('activated_plugin', [$this, 'clearAllCaches']);
-        add_action('deactivated_plugin', [$this, 'clearAllCaches']);
+        add_action("switched_theme", [$this, "clearAllCaches"]);
+        add_action("activated_plugin", [$this, "clearAllCaches"]);
+        add_action("deactivated_plugin", [$this, "clearAllCaches"]);
     }
 
     /**
@@ -75,7 +81,8 @@ final class CacheManager
             try {
                 $driver->clear();
             } catch (Throwable $e) {
-                $this->errorLog[] = get_class($driver) . ': ' . $e->getMessage();
+                $this->errorLog[] =
+                    get_class($driver) . ": " . $e->getMessage();
                 $success = false;
             }
         }
@@ -84,7 +91,7 @@ final class CacheManager
         $this->clearWordPressInternals(false);
 
         // 3. Fire Signal
-        do_action('wpsc_cache_cleared', $success, $this->errorLog);
+        do_action("wpsc_cache_cleared", $success, $this->errorLog);
 
         return $success && empty($this->errorLog);
     }
@@ -102,7 +109,8 @@ final class CacheManager
             try {
                 $driver->clear();
             } catch (Throwable $e) {
-                $this->errorLog[] = get_class($driver) . ': ' . $e->getMessage();
+                $this->errorLog[] =
+                    get_class($driver) . ": " . $e->getMessage();
                 $success = false;
             }
         }
@@ -111,12 +119,12 @@ final class CacheManager
         $this->clearWordPressInternals(true);
 
         // 3. Clear OpCache (PHP Code Cache)
-        if (function_exists('opcache_reset')) {
+        if (function_exists("opcache_reset")) {
             @opcache_reset();
         }
 
         // 4. Fire Signal
-        do_action('wpsc_cache_cleared', $success, $this->errorLog);
+        do_action("wpsc_cache_cleared", $success, $this->errorLog);
 
         return $success && empty($this->errorLog);
     }
@@ -147,12 +155,12 @@ final class CacheManager
             // _transient_% covers _transient_timeout_%
             // _site_transient_% covers _site_transient_timeout_%
             $wpdb->query(
-                "DELETE FROM {$wpdb->options} 
-                 WHERE option_name LIKE '\_transient\_%' 
-                 OR option_name LIKE '\_site\_transient\_%'"
+                "DELETE FROM {$wpdb->options}
+                 WHERE option_name LIKE '\_transient\_%'
+                 OR option_name LIKE '\_site\_transient\_%'",
             );
         } catch (Throwable $e) {
-            $this->errorLog['db'] = $e->getMessage();
+            $this->errorLog["db"] = $e->getMessage();
         }
     }
 
@@ -161,8 +169,8 @@ final class CacheManager
      */
     private function forceCleanupHtmlDirectory(): void
     {
-        if (defined('WPSC_CACHE_DIR')) {
-            $html_dir = WPSC_CACHE_DIR . 'html/';
+        if (defined("WPSC_CACHE_DIR")) {
+            $html_dir = WPSC_CACHE_DIR . "html/";
             if (is_dir($html_dir)) {
                 $this->recursiveRemoveDir($html_dir);
                 @mkdir($html_dir, 0755, true); // Recreate empty
@@ -172,12 +180,16 @@ final class CacheManager
 
     private function recursiveRemoveDir(string $dir): void
     {
-        if (!is_dir($dir))
+        if (!is_dir($dir)) {
             return;
+        }
 
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
+            new \RecursiveDirectoryIterator(
+                $dir,
+                \FilesystemIterator::SKIP_DOTS,
+            ),
+            \RecursiveIteratorIterator::CHILD_FIRST,
         );
 
         foreach ($iterator as $file) {
@@ -196,10 +208,12 @@ final class CacheManager
     public function getDriver(string $alias): ?CacheDriverInterface
     {
         foreach ($this->drivers as $driver) {
-            if ($alias === 'redis' && $driver instanceof RedisCache)
+            if ($alias === "redis" && $driver instanceof RedisCache) {
                 return $driver;
-            if ($alias === 'varnish' && $driver instanceof VarnishCache)
+            }
+            if ($alias === "varnish" && $driver instanceof VarnishCache) {
                 return $driver;
+            }
         }
         return null;
     }
@@ -212,7 +226,7 @@ final class CacheManager
     {
         // If HTML driver is loaded, use it
         foreach ($this->drivers as $driver) {
-            if (str_contains(get_class($driver), 'HTMLCache')) {
+            if (str_contains(get_class($driver), "HTMLCache")) {
                 $driver->clear();
                 return true;
             }
@@ -224,7 +238,7 @@ final class CacheManager
 
     public function clearRedisCache(): bool
     {
-        $driver = $this->getDriver('redis');
+        $driver = $this->getDriver("redis");
         if ($driver) {
             $driver->clear();
             return true;
@@ -234,7 +248,7 @@ final class CacheManager
 
     public function clearVarnishCache(): bool
     {
-        $driver = $this->getDriver('varnish');
+        $driver = $this->getDriver("varnish");
         if ($driver) {
             $driver->clear();
             return true;

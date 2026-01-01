@@ -6,7 +6,7 @@ namespace WPSCache\Optimization;
 
 /**
  * Handles Speculative Loading (Prerendering/Prefetching).
- * 
+ *
  * SOTA Implementation (2026):
  * 1. Uses native "Speculation Rules API" for Chrome/Edge (Prerender support).
  * 2. Uses lightweight IntersectionObserver/MouseOver fallback for Safari/Firefox.
@@ -22,41 +22,44 @@ class SpeculativeLoader
 
     public function initialize(): void
     {
-        if (empty($this->settings['speculative_loading'])) {
+        if (empty($this->settings["speculative_loading"])) {
             return;
         }
 
-        add_action('wp_footer', [$this, 'injectSpeculationRules'], 100);
+        add_action("wp_footer", [$this, "injectSpeculationRules"], 100);
     }
 
     public function injectSpeculationRules(): void
     {
         // Don't prefetch on admin pages or for logged-in users (optional, but safer)
-        if (is_admin())
+        if (is_admin()) {
             return;
+        }
 
-        $mode = $this->settings['speculation_mode'] ?? 'prerender'; // 'prefetch' or 'prerender'
+        $mode = $this->settings["speculation_mode"] ?? "prerender"; // 'prefetch' or 'prerender'
 
         // 1. Modern API (Chrome 109+, Edge)
         // 'moderate' eagerness = Triggers on Hover (stays for >200ms) or Pointer Down.
         $rules = [
             $mode => [
                 [
-                    'source' => 'document',
-                    'where' => [
-                        'and' => [
-                            ['href_matches' => '/*'], // Match all local links
-                            ['not' => ['href_matches' => '/wp-admin/*']],
-                            ['not' => ['href_matches' => '/wp-login.php*']],
-                            ['not' => ['href_matches' => '*logout*']],
-                        ]
+                    "source" => "document",
+                    "where" => [
+                        "and" => [
+                            ["href_matches" => "/*"], // Match all local links
+                            ["not" => ["href_matches" => "/wp-admin/*"]],
+                            ["not" => ["href_matches" => "/wp-login.php*"]],
+                            ["not" => ["href_matches" => "*logout*"]],
+                        ],
                     ],
-                    'eagerness' => 'moderate'
-                ]
-            ]
+                    "eagerness" => "moderate",
+                ],
+            ],
         ];
 
-        echo '<script type="speculationrules">' . json_encode($rules) . '</script>';
+        echo '<script type="speculationrules">' .
+            json_encode($rules) .
+            "</script>";
 
         // 2. Legacy Fallback (Safari, Firefox)
         // Uses standard <link rel="prefetch"> on hover
@@ -131,3 +134,4 @@ class SpeculativeLoader
         <?php
     }
 }
+?>

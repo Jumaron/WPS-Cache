@@ -6,7 +6,7 @@ namespace WPSCache\Cache\Drivers;
 
 /**
  * State-of-the-Art CSS Minification implementation.
- * 
+ *
  * Uses a Lexical Scanner (Tokenizer) to safely parse CSS.
  * Features:
  * - Context-aware `calc()` support (preserves required operator spacing).
@@ -23,6 +23,7 @@ final class MinifyCSS extends AbstractCacheDriver
     private const T_WHITESPACE = 0;
     private const T_COMMENT = 1;
     private const T_STRING = 2;
+
     private const T_OPEN = 3; // {
     private const T_CLOSE = 4; // }
     private const T_COLON = 5; // :
@@ -37,53 +38,53 @@ final class MinifyCSS extends AbstractCacheDriver
     private const TOKENIZER_MASK = " \t\n\r\v\f{}():;,'\">+~/";
 
     private const SELECTOR_PSEUDOS = [
-        'not' => true,
-        'is' => true,
-        'where' => true,
-        'has' => true,
-        'nth-child' => true,
-        'nth-last-child' => true,
-        'nth-of-type' => true,
-        'nth-last-of-type' => true,
-        'nth-col' => true,
-        'nth-last-col' => true,
-        'dir' => true,
-        'lang' => true,
-        'host' => true,
-        'host-context' => true,
-        'part' => true,
-        'slotted' => true,
-        'matches' => true,
-        '-webkit-any' => true,
-        '-moz-any' => true,
-        'cue' => true,
-        'current' => true,
-        'past' => true,
-        'future' => true,
-        'state' => true,
-        'view-transition-group' => true,
-        'view-transition-image-pair' => true,
-        'view-transition-old' => true,
-        'view-transition-new' => true
+        "not" => true,
+        "is" => true,
+        "where" => true,
+        "has" => true,
+        "nth-child" => true,
+        "nth-last-child" => true,
+        "nth-of-type" => true,
+        "nth-last-of-type" => true,
+        "nth-col" => true,
+        "nth-last-col" => true,
+        "dir" => true,
+        "lang" => true,
+        "host" => true,
+        "host-context" => true,
+        "part" => true,
+        "slotted" => true,
+        "matches" => true,
+        "-webkit-any" => true,
+        "-moz-any" => true,
+        "cue" => true,
+        "current" => true,
+        "past" => true,
+        "future" => true,
+        "state" => true,
+        "view-transition-group" => true,
+        "view-transition-image-pair" => true,
+        "view-transition-old" => true,
+        "view-transition-new" => true,
     ];
 
     private const CALC_FUNCTIONS = [
-        'calc' => true,
-        'clamp' => true,
-        'min' => true,
-        'max' => true,
-        'var' => true
+        "calc" => true,
+        "clamp" => true,
+        "min" => true,
+        "max" => true,
+        "var" => true,
     ];
 
     private const PRESERVED_UNITS = [
-        's' => true,
-        'ms' => true,
-        'deg' => true,
-        'rad' => true,
-        'grad' => true,
-        'turn' => true,
-        'hz' => true,
-        'khz' => true
+        "s" => true,
+        "ms" => true,
+        "deg" => true,
+        "rad" => true,
+        "grad" => true,
+        "turn" => true,
+        "hz" => true,
+        "khz" => true,
     ];
 
     private string $cache_dir;
@@ -91,14 +92,18 @@ final class MinifyCSS extends AbstractCacheDriver
     public function __construct()
     {
         parent::__construct();
-        $this->cache_dir = WPSC_CACHE_DIR . 'css/';
+        $this->cache_dir = WPSC_CACHE_DIR . "css/";
         $this->ensureDirectory($this->cache_dir);
     }
 
     public function initialize(): void
     {
-        if (!$this->initialized && !is_admin() && ($this->settings['css_minify'] ?? false)) {
-            add_action('wp_enqueue_scripts', [$this, 'processStyles'], 100);
+        if (
+            !$this->initialized &&
+            !is_admin() &&
+            ($this->settings["css_minify"] ?? false)
+        ) {
+            add_action("wp_enqueue_scripts", [$this, "processStyles"], 100);
             $this->initialized = true;
         }
     }
@@ -152,7 +157,7 @@ final class MinifyCSS extends AbstractCacheDriver
             return;
         }
 
-        $excluded_css = $this->settings['excluded_css'] ?? [];
+        $excluded_css = $this->settings["excluded_css"] ?? [];
 
         foreach ($wp_styles->queue as $handle) {
             try {
@@ -163,8 +168,11 @@ final class MinifyCSS extends AbstractCacheDriver
         }
     }
 
-    private function processStyle(string $handle, \WP_Styles $wp_styles, array $excluded_css): void
-    {
+    private function processStyle(
+        string $handle,
+        \WP_Styles $wp_styles,
+        array $excluded_css,
+    ): void {
         if (!isset($wp_styles->registered[$handle])) {
             return;
         }
@@ -189,7 +197,9 @@ final class MinifyCSS extends AbstractCacheDriver
         // Generate cache key based on handle + path + mtime + size (No content read)
         // Optimization: Avoid reading file content on every request if cache exists.
         $mtime = filemtime($source);
-        $cache_key = $this->generateCacheKey($handle . $source . $mtime . $size);
+        $cache_key = $this->generateCacheKey(
+            $handle . $source . $mtime . $size,
+        );
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
@@ -218,7 +228,7 @@ final class MinifyCSS extends AbstractCacheDriver
      */
     private function minifyCSS(string $css): string
     {
-        $output = fopen('php://memory', 'r+');
+        $output = fopen("php://memory", "r+");
 
         $prevToken = null;
         $prevPrevToken = null;
@@ -230,24 +240,23 @@ final class MinifyCSS extends AbstractCacheDriver
         $whitespaceSkipped = false;
 
         foreach ($this->tokenize($css) as $token) {
-
             // 1. Comments
-            if ($token['type'] === self::T_COMMENT) {
+            if ($token["type"] === self::T_COMMENT) {
                 // Preserve license comments (/*! ... */)
-                if (str_starts_with($token['value'], '/*!')) {
+                if (str_starts_with($token["value"], "/*!")) {
                     // Flush pending semicolon before comment
                     if ($pendingSemicolon) {
-                        fwrite($output, ';');
+                        fwrite($output, ";");
                         $pendingSemicolon = false;
                     }
-                    fwrite($output, $token['value']);
-                    $prevToken = ['type' => self::T_WHITESPACE, 'value' => ' ']; // Treat as break
+                    fwrite($output, $token["value"]);
+                    $prevToken = ["type" => self::T_WHITESPACE, "value" => " "]; // Treat as break
                 }
                 continue;
             }
 
             // 2. Whitespace
-            if ($token['type'] === self::T_WHITESPACE) {
+            if ($token["type"] === self::T_WHITESPACE) {
                 $whitespaceSkipped = true;
                 continue; // We generate our own spaces later
             }
@@ -255,24 +264,24 @@ final class MinifyCSS extends AbstractCacheDriver
             // 3. Handle Pending Semicolon
             // If the current token is '}', we DROP the semicolon.
             if ($pendingSemicolon) {
-                if ($token['type'] !== self::T_CLOSE) {
-                    fwrite($output, ';');
+                if ($token["type"] !== self::T_CLOSE) {
+                    fwrite($output, ";");
                 }
                 $pendingSemicolon = false;
             }
 
             // 4. Semicolon Buffering
-            if ($token['type'] === self::T_SEMICOLON) {
+            if ($token["type"] === self::T_SEMICOLON) {
                 $pendingSemicolon = true;
                 continue;
             }
 
             // 5. Context Tracking
-            if ($token['type'] === self::T_PAREN_OPEN) {
+            if ($token["type"] === self::T_PAREN_OPEN) {
                 $func = null;
                 // Check if previous token was a function name
-                if ($prevToken && $prevToken['type'] === self::T_WORD) {
-                    $func = strtolower($prevToken['value']);
+                if ($prevToken && $prevToken["type"] === self::T_WORD) {
+                    $func = strtolower($prevToken["value"]);
                     if (isset(self::CALC_FUNCTIONS[$func])) {
                         $calcDepth++;
                     } elseif ($calcDepth > 0) {
@@ -283,7 +292,7 @@ final class MinifyCSS extends AbstractCacheDriver
                 }
                 $parenStack[] = $func;
             }
-            if ($token['type'] === self::T_PAREN_CLOSE) {
+            if ($token["type"] === self::T_PAREN_CLOSE) {
                 if ($calcDepth > 0) {
                     $calcDepth--;
                 }
@@ -292,21 +301,31 @@ final class MinifyCSS extends AbstractCacheDriver
 
             // 6. Optimization: Zero Units
             // Transform '0px' -> '0'. But NOT '0s', '0deg', or inside calc()
-            if ($token['type'] === self::T_WORD && $calcDepth === 0) {
-                $token['value'] = $this->optimizeZeroUnits($token['value']);
+            if ($token["type"] === self::T_WORD && $calcDepth === 0) {
+                $token["value"] = $this->optimizeZeroUnits($token["value"]);
             }
 
             // 7. Optimization: Hex Colors
-            if ($token['type'] === self::T_WORD) {
-                $token['value'] = $this->compressHex($token['value']);
+            if ($token["type"] === self::T_WORD) {
+                $token["value"] = $this->compressHex($token["value"]);
             }
 
             // 8. Insert Space Logic
-            if ($prevToken && $this->needsSpace($prevToken, $token, $calcDepth > 0, $lastClosedFunc, $prevPrevToken, $whitespaceSkipped)) {
-                fwrite($output, ' ');
+            if (
+                $prevToken &&
+                $this->needsSpace(
+                    $prevToken,
+                    $token,
+                    $calcDepth > 0,
+                    $lastClosedFunc,
+                    $prevPrevToken,
+                    $whitespaceSkipped,
+                )
+            ) {
+                fwrite($output, " ");
             }
 
-            fwrite($output, $token['value']);
+            fwrite($output, $token["value"]);
             $prevPrevToken = $prevToken;
             $prevToken = $token;
             $whitespaceSkipped = false;
@@ -314,7 +333,7 @@ final class MinifyCSS extends AbstractCacheDriver
 
         // Write trailing semicolon if exists
         if ($pendingSemicolon) {
-            fwrite($output, ';');
+            fwrite($output, ";");
         }
 
         rewind($output);
@@ -340,7 +359,7 @@ final class MinifyCSS extends AbstractCacheDriver
                 // Optimization: Use strspn to skip all whitespace at once (much faster than loop)
                 $len_ws = strspn($css, " \t\n\r\v\f", $i);
                 $i += $len_ws;
-                yield ['type' => self::T_WHITESPACE, 'value' => ' '];
+                yield ["type" => self::T_WHITESPACE, "value" => " "];
                 continue;
             }
 
@@ -350,7 +369,7 @@ final class MinifyCSS extends AbstractCacheDriver
                 $start = $i;
                 $i++;
                 while ($i < $len) {
-                    if ($css[$i] === '\\') {
+                    if ($css[$i] === "\\") {
                         $i += 2;
                         continue;
                     }
@@ -358,18 +377,22 @@ final class MinifyCSS extends AbstractCacheDriver
                         $i++;
                         break;
                     }
-                    if ($css[$i] === "\n")
+                    if ($css[$i] === "\n") {
                         break;
+                    }
                     $i++;
                 }
-                yield ['type' => self::T_STRING, 'value' => substr($css, $start, $i - $start)];
+                yield [
+                    "type" => self::T_STRING,
+                    "value" => substr($css, $start, $i - $start),
+                ];
                 continue;
             }
 
             // Comments (/* ... */)
-            if ($char === '/' && ($css[$i + 1] ?? '') === '*') {
+            if ($char === "/" && ($css[$i + 1] ?? "") === "*") {
                 $start = $i;
-                $end = strpos($css, '*/', $i + 2);
+                $end = strpos($css, "*/", $i + 2);
 
                 if ($end === false) {
                     $i = $len; // Unterminated comment
@@ -377,45 +400,48 @@ final class MinifyCSS extends AbstractCacheDriver
                     $i = $end + 2;
                 }
 
-                yield ['type' => self::T_COMMENT, 'value' => substr($css, $start, $i - $start)];
+                yield [
+                    "type" => self::T_COMMENT,
+                    "value" => substr($css, $start, $i - $start),
+                ];
                 continue;
             }
 
             // Granular Tokens
-            if ($char === '{') {
-                yield ['type' => self::T_OPEN, 'value' => '{'];
+            if ($char === "{") {
+                yield ["type" => self::T_OPEN, "value" => "{"];
                 $i++;
                 continue;
             }
-            if ($char === '}') {
-                yield ['type' => self::T_CLOSE, 'value' => '}'];
+            if ($char === "}") {
+                yield ["type" => self::T_CLOSE, "value" => "}"];
                 $i++;
                 continue;
             }
-            if ($char === ':') {
-                yield ['type' => self::T_COLON, 'value' => ':'];
+            if ($char === ":") {
+                yield ["type" => self::T_COLON, "value" => ":"];
                 $i++;
                 continue;
             }
-            if ($char === ';') {
-                yield ['type' => self::T_SEMICOLON, 'value' => ';'];
+            if ($char === ";") {
+                yield ["type" => self::T_SEMICOLON, "value" => ";"];
                 $i++;
                 continue;
             }
-            if ($char === '(') {
-                yield ['type' => self::T_PAREN_OPEN, 'value' => '('];
+            if ($char === "(") {
+                yield ["type" => self::T_PAREN_OPEN, "value" => "("];
                 $i++;
                 continue;
             }
-            if ($char === ')') {
-                yield ['type' => self::T_PAREN_CLOSE, 'value' => ')'];
+            if ($char === ")") {
+                yield ["type" => self::T_PAREN_CLOSE, "value" => ")"];
                 $i++;
                 continue;
             }
 
             // Operators
-            if (str_contains(',>+~', $char)) {
-                yield ['type' => self::T_OPERATOR, 'value' => $char];
+            if (str_contains(",>+~", $char)) {
+                yield ["type" => self::T_OPERATOR, "value" => $char];
                 $i++;
                 continue;
             }
@@ -435,8 +461,8 @@ final class MinifyCSS extends AbstractCacheDriver
                 $c = $css[$i];
 
                 // If stopped at /, check if it's a comment start (/*)
-                if ($c === '/') {
-                    if (($css[$i + 1] ?? '') === '*') {
+                if ($c === "/") {
+                    if (($css[$i + 1] ?? "") === "*") {
                         break; // Comment start detected, let main loop handle it
                     }
                     $i++; // Consume / as part of the word/identifier (e.g. url(/img.png))
@@ -448,28 +474,37 @@ final class MinifyCSS extends AbstractCacheDriver
             }
 
             $val = substr($css, $start, $i - $start);
-            yield ['type' => self::T_WORD, 'value' => $val];
+            yield ["type" => self::T_WORD, "value" => $val];
         }
     }
 
-    private function needsSpace(array $prev, array $curr, bool $inCalc, ?string $lastClosedFunc = null, ?array $prevPrevToken = null, bool $whitespaceSkipped = false): bool
-    {
+    private function needsSpace(
+        array $prev,
+        array $curr,
+        bool $inCalc,
+        ?string $lastClosedFunc = null,
+        ?array $prevPrevToken = null,
+        bool $whitespaceSkipped = false,
+    ): bool {
         // 1. Inside calc(), spaces are REQUIRED around + and - operators
         if ($inCalc) {
-            $val = $curr['value'];
-            $pVal = $prev['value'];
-            if ($val === '+' || $val === '-')
+            $val = $curr["value"];
+            $pVal = $prev["value"];
+            if ($val === "+" || $val === "-") {
                 return true;
-            if ($pVal === '+' || $pVal === '-')
+            }
+            if ($pVal === "+" || $pVal === "-") {
                 return true;
+            }
         }
 
-        $t1 = $prev['type'];
-        $t2 = $curr['type'];
+        $t1 = $prev["type"];
+        $t2 = $curr["type"];
 
         // 2. Word + Word (margin: 10px 20px)
-        if ($t1 === self::T_WORD && $t2 === self::T_WORD)
+        if ($t1 === self::T_WORD && $t2 === self::T_WORD) {
             return true;
+        }
 
         // 3. Variable/Function fusion fix
         if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
@@ -481,7 +516,10 @@ final class MinifyCSS extends AbstractCacheDriver
             // If NO whitespace was skipped, check if we need to force space
 
             // Selector pseudo-classes
-            if ($lastClosedFunc && isset(self::SELECTOR_PSEUDOS[$lastClosedFunc])) {
+            if (
+                $lastClosedFunc &&
+                isset(self::SELECTOR_PSEUDOS[$lastClosedFunc])
+            ) {
                 // In selector context, no input space means chained selector.
                 // Do NOT insert space.
                 return false;
@@ -494,10 +532,14 @@ final class MinifyCSS extends AbstractCacheDriver
 
         // 4. Media Query "and ("
         if ($t1 === self::T_WORD && $t2 === self::T_PAREN_OPEN) {
-            $kw = strtolower($prev['value']);
-            if ($kw === 'and' || $kw === 'or' || $kw === 'not') {
+            $kw = strtolower($prev["value"]);
+            if ($kw === "and" || $kw === "or" || $kw === "not") {
                 // Check if this is a pseudo-class like :not(
-                if ($kw === 'not' && $prevPrevToken && $prevPrevToken['type'] === self::T_COLON) {
+                if (
+                    $kw === "not" &&
+                    $prevPrevToken &&
+                    $prevPrevToken["type"] === self::T_COLON
+                ) {
                     return false;
                 }
                 return true;
@@ -509,59 +551,83 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function optimizeZeroUnits(string $val): string
     {
-        if (!str_starts_with($val, '0'))
+        if (!str_starts_with($val, "0")) {
             return $val;
+        }
         if (preg_match('/^0([a-z%]+)$/i', $val, $matches)) {
             $unit = strtolower($matches[1]);
             // Protected units
-            if (isset(self::PRESERVED_UNITS[$unit]))
+            if (isset(self::PRESERVED_UNITS[$unit])) {
                 return $val;
-            return '0';
+            }
+            return "0";
         }
         return $val;
     }
 
     private function compressHex(string $val): string
     {
-        if (empty($val) || $val[0] !== '#')
+        if (empty($val) || $val[0] !== "#") {
             return $val;
+        }
         $len = strlen($val);
         $val = strtolower($val);
 
-        if ($len === 7) { // #aabbcc
-            if ($val[1] === $val[2] && $val[3] === $val[4] && $val[5] === $val[6]) {
-                return '#' . $val[1] . $val[3] . $val[5];
+        if ($len === 7) {
+            // #aabbcc
+            if (
+                $val[1] === $val[2] &&
+                $val[3] === $val[4] &&
+                $val[5] === $val[6]
+            ) {
+                return "#" . $val[1] . $val[3] . $val[5];
             }
-        } elseif ($len === 9) { // #aabbccdd
-            if ($val[1] === $val[2] && $val[3] === $val[4] && $val[5] === $val[6] && $val[7] === $val[8]) {
-                return '#' . $val[1] . $val[3] . $val[5] . $val[7];
+        } elseif ($len === 9) {
+            // #aabbccdd
+            if (
+                $val[1] === $val[2] &&
+                $val[3] === $val[4] &&
+                $val[5] === $val[6] &&
+                $val[7] === $val[8]
+            ) {
+                return "#" . $val[1] . $val[3] . $val[5] . $val[7];
             }
         }
         return $val;
     }
 
     // Helpers
-    private function shouldProcessStyle($style, string $handle, array $excluded_css): bool
-    {
-        if (!isset($style->src) || empty($style->src))
+    private function shouldProcessStyle(
+        $style,
+        string $handle,
+        array $excluded_css,
+    ): bool {
+        if (!isset($style->src) || empty($style->src)) {
             return false;
+        }
         $src = $style->src;
-        return strpos($src, '.min.css') === false
-            && strpos($src, '//') !== 0
-            && strpos($src, site_url()) !== false
-            && !in_array($handle, $excluded_css)
-            && !$this->isExcluded($src, $excluded_css);
+        return strpos($src, ".min.css") === false &&
+            strpos($src, "//") !== 0 &&
+            strpos($src, site_url()) !== false &&
+            !in_array($handle, $excluded_css) &&
+            !$this->isExcluded($src, $excluded_css);
     }
 
     private function getSourcePath($style): ?string
     {
-        if (!isset($style->src))
+        if (!isset($style->src)) {
             return null;
+        }
         $src = $style->src;
-        if (strpos($src, 'http') !== 0)
+        if (strpos($src, "http") !== 0) {
             $src = site_url($src);
+        }
 
-        $path = str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
+        $path = str_replace(
+            [site_url(), "wp-content"],
+            [ABSPATH, "wp-content"],
+            $src,
+        );
 
         // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
         $realPath = realpath($path);
@@ -570,7 +636,7 @@ final class MinifyCSS extends AbstractCacheDriver
         }
 
         // Sentinel Fix: Ensure strictly CSS extension
-        if (pathinfo($realPath, PATHINFO_EXTENSION) !== 'css') {
+        if (pathinfo($realPath, PATHINFO_EXTENSION) !== "css") {
             return null;
         }
 
@@ -579,22 +645,24 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function updateStyleRegistration($style, string $cache_file): void
     {
-        if (!isset($style->src))
+        if (!isset($style->src)) {
             return;
-        $style->src = str_replace(ABSPATH, site_url('/'), $cache_file);
+        }
+        $style->src = str_replace(ABSPATH, site_url("/"), $cache_file);
         $style->ver = filemtime($cache_file);
     }
 
     private function getCacheFile(string $key): string
     {
-        return $this->cache_dir . $key . '.css';
+        return $this->cache_dir . $key . ".css";
     }
 
     private function isExcluded(string $url, array $excluded_patterns): bool
     {
         foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url))
+            if (fnmatch($pattern, $url)) {
                 return true;
+            }
         }
         return false;
     }
