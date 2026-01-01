@@ -17,3 +17,8 @@
 **Vulnerability:** The settings export functionality (`ImportExportTools::exportSettings`) dumped the entire `wpsc_settings` array, including the `redis_password` field, to a JSON file. This could lead to accidental leakage of database credentials if the export file was shared (e.g., for support or debugging).
 **Learning:** Generic "export all settings" functions often overlook sensitive fields. Developers tend to trust "admin-only" features, but data often leaves the secure boundary (the server) via files.
 **Prevention:** Implement an explicit "allowlist" for exportable fields or a "denylist" for sensitive ones. Always scrub sensitive data (passwords, keys, salts) from export payloads unless there is a specific, secure mechanism to handle them (e.g., encryption).
+
+## 2024-05-27 - Security Headers Missing in Static Cache
+**Vulnerability:** When serving cached HTML files via `.htaccess` (mod_rewrite), the web server bypasses PHP entirely. This means security headers (like `X-Frame-Options`, `X-Content-Type-Options`) added by WordPress or plugins in PHP are NOT sent to the client, leaving the static versions of the site vulnerable to clickjacking and MIME sniffing.
+**Learning:** Performance optimizations that bypass the application layer (PHP) also bypass application-layer security controls.
+**Prevention:** Explicitly configure the web server (Apache/Nginx) to send critical security headers for static assets. In Apache, use `Header set` within `<FilesMatch>` directives in the `.htaccess` file generated for the cache.

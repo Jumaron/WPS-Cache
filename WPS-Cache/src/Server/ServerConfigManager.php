@@ -121,6 +121,10 @@ RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
         Header set Content-Type "text/html; charset=UTF-8"
         Header set Cache-Control "max-age=3600, public"
         Header set X-WPS-Cache "HIT"
+        # Sentinel: Security Headers for static content
+        Header set X-Content-Type-Options "nosniff"
+        Header set X-Frame-Options "SAMEORIGIN"
+        Header set Referrer-Policy "strict-origin-when-cross-origin"
     </FilesMatch>
 </IfModule>
 # END WPS Cache
