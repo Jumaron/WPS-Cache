@@ -5,15 +5,21 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Tools;
 
 /**
- * Handles Maintenance Tools with SOTA "Queue & Worker" Preloading.
+ * Handles Maintenance Tools, Object Cache Installation, and Preloading.
  */
 class ToolsManager
 {
+    private const OBJECT_CACHE_TEMPLATE = 'object-cache.php';
+
     public function __construct()
     {
-        // Register AJAX handlers for the Queue System
+        // Preloader AJAX
         add_action('wp_ajax_wpsc_get_preload_urls', [$this, 'handleGetUrls']);
         add_action('wp_ajax_wpsc_process_preload_url', [$this, 'handleProcessUrl']);
+
+        // Object Cache Handling (POST Actions)
+        add_action('admin_post_wpsc_install_object_cache', [$this, 'handleInstallObjectCache']);
+        add_action('admin_post_wpsc_remove_object_cache', [$this, 'handleRemoveObjectCache']);
     }
 
     /**
@@ -21,7 +27,46 @@ class ToolsManager
      */
     public function render(): void
     {
+        $object_cache_installed = file_exists(WP_CONTENT_DIR . '/object-cache.php');
 ?>
+        <!-- Object Cache Management -->
+        <div class="wpsc-card">
+            <div class="wpsc-card-header">
+                <h2>Object Cache Drop-in</h2>
+            </div>
+            <div class="wpsc-card-body">
+                <p class="wpsc-setting-desc">
+                    The Redis Object Cache requires a drop-in file (<code>object-cache.php</code>) in your <code>wp-content</code> directory.
+                </p>
+
+                <div style="margin-top: 15px;">
+                    <?php if ($object_cache_installed): ?>
+                        <div class="wpsc-notice success" style="display:inline-flex; margin-bottom: 15px;">
+                            <span class="dashicons dashicons-yes" style="margin-right:8px;"></span> Installed & Active
+                        </div>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                            <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
+                            <input type="hidden" name="action" value="wpsc_remove_object_cache">
+                            <button type="submit" class="button wpsc-btn-secondary" style="color: var(--wpsc-danger); border-color: var(--wpsc-danger);">
+                                Uninstall Drop-in
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <div class="wpsc-notice warning" style="display:inline-flex; margin-bottom: 15px;">
+                            <span class="dashicons dashicons-warning" style="margin-right:8px;"></span> Not Installed
+                        </div>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                            <?php wp_nonce_field('wpsc_install_object_cache'); ?>
+                            <input type="hidden" name="action" value="wpsc_install_object_cache">
+                            <button type="submit" class="button button-primary wpsc-btn-primary">
+                                Install Drop-in
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
         <!-- Preloader Tool -->
         <div class="wpsc-card">
             <div class="wpsc-card-header">
@@ -47,19 +92,69 @@ class ToolsManager
             </div>
         </div>
 
-        <!-- Debug Info -->
+        <!-- System Status -->
         <div class="wpsc-card">
             <div class="wpsc-card-header">
                 <h2>System Status</h2>
-                <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-system-status">
-                    <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy Report
-                </button>
             </div>
             <div class="wpsc-card-body">
-                <textarea id="wpsc-system-status" readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
             </div>
         </div>
 <?php
+    }
+
+    /**
+     * Handles Object Cache Installation
+     */
+    public function handleInstallObjectCache(): void
+    {
+        check_admin_referer('wpsc_install_object_cache');
+        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+
+        $source = WPSC_PLUGIN_DIR . 'includes/' . self::OBJECT_CACHE_TEMPLATE;
+        $destination = WP_CONTENT_DIR . '/object-cache.php';
+
+        if (file_exists($destination)) {
+            $this->redirectWithNotice('Drop-in already exists.', 'error');
+            return;
+        }
+
+        if (@copy($source, $destination)) {
+            // Fix permissions if WP_Filesystem is needed
+            @chmod($destination, 0644);
+            $this->redirectWithNotice('Object Cache Drop-in installed successfully.', 'success');
+        } else {
+            $this->redirectWithNotice('Failed to copy object-cache.php. Check permissions.', 'error');
+        }
+    }
+
+    /**
+     * Handles Object Cache Removal
+     */
+    public function handleRemoveObjectCache(): void
+    {
+        check_admin_referer('wpsc_remove_object_cache');
+        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+
+        $file = WP_CONTENT_DIR . '/object-cache.php';
+
+        if (file_exists($file)) {
+            @unlink($file);
+            wp_cache_flush(); // Clear memory cache
+            $this->redirectWithNotice('Object Cache Drop-in removed.', 'success');
+        } else {
+            $this->redirectWithNotice('File does not exist.', 'warning');
+        }
+    }
+
+    private function redirectWithNotice(string $message, string $type): void
+    {
+        // Simple notice implementation relying on transient or query arg
+        // Ideally use NoticeManager, but keeping dependencies light here.
+        set_transient('wpsc_admin_notices', [['message' => $message, 'type' => $type]], 60);
+        wp_redirect(remove_query_arg(['action', '_wpnonce'], wp_get_referer()));
+        exit;
     }
 
     /**
@@ -70,7 +165,6 @@ class ToolsManager
         check_ajax_referer('wpsc_ajax_nonce');
         if (!current_user_can('manage_options')) wp_send_json_error();
 
-        // SOTA: Efficiently query IDs only to save memory
         $post_types = ['page', 'post'];
         if (class_exists('WooCommerce')) {
             $post_types[] = 'product';
@@ -79,7 +173,7 @@ class ToolsManager
         $query = new \WP_Query([
             'post_type'      => $post_types,
             'post_status'    => 'publish',
-            'posts_per_page' => 200, // Limit for safety
+            'posts_per_page' => 200,
             'fields'         => 'ids',
             'no_found_rows'  => true,
             'update_post_meta_cache' => false,
@@ -87,7 +181,7 @@ class ToolsManager
         ]);
 
         $urls = [];
-        $urls[home_url('/')] = true; // Always preload home
+        $urls[home_url('/')] = true;
 
         foreach ($query->posts as $id) {
             $link = get_permalink($id);
@@ -108,14 +202,10 @@ class ToolsManager
         $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
         if (empty($url)) wp_send_json_error('No URL provided');
 
-        // Sentinel: Restrict preloader to local site only to prevent SSRF
-        // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
         if (!str_starts_with($url, home_url('/'))) {
             wp_send_json_error('External URLs are not allowed');
         }
 
-        // Perform the request
-        // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
         $response = wp_safe_remote_get($url, [
             'timeout'   => 10,
             'blocking'  => true,

@@ -8,7 +8,8 @@ use WPSCache\Cache\CacheManager;
 use WPSCache\Admin\Settings\SettingsManager;
 use WPSCache\Admin\UI\TabManager;
 use WPSCache\Admin\UI\NoticeManager;
-use WPSCache\Admin\Tools\ToolsManager; // Import ToolsManager
+use WPSCache\Admin\Tools\ToolsManager;
+use WPSCache\Admin\Analytics\AnalyticsManager;
 
 final class AdminPanelManager
 {
@@ -16,15 +17,19 @@ final class AdminPanelManager
     private SettingsManager $settingsManager;
     private TabManager $tabManager;
     private NoticeManager $noticeManager;
-    private ToolsManager $toolsManager; // Add Property
+    private ToolsManager $toolsManager;
+    private AnalyticsManager $analyticsManager;
 
     public function __construct(CacheManager $cacheManager)
     {
         $this->cacheManager = $cacheManager;
+
+        // Initialize Admin Sub-Controllers
         $this->settingsManager = new SettingsManager($cacheManager);
         $this->tabManager = new TabManager();
         $this->noticeManager = new NoticeManager();
-        $this->toolsManager = new ToolsManager(); // Initialize Controller
+        $this->toolsManager = new ToolsManager();
+        $this->analyticsManager = new AnalyticsManager($cacheManager);
 
         $this->initializeHooks();
     }
@@ -35,9 +40,6 @@ final class AdminPanelManager
         add_action('admin_bar_menu', [$this, 'registerAdminBarNode'], 99);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_post_wpsc_clear_cache', [$this, 'handleManualClear']);
-
-        // Register AJAX hooks from sub-managers (Analytics is handled in its own class usually, but Tools needs explicit init)
-        // ToolsManager hooks are registered in its __construct, which we just called.
     }
 
     public function registerAdminMenu(): void
@@ -150,10 +152,10 @@ final class AdminPanelManager
                                 $this->settingsManager->renderAdvancedTab();
                                 break;
                             case 'tools':
-                                $this->toolsManager->render(); // Use the instantiated property
+                                $this->toolsManager->render();
                                 break;
                             case 'analytics':
-                                (new \WPSCache\Admin\Analytics\AnalyticsManager($this->cacheManager))->render();
+                                $this->analyticsManager->render();
                                 break;
                             default:
                                 $this->settingsManager->renderDashboardTab();

@@ -53,6 +53,9 @@ class SettingsValidator
             }
         }
 
+        // FIXED: Fire action so ServerConfigManager and CronManager know settings changed
+        do_action('wpscac_settings_updated', $clean);
+
         return $clean;
     }
 
