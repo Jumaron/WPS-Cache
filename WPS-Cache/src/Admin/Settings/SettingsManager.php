@@ -163,17 +163,16 @@ class SettingsManager
             },
         );
 
-        // NEW: Compatibility Card
+        // UPDATED: Compatibility Card
         if (class_exists("WooCommerce")) {
             $this->renderer->renderCard(
                 "eCommerce Compatibility",
-                "Automatic detection enabled.",
+                "Ensure shop functionality works correctly.",
                 function () use ($settings) {
-                    // Read-only toggle or just an info toggle
                     $this->renderer->renderToggle(
                         "woo_support",
                         "WooCommerce Optimization",
-                        "Automatically excludes Cart, Checkout, and My Account. Bypasses cache when items are in cart.",
+                        "Excludes Cart, Checkout, and Account pages. Disables caching when items are in the cart.",
                         $settings,
                     );
                 },

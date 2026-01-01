@@ -28,16 +28,23 @@ class CommerceManager
      */
     public function shouldBypass(): bool
     {
+        // 1. Guard: Check if the user explicitly disabled support
+        // We default to true in Plugin.php, so this handles the "ON by default" requirement.
+        if (empty($this->settings["woo_support"])) {
+            return false; // Compatibility OFF -> Allow Caching (User assumes risk)
+        }
+
+        // 2. Check if Woo is actually active
         if (!$this->isWooActive) {
             return false;
         }
 
-        // 1. Check if we are on a sensitive page
+        // 3. Check if we are on a sensitive page (Cart/Checkout/Account)
         if ($this->isSensitivePage()) {
             return true;
         }
 
-        // 2. Check cookies (Items in cart)
+        // 4. Check cookies (Items in cart)
         if ($this->hasActiveSession()) {
             return true;
         }
@@ -47,11 +54,7 @@ class CommerceManager
 
     private function isSensitivePage(): bool
     {
-        // We rely on standard WP conditionals.
-        // Note: These functions (is_cart, etc.) might not be available early in the boot process
-        // depending on when caching triggers. However, our HTMLCache uses output buffering
-        // which runs AFTER WP has loaded queries, so these functions are safe to use.
-
+        // Standard Woo conditionals
         if (function_exists("is_cart") && is_cart()) {
             return true;
         }
@@ -62,7 +65,7 @@ class CommerceManager
             return true;
         }
 
-        // Also check URL endpoints just in case
+        // API endpoints
         $uri = $_SERVER["REQUEST_URI"] ?? "";
         if (strpos($uri, "/wc-api/") !== false) {
             return true;
@@ -81,13 +84,10 @@ class CommerceManager
             return true;
         }
 
-        // Bypass if user has just reset password or other session events
+        // Check for specific session cookies that indicate dynamic state
         foreach ($_COOKIE as $key => $val) {
             if (str_starts_with($key, "wp_woocommerce_session_")) {
-                // We typically don't bypass just for having a session (browsing),
-                // but strictly for cart items.
-                // However, strictly checking items_in_cart is usually sufficient for performance.
-                break;
+                return true;
             }
         }
 
