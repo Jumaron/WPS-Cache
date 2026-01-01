@@ -6,7 +6,6 @@ namespace WPSCache\Cache\Drivers;
 
 use DOMDocument;
 use WPSCache\Optimization\JSOptimizer;
-use WPSCache\Optimization\AsyncCSS;
 use WPSCache\Optimization\MediaOptimizer;
 use WPSCache\Optimization\FontOptimizer;
 use WPSCache\Optimization\CdnManager;
@@ -22,7 +21,6 @@ final class HTMLCache extends AbstractCacheDriver
     private const BYPASS_PARAMS = ["add-to-cart", "wp_nonce", "preview", "s"];
 
     // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
-    // This prevents the "purify.min.js.map/index.html" bug.
     private const IGNORED_EXTENSIONS = [
         "xml",
         "json",
@@ -90,8 +88,7 @@ final class HTMLCache extends AbstractCacheDriver
             return false;
         }
 
-        // 1. EXTENSION GUARD (The Fix)
-        // If the URL looks like a file, never cache it as HTML.
+        // 1. EXTENSION GUARD
         $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         if (in_array($ext, self::IGNORED_EXTENSIONS, true)) {
@@ -128,12 +125,10 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         // --- PHASE 1: DOM MANIPULATION (Robust & Safe) ---
-
         $useDomPipeline =
             !empty($this->settings["remove_unused_css"]) ||
             !empty($this->settings["js_delay"]) ||
-            !empty($this->settings["js_defer"]) ||
-            !empty($this->settings["css_async"]);
+            !empty($this->settings["js_defer"]);
 
         $content = $buffer;
 
@@ -147,7 +142,7 @@ final class HTMLCache extends AbstractCacheDriver
             );
             libxml_clear_errors();
 
-            // 1. Remove Unused CSS
+            // 1. Remove Unused CSS (DOM)
             if (!empty($this->settings["remove_unused_css"])) {
                 try {
                     $cssShaker = new CriticalCSSManager($this->settings);
@@ -156,7 +151,7 @@ final class HTMLCache extends AbstractCacheDriver
                 }
             }
 
-            // 2. JS Optimization (Delay/Defer)
+            // 2. JS Optimization (Delay/Defer - DOM)
             if (
                 !empty($this->settings["js_delay"]) ||
                 !empty($this->settings["js_defer"])
@@ -168,36 +163,27 @@ final class HTMLCache extends AbstractCacheDriver
                 }
             }
 
-            // 3. Async CSS (DOM Based - Safe)
-            if (!empty($this->settings["css_async"])) {
-                try {
-                    $cssOpt = new AsyncCSS($this->settings);
-                    $cssOpt->processDom($dom);
-                } catch (\Throwable $e) {
-                }
-            }
-
             $content = $dom->saveHTML();
             $content = str_replace('<?xml encoding="utf-8" ?>', "", $content);
         }
 
         // --- PHASE 2: STRING/REGEX MANIPULATION ---
 
-        // 4. CDN Rewrite
+        // 3. CDN Rewrite
         try {
             $cdnManager = new CdnManager($this->settings);
             $content = $cdnManager->process($content);
         } catch (\Throwable $e) {
         }
 
-        // 5. Font Optimization
+        // 4. Font Optimization
         try {
             $fontOpt = new FontOptimizer($this->settings);
             $content = $fontOpt->process($content);
         } catch (\Throwable $e) {
         }
 
-        // 6. Media Optimization
+        // 5. Media Optimization
         try {
             $mediaOpt = new MediaOptimizer($this->settings);
             $content = $mediaOpt->process($content);

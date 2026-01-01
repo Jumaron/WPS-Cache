@@ -28,8 +28,7 @@ final class Plugin
         "redis_cache" => false,
         "varnish_cache" => false,
         "css_minify" => false,
-        "css_async" => false,
-        "remove_unused_css" => false, // New Setting
+        "remove_unused_css" => false,
         "js_minify" => false,
         "js_defer" => false,
         "js_delay" => false,

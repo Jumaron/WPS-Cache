@@ -391,12 +391,6 @@ class SettingsManager
                     $settings,
                 );
                 $this->renderer->renderToggle(
-                    "css_async",
-                    "Async CSS",
-                    "Load non-critical CSS later.",
-                    $settings,
-                );
-                $this->renderer->renderToggle(
                     "remove_unused_css",
                     "Remove Unused CSS",
                     "Automatically strip unused rules (Inline Styles & Theme). SOTA Tree Shaking.",
