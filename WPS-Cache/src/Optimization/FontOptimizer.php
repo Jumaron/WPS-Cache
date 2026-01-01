@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace WPSCache\Optimization;
 
 /**
- * SOTA Font Optimization (WP 6.9+ Ready).
+ * SOTA Font Optimization.
  *
  * Features:
  * 1. Localize Legacy Google Fonts (Downloads & Caches WOFF2).
- * 2. Enforces 'font-display: swap' on ALL fonts (Native & Legacy).
- * 3. Preloads Critical Fonts.
+ * 2. Enforces 'font-display: swap' on ALL fonts.
+ * 3. Handles Unicode Ranges correctly (prevents duplicates).
+ * 4. Canonicalizes URLs to prevent cache bloat from ?ver= parameters.
  */
 class FontOptimizer
 {
@@ -40,9 +41,8 @@ class FontOptimizer
             );
         }
 
-        // 2. Force 'font-display: swap' (Universal - covers WP Font Library too)
+        // 2. Force 'font-display: swap' (Universal)
         if (!empty($this->settings["font_display_swap"])) {
-            // This regex finds @font-face blocks in inline <style> tags and injects swap if missing
             $html = preg_replace_callback(
                 "/@font-face\s*{([^}]+)}/i",
                 function ($matches) {
@@ -62,17 +62,19 @@ class FontOptimizer
     }
 
     /**
-     * Downloads Google Fonts CSS, parses it, downloads WOFF2 files,
-     * and returns an inline <style> block.
+     * Downloads Google Fonts CSS, parses it, downloads WOFF2 files.
      */
     private function localizeGoogleFont(array $matches): string
     {
         $originalTag = $matches[0];
-        $url = html_entity_decode($matches[1]);
+        $rawUrl = html_entity_decode($matches[1]);
 
-        // Create a cache ID based on the URL
-        $cacheFile = $this->fontCacheDir . md5($url) . ".css";
-        $cacheUrl = $this->fontCacheUrl . md5($url) . ".css";
+        // SOTA: Canonicalize URL to prevent duplicates (remove ver, sort params)
+        $url = $this->canonicalizeUrl($rawUrl);
+
+        // Create a cache ID based on the CLEAN URL
+        $cacheFilename = md5($url) . ".css";
+        $cacheFile = $this->fontCacheDir . $cacheFilename;
 
         if (file_exists($cacheFile)) {
             $css = file_get_contents($cacheFile);
@@ -80,22 +82,25 @@ class FontOptimizer
             $css = $this->downloadAndProcessFont($url);
             if (!$css) {
                 return $originalTag;
-            } // Fallback on failure
+            }
             file_put_contents($cacheFile, $css);
         }
 
-        // Return inline CSS (fastest) or linked CSS
-        // SOTA: For fonts, inline the @font-face definitions to prevent render blocking of the CSS request
-        return sprintf('<style id="wpsc-local-font">%s</style>', $css);
+        // Return inline CSS to prevent render blocking
+        return sprintf(
+            '<style id="wpsc-local-font-%s">%s</style>',
+            substr($cacheFilename, 0, 8),
+            $css,
+        );
     }
 
     private function downloadAndProcessFont(string $apiUrl): ?string
     {
-        // 1. Fetch CSS from Google (Masquerading as Modern Chrome to get WOFF2)
+        // Fetch CSS masquerading as Chrome to get WOFF2 (Modern Format)
         $response = wp_safe_remote_get($apiUrl, [
             "user-agent" =>
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "timeout" => 10,
+            "timeout" => 15, // Increased timeout for font processing
         ]);
 
         if (is_wp_error($response)) {
@@ -106,8 +111,8 @@ class FontOptimizer
             return null;
         }
 
-        // 2. Extract Font URLs (.woff2)
-        // Regex to find: url(https://...woff2)
+        // Extract and Download Font URLs
+        // Regex handles query strings inside url(...) if present
         $css = preg_replace_callback(
             "/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/",
             function ($m) {
@@ -117,7 +122,7 @@ class FontOptimizer
             $css,
         );
 
-        // 3. Ensure display:swap is present in the downloaded CSS
+        // Ensure display:swap
         if (!empty($this->settings["font_display_swap"])) {
             $css = str_replace("}", ";font-display:swap;}", $css);
         }
@@ -127,7 +132,14 @@ class FontOptimizer
 
     private function downloadFontFile(string $url): string
     {
-        $filename = basename(parse_url($url, PHP_URL_PATH));
+        // SOTA: Use MD5 of the URL for the filename.
+        // This ensures uniqueness even if Google serves different files with same basename,
+        // and handles query strings in font URLs safely.
+        $ext =
+            pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?:
+            "woff2";
+        $filename = md5($url) . "." . $ext;
+
         $localPath = $this->fontCacheDir . $filename;
         $localUrl = $this->fontCacheUrl . $filename;
 
@@ -142,5 +154,37 @@ class FontOptimizer
         }
 
         return $localUrl;
+    }
+
+    /**
+     * Cleans Google Font URLs to ensure single cache file per unique font request.
+     */
+    private function canonicalizeUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!isset($parts["query"])) {
+            return $url;
+        }
+
+        parse_str($parts["query"], $params);
+
+        // Remove cache-busting parameters often added by WP themes
+        unset(
+            $params["ver"],
+            $params["version"],
+            $params["timestamp"],
+            $params["time"],
+        );
+
+        // Sort parameters to ensure ?family=A&display=swap == ?display=swap&family=A
+        ksort($params);
+
+        // Rebuild URL
+        $scheme = isset($parts["scheme"]) ? $parts["scheme"] . "://" : "//";
+        $host = $parts["host"] ?? "";
+        $path = $parts["path"] ?? "";
+        $query = http_build_query($params);
+
+        return $scheme . $host . $path . "?" . $query;
     }
 }
