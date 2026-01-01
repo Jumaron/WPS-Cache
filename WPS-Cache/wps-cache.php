@@ -34,8 +34,8 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
 
 // 2. Constants Definition (Early binding)
 const VERSION = '0.0.3';
-const FILE    = __FILE__;
-const DIR     = __DIR__;
+const FILE = __FILE__;
+const DIR = __DIR__;
 
 // 3. PSR-4 Compliant Autoloader
 spl_autoload_register(function (string $class): void {

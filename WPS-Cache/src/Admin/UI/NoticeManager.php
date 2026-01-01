@@ -8,14 +8,16 @@ class NoticeManager
 {
     private const TRANSIENT_KEY = 'wpsc_admin_notices';
 
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 
     public function add(string $message, string $type = 'success'): void
     {
         $notices = get_transient(self::TRANSIENT_KEY) ?: [];
         $notices[] = [
             'message' => $message,
-            'type'    => $type
+            'type' => $type
         ];
         set_transient(self::TRANSIENT_KEY, $notices, 60);
     }
@@ -45,18 +47,19 @@ class NoticeManager
                 default => 'dashicons-yes-alt'
             };
 
-?>
+            ?>
             <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>">
                 <div class="wpsc-notice-content">
                     <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
                     <span><?php echo wp_kses_post($notice['message']); ?></span>
                 </div>
                 <!-- Custom Dismiss Button (No WP Core classes) -->
-                <button type="button" class="wpsc-dismiss-btn" onclick="this.closest('.wpsc-notice').remove()" aria-label="<?php echo esc_attr__('Dismiss this notice', 'wps-cache'); ?>">
+                <button type="button" class="wpsc-dismiss-btn" onclick="this.closest('.wpsc-notice').remove()"
+                    aria-label="<?php echo esc_attr__('Dismiss this notice', 'wps-cache'); ?>">
                     <span class="dashicons dashicons-dismiss"></span>
                 </button>
             </div>
-<?php
+            <?php
         }
 
         echo '</div>';

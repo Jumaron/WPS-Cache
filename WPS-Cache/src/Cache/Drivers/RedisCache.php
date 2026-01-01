@@ -58,7 +58,7 @@ final class RedisCache extends AbstractCacheDriver
             // Sentinel Fix: Use DB credentials to generate a consistent, site-specific salt.
             // This prevents using the hardcoded fallback which is publicly known.
             // We use constants available in wp-config.php which is loaded before plugins.
-            $secret  = (defined('DB_NAME') ? DB_NAME : '');
+            $secret = (defined('DB_NAME') ? DB_NAME : '');
             $secret .= (defined('DB_USER') ? DB_USER : '');
             $secret .= (defined('DB_PASSWORD') ? DB_PASSWORD : '');
 
@@ -128,10 +128,12 @@ final class RedisCache extends AbstractCacheDriver
 
     public function get(string $key): mixed
     {
-        if (!$this->redis) return null;
+        if (!$this->redis)
+            return null;
         try {
             $result = $this->redis->get($key);
-            if ($result === false) return null;
+            if ($result === false)
+                return null;
 
             // Sentinel: Verify signature and unserialize
             // Returns [success, value] to strictly distinguish between valid 'false' value and error.
@@ -149,7 +151,8 @@ final class RedisCache extends AbstractCacheDriver
 
     public function set(string $key, mixed $value, int $ttl = 3600): void
     {
-        if (!$this->redis) return;
+        if (!$this->redis)
+            return;
         try {
             // Sentinel: Serialize and sign all values to preserve types and ensure security
             $value = $this->maybeSerialize($value);
@@ -166,7 +169,8 @@ final class RedisCache extends AbstractCacheDriver
 
     public function delete(string $key): void
     {
-        if (!$this->redis) return;
+        if (!$this->redis)
+            return;
         try {
             if (method_exists($this->redis, 'unlink')) {
                 $this->redis->unlink($key);

@@ -66,7 +66,7 @@ class SettingsValidator
 
         switch ($type) {
             case 'boolean':
-                return (string)$value === '1';
+                return (string) $value === '1';
 
             case 'integer':
                 // Apply specific ranges for known keys
@@ -80,7 +80,7 @@ class SettingsValidator
 
             default:
                 // Fallback for unknown types (shouldn't happen with strict typing in Plugin)
-                return sanitize_text_field((string)$value);
+                return sanitize_text_field((string) $value);
         }
     }
 
@@ -118,7 +118,7 @@ class SettingsValidator
 
     private function sanitizeString(string $key, mixed $value): string
     {
-        $val = (string)$value;
+        $val = (string) $value;
 
         if ($key === 'redis_host' || $key === 'varnish_host') {
             return $this->sanitizeHost($val);

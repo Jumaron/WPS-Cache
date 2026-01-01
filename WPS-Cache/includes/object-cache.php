@@ -56,7 +56,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             if (!defined($env) && ($value = getenv($env))) {
                 $value = match ($config['type']) {
                     'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
-                    'int' => (int)$value,
+                    'int' => (int) $value,
                     default => $value,
                 };
                 define($env, $value);
@@ -423,7 +423,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 $this->salt = NONCE_KEY;
             } else {
                 // Sentinel Fix: Use DB credentials for consistent salt when keys are missing.
-                $secret  = (defined('DB_NAME') ? DB_NAME : '');
+                $secret = (defined('DB_NAME') ? DB_NAME : '');
                 $secret .= (defined('DB_USER') ? DB_USER : '');
                 $secret .= (defined('DB_PASSWORD') ? DB_PASSWORD : '');
                 $this->salt = hash('sha256', $secret ?: uniqid('wpsc_', true));
@@ -432,7 +432,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             // Pre-compute key prefixes
             $prefix = defined('WP_REDIS_PREFIX') ? WP_REDIS_PREFIX : '';
             $this->globalKeyPrefix = $prefix . (is_multisite() ? '' : $table_prefix);
-            $this->blogKeyPrefix = $prefix . (is_multisite() ? (string)$blog_id : $table_prefix);
+            $this->blogKeyPrefix = $prefix . (is_multisite() ? (string) $blog_id : $table_prefix);
 
             // Initialize cache configuration
             $this->setupGroups();
@@ -610,7 +610,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                     $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
                 }
 
-                return (bool)$result;
+                return (bool) $result;
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -734,7 +734,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                     $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
                 }
 
-                return (bool)$result;
+                return (bool) $result;
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -777,7 +777,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                     $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
                 }
 
-                return (bool)$result;
+                return (bool) $result;
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -804,7 +804,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
 
             try {
                 $startTime = microtime(true);
-                return (bool)$this->redis->del($derivedKey);
+                return (bool) $this->redis->del($derivedKey);
             } catch (Exception $e) {
                 $this->handleException($e);
                 return false;
@@ -872,7 +872,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 // Use selective flush if enabled
                 if (defined('WP_REDIS_SELECTIVE_FLUSH') && WP_REDIS_SELECTIVE_FLUSH) {
                     $pattern = $this->globalKeyPrefix . '*';
-                    return (bool)$this->redis->evalSha(
+                    return (bool) $this->redis->evalSha(
                         $this->flushScriptSHA1,
                         [$pattern],
                         1
@@ -918,7 +918,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 }
 
                 // Use SCAN to find and delete all keys in the group
-                $result = (bool)$this->redis->evalSha($this->flushScriptSHA1, [$pattern], 1);
+                $result = (bool) $this->redis->evalSha($this->flushScriptSHA1, [$pattern], 1);
 
                 return $result;
             } catch (Exception $e) {
@@ -1000,8 +1000,8 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function buildKey(string|int $key, string $group = 'default'): string
         {
-            $key = (string)$key;
-            $group = (string)$group;
+            $key = (string) $key;
+            $group = (string) $group;
 
             // Direct string concatenation is faster than sprintf
             $cacheKey = $group . ':' . $key;
@@ -1026,7 +1026,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function generateKey(string|int $key, string $group): string
         {
-            $key = (string)$key;
+            $key = (string) $key;
             $prefix = $this->isGlobalGroup($group) ? $this->globalKeyPrefix : $this->blogKeyPrefix;
             $derivedKey = $prefix . $this->sanitizeKey($group ?: 'default') . ':' . $this->sanitizeKey($key);
 
@@ -1111,7 +1111,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function validateExpiration(int $expiration): int
         {
-            $expiration = (int)round($expiration);
+            $expiration = (int) round($expiration);
 
             if ($expiration < 0) {
                 return 0; // Treat negative values as no expiration
@@ -1132,7 +1132,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function sanitizeKey(mixed $key): string
         {
-            return str_replace(' ', '-', (string)$key);
+            return str_replace(' ', '-', (string) $key);
         }
 
         /**
@@ -1205,7 +1205,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
          */
         private function manageGroups(string|array $groups, string $type): void
         {
-            $groups = (array)$groups;
+            $groups = (array) $groups;
             $sanitizedGroups = array_map([$this, 'sanitizeKey'], $groups);
 
             match ($type) {
@@ -1234,7 +1234,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
         public function addNonPersistentGroups(string|array $groups): void
         {
             if (function_exists('apply_filters')) {
-                $groups = apply_filters('redis_cache_add_non_persistent_groups', (array)$groups);
+                $groups = apply_filters('redis_cache_add_non_persistent_groups', (array) $groups);
             }
 
             $this->manageGroups($groups, 'ignored');
@@ -1332,10 +1332,10 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             } else {
                 $connected = $this->redis->connect(
                     $config['host'],
-                    (int)$config['port'],
-                    (float)$config['timeout'],
+                    (int) $config['port'],
+                    (float) $config['timeout'],
                     null,
-                    (int)$config['retry_interval']
+                    (int) $config['retry_interval']
                 );
             }
 
@@ -1347,12 +1347,12 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
                 $this->redis->auth($config['password']);
             }
 
-            if ((int)$config['database'] !== 0) {
-                $this->redis->select((int)$config['database']);
+            if ((int) $config['database'] !== 0) {
+                $this->redis->select((int) $config['database']);
             }
 
             // Set read timeout
-            $this->redis->setOption(\Redis::OPT_READ_TIMEOUT, (float)$config['read_timeout']);
+            $this->redis->setOption(\Redis::OPT_READ_TIMEOUT, (float) $config['read_timeout']);
         }
 
         /**
@@ -1389,7 +1389,7 @@ if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
             }
 
             $this->cache = []; // Clear in-memory cache
-            $this->blogKeyPrefix = $this->globalKeyPrefix . (string)$blog_id;
+            $this->blogKeyPrefix = $this->globalKeyPrefix . (string) $blog_id;
 
             // Reset key cache on blog switch
             self::$keyCache = [];

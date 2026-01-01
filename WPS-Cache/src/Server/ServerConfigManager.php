@@ -68,7 +68,8 @@ class ServerConfigManager
 
     private function cleanHtaccess(): void
     {
-        if (!file_exists($this->htaccessPath) || !is_writable($this->htaccessPath)) return;
+        if (!file_exists($this->htaccessPath) || !is_writable($this->htaccessPath))
+            return;
 
         $content = file_get_contents($this->htaccessPath);
         $new_content = preg_replace('/# BEGIN WPS Cache.*?# END WPS Cache\s*/s', '', $content);

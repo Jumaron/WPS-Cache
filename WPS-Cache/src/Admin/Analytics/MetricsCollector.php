@@ -30,9 +30,9 @@ class MetricsCollector
         if (empty($settings['enable_metrics'])) {
             return [
                 'timestamp' => current_time('mysql'),
-                'html'      => ['enabled' => false, 'files' => 0, 'size' => '0 B'],
-                'redis'     => ['enabled' => false],
-                'system'    => $this->getSystemStats()
+                'html' => ['enabled' => false, 'files' => 0, 'size' => '0 B'],
+                'redis' => ['enabled' => false],
+                'system' => $this->getSystemStats()
             ];
         }
 
@@ -43,9 +43,9 @@ class MetricsCollector
 
         $stats = [
             'timestamp' => current_time('mysql'),
-            'html'      => $this->getHtmlStats(),
-            'redis'     => $this->getRedisStats(),
-            'system'    => $this->getSystemStats()
+            'html' => $this->getHtmlStats(),
+            'redis' => $this->getRedisStats(),
+            'system' => $this->getSystemStats()
         ];
 
         set_transient('wpsc_stats_cache', $stats, 5 * MINUTE_IN_SECONDS);
@@ -85,8 +85,8 @@ class MetricsCollector
 
         return [
             'enabled' => (bool) get_option('wpsc_settings')['html_cache'] ?? false,
-            'files'   => $count,
-            'size'    => size_format($size),
+            'files' => $count,
+            'size' => size_format($size),
         ];
     }
 
@@ -118,13 +118,13 @@ class MetricsCollector
             $ratio = $total > 0 ? round(($hits / $total) * 100, 2) : 0;
 
             return [
-                'enabled'     => true,
-                'connected'   => true,
+                'enabled' => true,
+                'connected' => true,
                 'memory_used' => $info['used_memory_human'] ?? '0B',
-                'hit_ratio'   => $ratio, // THIS is the valid Hit Ratio (Redis Only)
-                'hits'        => $hits,
-                'misses'      => $misses,
-                'uptime'      => $info['uptime_in_days'] ?? 0
+                'hit_ratio' => $ratio, // THIS is the valid Hit Ratio (Redis Only)
+                'hits' => $hits,
+                'misses' => $misses,
+                'uptime' => $info['uptime_in_days'] ?? 0
             ];
         } catch (\Throwable $e) {
             return ['enabled' => true, 'connected' => false, 'error' => $e->getMessage()];
@@ -135,9 +135,9 @@ class MetricsCollector
     {
         return [
             'php_version' => PHP_VERSION,
-            'server'      => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'memory_limit' => ini_get('memory_limit'),
-            'max_exec'    => ini_get('max_execution_time')
+            'max_exec' => ini_get('max_execution_time')
         ];
     }
 }

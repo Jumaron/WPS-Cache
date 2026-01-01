@@ -115,7 +115,8 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
      */
     protected function recursiveDelete(string $dir): void
     {
-        if (!is_dir($dir)) return;
+        if (!is_dir($dir))
+            return;
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),

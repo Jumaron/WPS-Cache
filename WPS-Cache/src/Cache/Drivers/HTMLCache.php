@@ -45,14 +45,18 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function shouldCacheRequest(): bool
     {
-        if (empty($this->settings['html_cache'])) return false;
-        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return false;
-        if (is_user_logged_in() || is_admin()) return false;
+        if (empty($this->settings['html_cache']))
+            return false;
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET')
+            return false;
+        if (is_user_logged_in() || is_admin())
+            return false;
 
         if (!empty($_GET)) {
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
-                if (in_array($key, self::BYPASS_PARAMS, true)) return false;
+                if (in_array($key, self::BYPASS_PARAMS, true))
+                    return false;
             }
         }
 
@@ -68,7 +72,8 @@ final class HTMLCache extends AbstractCacheDriver
 
     public function processOutput(string $buffer): string
     {
-        if (empty($buffer) || http_response_code() !== 200) return $buffer;
+        if (empty($buffer) || http_response_code() !== 200)
+            return $buffer;
 
         // --- DISABLE HTML OPTIMIZATION FOR STABILITY ---
         // Elementor and other builders rely on whitespace for inline-block layout.
@@ -145,7 +150,8 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         $fullPath = $this->cacheDir . $host . $path;
-        if (substr($fullPath, -1) !== '/') $fullPath .= '/';
+        if (substr($fullPath, -1) !== '/')
+            $fullPath .= '/';
 
         $this->atomicWrite($fullPath . $filename, $content);
     }
@@ -182,12 +188,16 @@ final class HTMLCache extends AbstractCacheDriver
         return '/' . implode('/', $safeParts);
     }
 
-    public function set(string $key, mixed $value, int $ttl = 3600): void {}
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
+    }
     public function get(string $key): mixed
     {
         return null;
     }
-    public function delete(string $key): void {}
+    public function delete(string $key): void
+    {
+    }
     public function clear(): void
     {
         $this->recursiveDelete($this->cacheDir);

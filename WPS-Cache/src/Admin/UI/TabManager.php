@@ -18,32 +18,37 @@ class TabManager
         $this->tabs = [
             'dashboard' => [
                 'label' => __('Dashboard', 'wps-cache'),
-                'icon'  => 'dashicons-dashboard',
+                'icon' => 'dashicons-dashboard',
                 'order' => 10
             ],
             'cache' => [
                 'label' => __('Cache Rules', 'wps-cache'),
-                'icon'  => 'dashicons-database',
+                'icon' => 'dashicons-database',
                 'order' => 20
             ],
             'css_js' => [
                 'label' => __('File Optimization', 'wps-cache'),
-                'icon'  => 'dashicons-editor-code',
+                'icon' => 'dashicons-editor-code',
                 'order' => 30
+            ],
+            'database' => [
+                'label' => __('Database', 'wps-cache'),
+                'icon' => 'dashicons-archive',
+                'order' => 35
             ],
             'analytics' => [
                 'label' => __('Analytics', 'wps-cache'),
-                'icon'  => 'dashicons-chart-bar',
+                'icon' => 'dashicons-chart-bar',
                 'order' => 40
             ],
             'tools' => [
                 'label' => __('Tools', 'wps-cache'),
-                'icon'  => 'dashicons-admin-tools',
+                'icon' => 'dashicons-admin-tools',
                 'order' => 50
             ],
             'advanced' => [
                 'label' => __('Advanced', 'wps-cache'),
-                'icon'  => 'dashicons-admin-settings',
+                'icon' => 'dashicons-admin-settings',
                 'order' => 60
             ]
         ];
@@ -61,21 +66,18 @@ class TabManager
     public function renderSidebar(string $current): void
     {
         echo '<nav class="wpsc-nav">';
-
         foreach ($this->tabs as $key => $data) {
             $isActive = ($current === $key);
             $activeClass = $isActive ? 'active' : '';
             $ariaCurrent = $isActive ? ' aria-current="page"' : '';
             $url = add_query_arg(['page' => 'wps-cache', 'tab' => $key], admin_url('admin.php'));
-
-?>
-            <a href="<?php echo esc_url($url); ?>" class="wpsc-nav-item <?php echo esc_attr($activeClass); ?>"<?php echo $ariaCurrent; ?>>
+            ?>
+            <a href="<?php echo esc_url($url); ?>" class="wpsc-nav-item <?php echo esc_attr($activeClass); ?>" <?php echo $ariaCurrent; ?>>
                 <span class="dashicons <?php echo esc_attr($data['icon']); ?>"></span>
                 <?php echo esc_html($data['label']); ?>
             </a>
-<?php
+            <?php
         }
-
         echo '</nav>';
     }
 }

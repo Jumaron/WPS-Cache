@@ -28,7 +28,7 @@ class ToolsManager
     public function render(): void
     {
         $object_cache_installed = file_exists(WP_CONTENT_DIR . '/object-cache.php');
-?>
+        ?>
         <!-- Object Cache Management -->
         <div class="wpsc-card">
             <div class="wpsc-card-header">
@@ -36,7 +36,8 @@ class ToolsManager
             </div>
             <div class="wpsc-card-body">
                 <p class="wpsc-setting-desc">
-                    The Redis Object Cache requires a drop-in file (<code>object-cache.php</code>) in your <code>wp-content</code> directory.
+                    The Redis Object Cache requires a drop-in file (<code>object-cache.php</code>) in your
+                    <code>wp-content</code> directory.
                 </p>
 
                 <div style="margin-top: 15px;">
@@ -47,7 +48,8 @@ class ToolsManager
                         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                             <?php wp_nonce_field('wpsc_remove_object_cache'); ?>
                             <input type="hidden" name="action" value="wpsc_remove_object_cache">
-                            <button type="submit" class="button wpsc-btn-secondary" style="color: var(--wpsc-danger); border-color: var(--wpsc-danger);">
+                            <button type="submit" class="button wpsc-btn-secondary"
+                                style="color: var(--wpsc-danger); border-color: var(--wpsc-danger);">
                                 Uninstall Drop-in
                             </button>
                         </form>
@@ -78,15 +80,18 @@ class ToolsManager
                     <br><strong>Method:</strong> Client-side Queue (Prevents server timeouts).
                 </p>
 
-                <div id="wpsc-preload-progress" style="display:none; margin: 20px 0; background: #f3f4f6; padding: 15px; border-radius: 6px;">
+                <div id="wpsc-preload-progress"
+                    style="display:none; margin: 20px 0; background: #f3f4f6; padding: 15px; border-radius: 6px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 600;">
                         <span id="wpsc-preload-status" role="status" aria-live="polite">Initializing...</span>
                         <span id="wpsc-preload-percent">0%</span>
                     </div>
-                    <progress id="wpsc-preload-bar" aria-labelledby="wpsc-preload-status" value="0" max="100" style="width: 100%; height: 10px;"></progress>
+                    <progress id="wpsc-preload-bar" aria-labelledby="wpsc-preload-status" value="0" max="100"
+                        style="width: 100%; height: 10px;"></progress>
                 </div>
 
-                <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary" aria-controls="wpsc-preload-progress">
+                <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary"
+                    aria-controls="wpsc-preload-progress">
                     Start Preloading
                 </button>
             </div>
@@ -98,10 +103,11 @@ class ToolsManager
                 <h2>System Status</h2>
             </div>
             <div class="wpsc-card-body">
-                <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8" style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
+                <textarea readonly aria-label="System Status Report" class="wpsc-textarea" rows="8"
+                    style="font-family: monospace; font-size: 11px; width:100%;"><?php echo esc_textarea($this->getSystemReport()); ?></textarea>
             </div>
         </div>
-<?php
+        <?php
     }
 
     /**
@@ -110,7 +116,8 @@ class ToolsManager
     public function handleInstallObjectCache(): void
     {
         check_admin_referer('wpsc_install_object_cache');
-        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+        if (!current_user_can('manage_options'))
+            wp_die('Unauthorized');
 
         $source = WPSC_PLUGIN_DIR . 'includes/' . self::OBJECT_CACHE_TEMPLATE;
         $destination = WP_CONTENT_DIR . '/object-cache.php';
@@ -135,7 +142,8 @@ class ToolsManager
     public function handleRemoveObjectCache(): void
     {
         check_admin_referer('wpsc_remove_object_cache');
-        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+        if (!current_user_can('manage_options'))
+            wp_die('Unauthorized');
 
         $file = WP_CONTENT_DIR . '/object-cache.php';
 
@@ -163,7 +171,8 @@ class ToolsManager
     public function handleGetUrls(): void
     {
         check_ajax_referer('wpsc_ajax_nonce');
-        if (!current_user_can('manage_options')) wp_send_json_error();
+        if (!current_user_can('manage_options'))
+            wp_send_json_error();
 
         $post_types = ['page', 'post'];
         if (class_exists('WooCommerce')) {
@@ -171,11 +180,11 @@ class ToolsManager
         }
 
         $query = new \WP_Query([
-            'post_type'      => $post_types,
-            'post_status'    => 'publish',
+            'post_type' => $post_types,
+            'post_status' => 'publish',
             'posts_per_page' => 200,
-            'fields'         => 'ids',
-            'no_found_rows'  => true,
+            'fields' => 'ids',
+            'no_found_rows' => true,
             'update_post_meta_cache' => false,
             'update_post_term_cache' => false,
         ]);
@@ -185,7 +194,8 @@ class ToolsManager
 
         foreach ($query->posts as $id) {
             $link = get_permalink($id);
-            if ($link) $urls[$link] = true;
+            if ($link)
+                $urls[$link] = true;
         }
 
         wp_send_json_success(array_values(array_keys($urls)));
@@ -197,20 +207,22 @@ class ToolsManager
     public function handleProcessUrl(): void
     {
         check_ajax_referer('wpsc_ajax_nonce');
-        if (!current_user_can('manage_options')) wp_send_json_error();
+        if (!current_user_can('manage_options'))
+            wp_send_json_error();
 
         $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
-        if (empty($url)) wp_send_json_error('No URL provided');
+        if (empty($url))
+            wp_send_json_error('No URL provided');
 
         if (!str_starts_with($url, home_url('/'))) {
             wp_send_json_error('External URLs are not allowed');
         }
 
         $response = wp_safe_remote_get($url, [
-            'timeout'   => 10,
-            'blocking'  => true,
-            'cookies'   => [],
-            'headers'   => [
+            'timeout' => 10,
+            'blocking' => true,
+            'cookies' => [],
+            'headers' => [
                 'User-Agent' => 'WPS-Cache-Preloader/1.0; ' . home_url()
             ]
         ]);

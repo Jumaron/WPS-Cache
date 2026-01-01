@@ -54,10 +54,10 @@ class CronManager
 
             // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
             wp_safe_remote_get($url, [
-                'timeout'   => 5,
-                'blocking'  => true, // Wait for it to generate
-                'cookies'   => [],
-                'headers'   => ['User-Agent' => 'WPS-Cache-Cron-Preloader']
+                'timeout' => 5,
+                'blocking' => true, // Wait for it to generate
+                'cookies' => [],
+                'headers' => ['User-Agent' => 'WPS-Cache-Cron-Preloader']
             ]);
 
             // Be nice to the CPU
@@ -73,12 +73,12 @@ class CronManager
         $urls = [home_url('/')];
 
         $query = new \WP_Query([
-            'post_type'      => ['post', 'page', 'product'],
-            'post_status'    => 'publish',
+            'post_type' => ['post', 'page', 'product'],
+            'post_status' => 'publish',
             'posts_per_page' => $limit,
-            'fields'         => 'ids',
-            'orderby'        => 'date',
-            'order'          => 'DESC'
+            'fields' => 'ids',
+            'orderby' => 'date',
+            'order' => 'DESC'
         ]);
 
         foreach ($query->posts as $id) {

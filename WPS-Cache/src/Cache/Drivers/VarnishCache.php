@@ -80,7 +80,8 @@ final class VarnishCache extends AbstractCacheDriver
      */
     public function purgePost(int $post_id): void
     {
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
+            return;
 
         // 1. Purge the post itself
         $this->sendPurgeRequest(['X-Purge-Tags' => "post-{$post_id}"]);
@@ -119,16 +120,18 @@ final class VarnishCache extends AbstractCacheDriver
         ], $headers);
 
         wp_remote_request($url, [
-            'method'      => 'PURGE',
-            'headers'     => $headers,
-            'blocking'    => false, // Async: Don't wait for Varnish to reply
-            'timeout'     => 1,
-            'sslverify'   => false
+            'method' => 'PURGE',
+            'headers' => $headers,
+            'blocking' => false, // Async: Don't wait for Varnish to reply
+            'timeout' => 1,
+            'sslverify' => false
         ]);
     }
 
     // Interface compliance
-    public function set(string $key, mixed $value, int $ttl = 3600): void {} // Varnish sets itself
+    public function set(string $key, mixed $value, int $ttl = 3600): void
+    {
+    } // Varnish sets itself
     public function get(string $key): mixed
     {
         return null;

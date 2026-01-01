@@ -128,7 +128,8 @@ class AsyncCSS
         }
 
         $css = @file_get_contents($path);
-        if (!$css) return '';
+        if (!$css)
+            return '';
 
         $critical = '';
 

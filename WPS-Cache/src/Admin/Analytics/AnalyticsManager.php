@@ -25,9 +25,9 @@ class AnalyticsManager
     {
         $stats = $this->collector->getStats();
         $redis = $stats['redis'];
-        $html  = $stats['html'];
+        $html = $stats['html'];
 
-?>
+        ?>
         <div class="wpsc-stats-grid">
             <!-- Redis Card -->
             <div class="wpsc-stat-card">
@@ -83,7 +83,7 @@ class AnalyticsManager
                 <button type="submit" class="button wpsc-btn-secondary">Refresh Statistics</button>
             </form>
         </div>
-<?php
+        <?php
 
         // Handle manual refresh
         if (isset($_POST['wpsc_action']) && $_POST['wpsc_action'] === 'refresh_stats') {

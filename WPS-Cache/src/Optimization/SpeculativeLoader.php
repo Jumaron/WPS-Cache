@@ -32,25 +32,28 @@ class SpeculativeLoader
     public function injectSpeculationRules(): void
     {
         // Don't prefetch on admin pages or for logged-in users (optional, but safer)
-        if (is_admin()) return;
+        if (is_admin())
+            return;
 
         $mode = $this->settings['speculation_mode'] ?? 'prerender'; // 'prefetch' or 'prerender'
 
         // 1. Modern API (Chrome 109+, Edge)
         // 'moderate' eagerness = Triggers on Hover (stays for >200ms) or Pointer Down.
         $rules = [
-            $mode => [[
-                'source' => 'document',
-                'where'  => [
-                    'and' => [
-                        ['href_matches' => '/*'], // Match all local links
-                        ['not' => ['href_matches' => '/wp-admin/*']],
-                        ['not' => ['href_matches' => '/wp-login.php*']],
-                        ['not' => ['href_matches' => '*logout*']],
-                    ]
-                ],
-                'eagerness' => 'moderate'
-            ]]
+            $mode => [
+                [
+                    'source' => 'document',
+                    'where' => [
+                        'and' => [
+                            ['href_matches' => '/*'], // Match all local links
+                            ['not' => ['href_matches' => '/wp-admin/*']],
+                            ['not' => ['href_matches' => '/wp-login.php*']],
+                            ['not' => ['href_matches' => '*logout*']],
+                        ]
+                    ],
+                    'eagerness' => 'moderate'
+                ]
+            ]
         ];
 
         echo '<script type="speculationrules">' . json_encode($rules) . '</script>';
@@ -62,9 +65,9 @@ class SpeculativeLoader
 
     private function outputLegacyFallback(): void
     {
-?>
+        ?>
         <script id="wpsc-speculation-fallback">
-            (function() {
+            (function () {
                 // Feature detect Speculation Rules. If supported, exit (let browser handle it).
                 if (HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules')) return;
 
@@ -125,6 +128,6 @@ class SpeculativeLoader
                 });
             })();
         </script>
-<?php
+        <?php
     }
 }

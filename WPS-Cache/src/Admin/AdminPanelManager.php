@@ -23,14 +23,11 @@ final class AdminPanelManager
     public function __construct(CacheManager $cacheManager)
     {
         $this->cacheManager = $cacheManager;
-
-        // Initialize Admin Sub-Controllers
         $this->settingsManager = new SettingsManager($cacheManager);
         $this->tabManager = new TabManager();
         $this->noticeManager = new NoticeManager();
         $this->toolsManager = new ToolsManager();
         $this->analyticsManager = new AnalyticsManager($cacheManager);
-
         $this->initializeHooks();
     }
 
@@ -44,101 +41,64 @@ final class AdminPanelManager
 
     public function registerAdminMenu(): void
     {
-        add_menu_page(
-            'WPS Cache',
-            'WPS Cache',
-            'manage_options',
-            'wps-cache',
-            [$this, 'renderAdminPage'],
-            'dashicons-performance',
-            100
-        );
+        add_menu_page('WPS Cache', 'WPS Cache', 'manage_options', 'wps-cache', [$this, 'renderAdminPage'], 'dashicons-performance', 100);
     }
 
     public function registerAdminBarNode(\WP_Admin_Bar $wp_admin_bar): void
     {
-        if (!current_user_can('manage_options')) return;
-
-        $wp_admin_bar->add_node([
-            'id'    => 'wpsc-toolbar',
-            'title' => 'WPS Cache',
-            'href'  => admin_url('admin.php?page=wps-cache'),
-        ]);
-
+        if (!current_user_can('manage_options'))
+            return;
+        $wp_admin_bar->add_node(['id' => 'wpsc-toolbar', 'title' => 'WPS Cache', 'href' => admin_url('admin.php?page=wps-cache')]);
         $purge_url = wp_nonce_url(admin_url('admin-post.php?action=wpsc_clear_cache'), 'wpsc_clear_cache');
-
-        $wp_admin_bar->add_node([
-            'parent' => 'wpsc-toolbar',
-            'id'     => 'wpsc-purge',
-            'title'  => 'Purge All Caches',
-            'href'   => $purge_url,
-        ]);
+        $wp_admin_bar->add_node(['parent' => 'wpsc-toolbar', 'id' => 'wpsc-purge', 'title' => 'Purge All Caches', 'href' => $purge_url]);
     }
 
     public function enqueueAssets(string $hook): void
     {
-        if ($hook !== 'toplevel_page_wps-cache') return;
-
+        if ($hook !== 'toplevel_page_wps-cache')
+            return;
         wp_enqueue_style('wpsc-admin-css', WPSC_PLUGIN_URL . 'assets/css/admin.css', [], WPSC_VERSION);
         wp_enqueue_script('wpsc-admin-js', WPSC_PLUGIN_URL . 'assets/js/admin.js', [], WPSC_VERSION, true);
-
         wp_localize_script('wpsc-admin-js', 'wpsc_admin', [
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('wpsc_ajax_nonce'),
-            'strings'  => [
-                'preload_start' => __('Gathering URLs...', 'wps-cache'),
-                'preload_loading' => __('Preloading...', 'wps-cache'),
-                'preload_done' => __('Done!', 'wps-cache'),
-                'preload_error' => __('Error during preload.', 'wps-cache'),
-                'preload_complete' => __('Preloading Complete!', 'wps-cache')
-            ]
+            'nonce' => wp_create_nonce('wpsc_ajax_nonce'),
+            'strings' => ['preload_start' => 'Gathering URLs...', 'preload_loading' => 'Preloading...', 'preload_done' => 'Done!', 'preload_complete' => 'Preloading Complete!']
         ]);
     }
 
     public function handleManualClear(): void
     {
-        if (!current_user_can('manage_options')) return;
+        if (!current_user_can('manage_options'))
+            return;
         check_admin_referer('wpsc_clear_cache');
-
         $this->cacheManager->clearAllCaches();
         $this->noticeManager->add('All caches have been purged successfully.', 'success');
-
         wp_redirect(remove_query_arg('wpsc_cleared', wp_get_referer()));
         exit;
     }
 
     public function renderAdminPage(): void
     {
-        if (!current_user_can('manage_options')) return;
+        if (!current_user_can('manage_options'))
+            return;
         remove_all_actions('admin_notices');
-
         $current_tab = $this->tabManager->getCurrentTab();
-?>
+        ?>
         <div class="wpsc-wrap">
             <div class="wpsc-header">
                 <div class="wpsc-logo">
-                    <h1>
-                        <span class="dashicons dashicons-performance" style="font-size: 28px; width: 28px; height: 28px;"></span>
-                        WPS Cache
-                        <span class="wpsc-version">v<?php echo esc_html(WPSC_VERSION); ?></span>
-                    </h1>
+                    <h1><span class="dashicons dashicons-performance"
+                            style="font-size: 28px; width: 28px; height: 28px;"></span> WPS Cache <span
+                            class="wpsc-version">v<?php echo esc_html(WPSC_VERSION); ?></span></h1>
                 </div>
-                <div class="wpsc-actions">
-                    <a href="#" class="wpsc-btn-secondary">Documentation</a>
-                </div>
+                <div class="wpsc-actions"><a href="#" class="wpsc-btn-secondary">Documentation</a></div>
             </div>
-
             <div class="wpsc-layout">
-                <div class="wpsc-sidebar">
-                    <?php $this->tabManager->renderSidebar($current_tab); ?>
-                </div>
-
+                <div class="wpsc-sidebar"><?php $this->tabManager->renderSidebar($current_tab); ?></div>
                 <div class="wpsc-content">
                     <div class="wpsc-notices-area">
-                        <?php settings_errors('wpsc_settings'); ?>
-                        <?php $this->noticeManager->renderNotices(); ?>
+                        <?php settings_errors('wpsc_settings'); ?>         <?php $this->noticeManager->renderNotices(); ?>
                     </div>
-
                     <div class="wpsc-tab-content">
                         <?php
                         switch ($current_tab) {
@@ -147,6 +107,9 @@ final class AdminPanelManager
                                 break;
                             case 'css_js':
                                 $this->settingsManager->renderOptimizationTab();
+                                break;
+                            case 'database':
+                                $this->settingsManager->renderDatabaseTab();
                                 break;
                             case 'advanced':
                                 $this->settingsManager->renderAdvancedTab();
@@ -166,6 +129,6 @@ final class AdminPanelManager
                 </div>
             </div>
         </div>
-<?php
+        <?php
     }
 }

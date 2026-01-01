@@ -21,16 +21,16 @@ final class MinifyCSS extends AbstractCacheDriver
 
     // Token Types (Granular for precise optimization)
     private const T_WHITESPACE = 0;
-    private const T_COMMENT    = 1;
-    private const T_STRING     = 2;
-    private const T_OPEN       = 3; // {
-    private const T_CLOSE      = 4; // }
-    private const T_COLON      = 5; // :
-    private const T_SEMICOLON  = 6; // ;
+    private const T_COMMENT = 1;
+    private const T_STRING = 2;
+    private const T_OPEN = 3; // {
+    private const T_CLOSE = 4; // }
+    private const T_COLON = 5; // :
+    private const T_SEMICOLON = 6; // ;
     private const T_PAREN_OPEN = 7; // (
     private const T_PAREN_CLOSE = 8; // )
-    private const T_OPERATOR   = 9; // , > + ~
-    private const T_WORD       = 10; // Selectors, properties, values
+    private const T_OPERATOR = 9; // , > + ~
+    private const T_WORD = 10; // Selectors, properties, values
 
     // Mask: Whitespace + Special Chars + Operators + /
     // Used for strcspn optimization in tokenizer
@@ -68,11 +68,22 @@ final class MinifyCSS extends AbstractCacheDriver
     ];
 
     private const CALC_FUNCTIONS = [
-        'calc' => true, 'clamp' => true, 'min' => true, 'max' => true, 'var' => true
+        'calc' => true,
+        'clamp' => true,
+        'min' => true,
+        'max' => true,
+        'var' => true
     ];
 
     private const PRESERVED_UNITS = [
-        's' => true, 'ms' => true, 'deg' => true, 'rad' => true, 'grad' => true, 'turn' => true, 'hz' => true, 'khz' => true
+        's' => true,
+        'ms' => true,
+        'deg' => true,
+        'rad' => true,
+        'grad' => true,
+        'turn' => true,
+        'hz' => true,
+        'khz' => true
     ];
 
     private string $cache_dir;
@@ -347,7 +358,8 @@ final class MinifyCSS extends AbstractCacheDriver
                         $i++;
                         break;
                     }
-                    if ($css[$i] === "\n") break;
+                    if ($css[$i] === "\n")
+                        break;
                     $i++;
                 }
                 yield ['type' => self::T_STRING, 'value' => substr($css, $start, $i - $start)];
@@ -446,15 +458,18 @@ final class MinifyCSS extends AbstractCacheDriver
         if ($inCalc) {
             $val = $curr['value'];
             $pVal = $prev['value'];
-            if ($val === '+' || $val === '-') return true;
-            if ($pVal === '+' || $pVal === '-') return true;
+            if ($val === '+' || $val === '-')
+                return true;
+            if ($pVal === '+' || $pVal === '-')
+                return true;
         }
 
         $t1 = $prev['type'];
         $t2 = $curr['type'];
 
         // 2. Word + Word (margin: 10px 20px)
-        if ($t1 === self::T_WORD && $t2 === self::T_WORD) return true;
+        if ($t1 === self::T_WORD && $t2 === self::T_WORD)
+            return true;
 
         // 3. Variable/Function fusion fix
         if ($t1 === self::T_PAREN_CLOSE && $t2 === self::T_WORD) {
@@ -494,11 +509,13 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function optimizeZeroUnits(string $val): string
     {
-        if (!str_starts_with($val, '0')) return $val;
+        if (!str_starts_with($val, '0'))
+            return $val;
         if (preg_match('/^0([a-z%]+)$/i', $val, $matches)) {
             $unit = strtolower($matches[1]);
             // Protected units
-            if (isset(self::PRESERVED_UNITS[$unit])) return $val;
+            if (isset(self::PRESERVED_UNITS[$unit]))
+                return $val;
             return '0';
         }
         return $val;
@@ -506,7 +523,8 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function compressHex(string $val): string
     {
-        if (empty($val) || $val[0] !== '#') return $val;
+        if (empty($val) || $val[0] !== '#')
+            return $val;
         $len = strlen($val);
         $val = strtolower($val);
 
@@ -525,7 +543,8 @@ final class MinifyCSS extends AbstractCacheDriver
     // Helpers
     private function shouldProcessStyle($style, string $handle, array $excluded_css): bool
     {
-        if (!isset($style->src) || empty($style->src)) return false;
+        if (!isset($style->src) || empty($style->src))
+            return false;
         $src = $style->src;
         return strpos($src, '.min.css') === false
             && strpos($src, '//') !== 0
@@ -536,9 +555,11 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function getSourcePath($style): ?string
     {
-        if (!isset($style->src)) return null;
+        if (!isset($style->src))
+            return null;
         $src = $style->src;
-        if (strpos($src, 'http') !== 0) $src = site_url($src);
+        if (strpos($src, 'http') !== 0)
+            $src = site_url($src);
 
         $path = str_replace([site_url(), 'wp-content'], [ABSPATH, 'wp-content'], $src);
 
@@ -558,7 +579,8 @@ final class MinifyCSS extends AbstractCacheDriver
 
     private function updateStyleRegistration($style, string $cache_file): void
     {
-        if (!isset($style->src)) return;
+        if (!isset($style->src))
+            return;
         $style->src = str_replace(ABSPATH, site_url('/'), $cache_file);
         $style->ver = filemtime($cache_file);
     }
@@ -571,7 +593,8 @@ final class MinifyCSS extends AbstractCacheDriver
     private function isExcluded(string $url, array $excluded_patterns): bool
     {
         foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url)) return true;
+            if (fnmatch($pattern, $url))
+                return true;
         }
         return false;
     }

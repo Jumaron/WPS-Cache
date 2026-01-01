@@ -172,7 +172,8 @@ final class CacheManager
 
     private function recursiveRemoveDir(string $dir): void
     {
-        if (!is_dir($dir)) return;
+        if (!is_dir($dir))
+            return;
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
@@ -195,8 +196,10 @@ final class CacheManager
     public function getDriver(string $alias): ?CacheDriverInterface
     {
         foreach ($this->drivers as $driver) {
-            if ($alias === 'redis' && $driver instanceof RedisCache) return $driver;
-            if ($alias === 'varnish' && $driver instanceof VarnishCache) return $driver;
+            if ($alias === 'redis' && $driver instanceof RedisCache)
+                return $driver;
+            if ($alias === 'varnish' && $driver instanceof VarnishCache)
+                return $driver;
         }
         return null;
     }

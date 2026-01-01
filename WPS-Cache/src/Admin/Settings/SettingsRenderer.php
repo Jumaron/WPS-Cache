@@ -15,7 +15,7 @@ class SettingsRenderer
      */
     public function renderCard(string $title, string $description, callable $contentCallback): void
     {
-?>
+        ?>
         <div class="wpsc-card">
             <div class="wpsc-card-header">
                 <div>
@@ -29,7 +29,7 @@ class SettingsRenderer
                 <?php call_user_func($contentCallback); ?>
             </div>
         </div>
-    <?php
+        <?php
     }
 
     /**
@@ -41,30 +41,26 @@ class SettingsRenderer
     {
         $checked = !empty($settings[$key]);
         $descId = $description ? 'wpsc_' . esc_attr($key) . '_desc' : '';
-    ?>
+        ?>
         <div class="wpsc-setting-row">
             <div class="wpsc-setting-info">
                 <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
                     <?php echo esc_html($label); ?>
                 </label>
-                <p class="wpsc-setting-desc" <?php echo $descId ? 'id="' . $descId . '"' : ''; ?>><?php echo esc_html($description); ?></p>
+                <p class="wpsc-setting-desc" <?php echo $descId ? 'id="' . $descId . '"' : ''; ?>>
+                    <?php echo esc_html($description); ?></p>
             </div>
             <div class="wpsc-setting-control">
                 <input type="hidden" name="wpsc_settings[<?php echo esc_attr($key); ?>]" value="0">
 
                 <label class="wpsc-switch">
-                    <input type="checkbox"
-                        role="switch"
-                        id="wpsc_<?php echo esc_attr($key); ?>"
-                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                        value="1"
-                        <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>
-                        <?php checked($checked); ?>>
+                    <input type="checkbox" role="switch" id="wpsc_<?php echo esc_attr($key); ?>"
+                        name="wpsc_settings[<?php echo esc_attr($key); ?>]" value="1" <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>         <?php checked($checked); ?>>
                     <span class="wpsc-slider"></span>
                 </label>
             </div>
         </div>
-    <?php
+        <?php
     }
 
     /**
@@ -99,7 +95,7 @@ class SettingsRenderer
         foreach ($attrs as $k => $v) {
             $attrStr .= esc_attr($k) . '="' . esc_attr($v) . '" ';
         }
-    ?>
+        ?>
         <div class="wpsc-setting-row">
             <div class="wpsc-setting-info">
                 <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
@@ -110,22 +106,20 @@ class SettingsRenderer
                 <?php endif; ?>
             </div>
             <div class="wpsc-setting-control">
-                <input type="<?php echo esc_attr($type); ?>"
-                    class="<?php echo esc_attr($class); ?>"
-                    id="wpsc_<?php echo esc_attr($key); ?>"
-                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                    value="<?php echo esc_attr($value); ?>"
-                    <?php echo !empty($ariaDescribedByStr) ? 'aria-describedby="' . esc_attr($ariaDescribedByStr) . '"' : ''; ?>
-                    <?php echo $attrStr; ?>>
+                <input type="<?php echo esc_attr($type); ?>" class="<?php echo esc_attr($class); ?>"
+                    id="wpsc_<?php echo esc_attr($key); ?>" name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                    value="<?php echo esc_attr($value); ?>" <?php echo !empty($ariaDescribedByStr) ? 'aria-describedby="' . esc_attr($ariaDescribedByStr) . '"' : ''; ?>         <?php echo $attrStr; ?>>
                 <?php if ($isPasswordSet): ?>
-                    <div id="<?php echo esc_attr($statusId); ?>" style="margin-top: 5px; font-size: 12px; color: var(--wpsc-success); display: flex; align-items: center; gap: 4px;">
-                        <span class="dashicons dashicons-yes" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px;"></span>
+                    <div id="<?php echo esc_attr($statusId); ?>"
+                        style="margin-top: 5px; font-size: 12px; color: var(--wpsc-success); display: flex; align-items: center; gap: 4px;">
+                        <span class="dashicons dashicons-yes" aria-hidden="true"
+                            style="font-size: 16px; width: 16px; height: 16px;"></span>
                         <?php esc_html_e('Password is set. Leave blank to keep unchanged.', 'wps-cache'); ?>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
-    <?php
+        <?php
     }
 
     /**
@@ -138,7 +132,7 @@ class SettingsRenderer
         if (is_array($value)) {
             $value = implode("\n", $value);
         }
-    ?>
+        ?>
         <div class="wpsc-setting-row" style="align-items: flex-start;">
             <div class="wpsc-setting-info">
                 <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
@@ -149,15 +143,11 @@ class SettingsRenderer
                 <?php endif; ?>
             </div>
             <div class="wpsc-setting-control" style="width: 100%; max-width: 500px;">
-                <textarea class="wpsc-textarea"
-                    id="wpsc_<?php echo esc_attr($key); ?>"
-                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                    rows="5"
-                    <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>
-                    spellcheck="false"><?php echo esc_textarea($value); ?></textarea>
+                <textarea class="wpsc-textarea" id="wpsc_<?php echo esc_attr($key); ?>"
+                    name="wpsc_settings[<?php echo esc_attr($key); ?>]" rows="5" <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?> spellcheck="false"><?php echo esc_textarea($value); ?></textarea>
             </div>
         </div>
-    <?php
+        <?php
     }
 
     /**
@@ -167,19 +157,18 @@ class SettingsRenderer
     {
         $current = $settings[$key] ?? '';
         $descId = $description ? 'wpsc_' . esc_attr($key) . '_desc' : '';
-    ?>
+        ?>
         <div class="wpsc-setting-row">
             <div class="wpsc-setting-info">
                 <label class="wpsc-setting-label" for="wpsc_<?php echo esc_attr($key); ?>">
                     <?php echo esc_html($label); ?>
                 </label>
-                <p class="wpsc-setting-desc" <?php echo $descId ? 'id="' . $descId . '"' : ''; ?>><?php echo esc_html($description); ?></p>
+                <p class="wpsc-setting-desc" <?php echo $descId ? 'id="' . $descId . '"' : ''; ?>>
+                    <?php echo esc_html($description); ?></p>
             </div>
             <div class="wpsc-setting-control">
-                <select class="wpsc-input-text"
-                    id="wpsc_<?php echo esc_attr($key); ?>"
-                    name="wpsc_settings[<?php echo esc_attr($key); ?>]"
-                    <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>>
+                <select class="wpsc-input-text" id="wpsc_<?php echo esc_attr($key); ?>"
+                    name="wpsc_settings[<?php echo esc_attr($key); ?>]" <?php echo $descId ? 'aria-describedby="' . $descId . '"' : ''; ?>>
                     <?php foreach ($options as $optValue => $optLabel): ?>
                         <option value="<?php echo esc_attr($optValue); ?>" <?php selected($current, $optValue); ?>>
                             <?php echo esc_html($optLabel); ?>
@@ -188,6 +177,6 @@ class SettingsRenderer
                 </select>
             </div>
         </div>
-<?php
+        <?php
     }
 }
