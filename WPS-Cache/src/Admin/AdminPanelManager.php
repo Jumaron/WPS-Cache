@@ -105,6 +105,9 @@ final class AdminPanelManager
                             case 'cache':
                                 $this->settingsManager->renderCacheTab();
                                 break;
+                            case 'media':
+                                $this->settingsManager->renderMediaTab();
+                                break;
                             case 'css_js':
                                 $this->settingsManager->renderOptimizationTab();
                                 break;

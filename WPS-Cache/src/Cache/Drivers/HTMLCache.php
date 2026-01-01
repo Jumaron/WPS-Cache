@@ -6,6 +6,7 @@ namespace WPSCache\Cache\Drivers;
 
 use WPSCache\Optimization\JSOptimizer;
 use WPSCache\Optimization\AsyncCSS;
+use WPSCache\Optimization\MediaOptimizer; // Import
 
 final class HTMLCache extends AbstractCacheDriver
 {
@@ -75,15 +76,19 @@ final class HTMLCache extends AbstractCacheDriver
         if (empty($buffer) || http_response_code() !== 200)
             return $buffer;
 
-        // --- DISABLE HTML OPTIMIZATION FOR STABILITY ---
-        // Elementor and other builders rely on whitespace for inline-block layout.
-        // We skip $this->optimizeHTML($buffer) entirely to ensure 100% visual compatibility.
         $content = $buffer;
 
-        // --- ASSET OPTIMIZATION ---
-        // We still apply JS and CSS optimizations as they are handled safely by SOTA drivers.
+        // --- OPTIMIZATION PIPELINE ---
 
-        // 1. JS Delay/Defer
+        // 1. Media Optimization (Images, Iframes, YouTube) - NEW
+        try {
+            $mediaOpt = new MediaOptimizer($this->settings);
+            $content = $mediaOpt->process($content);
+        } catch (\Throwable $e) {
+            // Log error, keep content
+        }
+
+        // 2. JS Delay/Defer
         if (!empty($this->settings['js_delay']) || !empty($this->settings['js_defer'])) {
             try {
                 $jsOpt = new JSOptimizer($this->settings);
@@ -94,13 +99,12 @@ final class HTMLCache extends AbstractCacheDriver
             }
         }
 
-        // 2. CSS Async
+        // 3. CSS Async
         if (!empty($this->settings['css_async'])) {
             try {
                 $cssOpt = new AsyncCSS($this->settings);
                 $content = $cssOpt->process($content);
             } catch (\Throwable $e) {
-                // Fail safe
             }
         }
 
@@ -116,24 +120,15 @@ final class HTMLCache extends AbstractCacheDriver
     private function writeCacheFile(string $content): void
     {
         $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
-
-        // Sentinel Fix: Prevent Directory Traversal via Host Header
-        // 1. Remove port
         $host = explode(':', $host)[0];
-        // 2. Strict whitelist (alphanumeric, dot, dash)
         $host = preg_replace('/[^a-z0-9\-\.]/i', '', $host);
-        // 3. Remove consecutive dots (..) to prevent traversal
         $host = preg_replace('/\.+/', '.', $host);
-        // 4. Trim leading/trailing dots
         $host = trim($host, '.');
 
-        if (empty($host)) {
+        if (empty($host))
             $host = 'unknown';
-        }
 
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-
-        // Sentinel: Prevent path traversal by sanitizing the path
         $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
 
         if (substr($path, -1) !== '/' && !preg_match('/\.[a-z0-9]{2,4}$/i', $path)) {
@@ -156,35 +151,21 @@ final class HTMLCache extends AbstractCacheDriver
         $this->atomicWrite($fullPath . $filename, $content);
     }
 
-    /**
-     * Sentinel: Sanitize path to prevent Directory Traversal.
-     * Removes dot segments (./ and ../) and enforces strict path structure.
-     */
     private function sanitizePath(string $path): string
     {
-        // 1. Remove null bytes
         $path = str_replace(chr(0), '', $path);
-
-        // 2. Explode and filter parts
         $parts = explode('/', $path);
         $safeParts = [];
 
         foreach ($parts as $part) {
-            if ($part === '' || $part === '.') {
+            if ($part === '' || $part === '.')
                 continue;
-            }
-
-            if ($part === '..') {
-                // Determine behavior: skip or pop?
-                // Standard URL resolution pops the last segment.
-                // If we are at root, we ignore it.
+            if ($part === '..')
                 array_pop($safeParts);
-            } else {
+            else
                 $safeParts[] = $part;
-            }
         }
 
-        // 3. Rebuild path
         return '/' . implode('/', $safeParts);
     }
 

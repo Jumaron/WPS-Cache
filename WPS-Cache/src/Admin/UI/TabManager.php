@@ -26,6 +26,11 @@ class TabManager
                 'icon' => 'dashicons-database',
                 'order' => 20
             ],
+            'media' => [ // NEW
+                'label' => __('Media', 'wps-cache'),
+                'icon' => 'dashicons-images-alt',
+                'order' => 25
+            ],
             'css_js' => [
                 'label' => __('File Optimization', 'wps-cache'),
                 'icon' => 'dashicons-editor-code',
