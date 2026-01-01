@@ -267,6 +267,7 @@ class SettingsManager
     private function renderOptimizationTabContent(array $settings): void
     {
         $this->formStart();
+
         $this->renderer->renderCard(
             "Instant Click (Speculative Loading)",
             "Prerender pages before the user clicks. 0ms Navigation.",
@@ -289,6 +290,27 @@ class SettingsManager
                 );
             },
         );
+
+        // NEW: Font Optimization Card
+        $this->renderer->renderCard(
+            "Font Optimization",
+            "Performance for Google Fonts and Local Fonts.",
+            function () use ($settings) {
+                $this->renderer->renderToggle(
+                    "font_localize_google",
+                    "Localize Google Fonts",
+                    "Download Google Fonts to your server. Removes DNS lookups and tracking.",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "font_display_swap",
+                    "Force Font Swap",
+                    "Add font-display: swap to all fonts to ensure text remains visible during load.",
+                    $settings,
+                );
+            },
+        );
+
         $this->renderer->renderCard(
             "CSS Optimization",
             "Improve First Contentful Paint.",
@@ -313,6 +335,7 @@ class SettingsManager
                 );
             },
         );
+
         $this->renderer->renderCard(
             "JavaScript Optimization",
             "Improve Time to Interactive.",

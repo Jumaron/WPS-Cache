@@ -32,6 +32,8 @@ final class Plugin
         "js_delay" => false,
         "speculative_loading" => false,
         "speculation_mode" => "prerender",
+        "font_localize_google" => true,
+        "font_display_swap" => true,
         "media_lazy_load" => true,
         "media_lazy_load_iframes" => true,
         "media_lazy_load_exclude_count" => 3,

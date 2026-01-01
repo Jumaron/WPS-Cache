@@ -6,7 +6,8 @@ namespace WPSCache\Cache\Drivers;
 
 use WPSCache\Optimization\JSOptimizer;
 use WPSCache\Optimization\AsyncCSS;
-use WPSCache\Optimization\MediaOptimizer; // Import
+use WPSCache\Optimization\MediaOptimizer;
+use WPSCache\Optimization\FontOptimizer;
 
 final class HTMLCache extends AbstractCacheDriver
 {
@@ -60,7 +61,6 @@ final class HTMLCache extends AbstractCacheDriver
         if (is_user_logged_in() || is_admin()) {
             return false;
         }
-
         if (!empty($_GET)) {
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
@@ -69,14 +69,12 @@ final class HTMLCache extends AbstractCacheDriver
                 }
             }
         }
-
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
 
         // Optimized: Single regex match instead of loop + str_contains (O(1) vs O(N))
         if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
             return false;
         }
-
         return true;
     }
 
@@ -90,7 +88,16 @@ final class HTMLCache extends AbstractCacheDriver
 
         // --- OPTIMIZATION PIPELINE ---
 
-        // 1. Media Optimization (Images, Iframes, YouTube) - NEW
+        // 1. Font Optimization (New)
+        // We do this early so subsequent CSS minification sees the new inline styles
+        try {
+            $fontOpt = new FontOptimizer($this->settings);
+            $content = $fontOpt->process($content);
+        } catch (\Throwable $e) {
+            // Log error
+        }
+
+        // 2. Media Optimization
         try {
             $mediaOpt = new MediaOptimizer($this->settings);
             $content = $mediaOpt->process($content);
@@ -98,7 +105,7 @@ final class HTMLCache extends AbstractCacheDriver
             // Log error, keep content
         }
 
-        // 2. JS Delay/Defer
+        // 3. JS Delay/Defer
         if (
             !empty($this->settings["js_delay"]) ||
             !empty($this->settings["js_defer"])
@@ -112,7 +119,7 @@ final class HTMLCache extends AbstractCacheDriver
             }
         }
 
-        // 3. CSS Async
+        // 4. CSS Async
         if (!empty($this->settings["css_async"])) {
             try {
                 $cssOpt = new AsyncCSS($this->settings);
@@ -137,21 +144,17 @@ final class HTMLCache extends AbstractCacheDriver
         $host = preg_replace("/[^a-z0-9\-\.]/i", "", $host);
         $host = preg_replace("/\.+/", ".", $host);
         $host = trim($host, ".");
-
         if (empty($host)) {
             $host = "unknown";
         }
-
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
         $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
-
         if (
             substr($path, -1) !== "/" &&
             !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
         ) {
             $path .= "/";
         }
-
         $query = parse_url($uri, PHP_URL_QUERY);
         if ($query) {
             parse_str($query, $queryParams);
@@ -161,21 +164,17 @@ final class HTMLCache extends AbstractCacheDriver
         } else {
             $filename = "index.html";
         }
-
         $fullPath = $this->cacheDir . $host . $path;
         if (substr($fullPath, -1) !== "/") {
             $fullPath .= "/";
         }
-
         $this->atomicWrite($fullPath . $filename, $content);
     }
-
     private function sanitizePath(string $path): string
     {
         $path = str_replace(chr(0), "", $path);
         $parts = explode("/", $path);
         $safeParts = [];
-
         foreach ($parts as $part) {
             if ($part === "" || $part === ".") {
                 continue;
@@ -186,10 +185,8 @@ final class HTMLCache extends AbstractCacheDriver
                 $safeParts[] = $part;
             }
         }
-
         return "/" . implode("/", $safeParts);
     }
-
     public function set(string $key, mixed $value, int $ttl = 3600): void {}
     public function get(string $key): mixed
     {
