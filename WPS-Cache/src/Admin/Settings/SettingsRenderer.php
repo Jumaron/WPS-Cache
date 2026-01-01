@@ -74,7 +74,7 @@ class SettingsRenderer
     {
         $value = $settings[$key] ?? '';
 
-        // Sentinel Fix: Prevent password exposure in HTML source
+        // Sentinel Fix: Prevent password exposure in HTML source (Security Hardening)
         $isPasswordSet = false;
         if ($type === 'password') {
             $isPasswordSet = !empty($value);
