@@ -34,10 +34,6 @@ class SettingsManager
         );
     }
 
-    /**
-     * Helper to get settings with defaults merged.
-     * Prevents "undefined index" errors in views.
-     */
     private function getSettings(): array
     {
         $defaults = $this->getDefaultSettings();
@@ -47,30 +43,8 @@ class SettingsManager
 
     public function getDefaultSettings(): array
     {
-        return [
-            'html_cache' => false,
-            'redis_cache' => false,
-            'varnish_cache' => false,
-            'css_minify' => false,
-            'css_async' => false,
-            'js_minify' => false,
-            'js_defer' => false,
-            'js_delay' => false,
-            'enable_metrics' => true,
-            'cache_lifetime' => 3600,
-            'metrics_retention' => 30,
-            'redis_host' => '127.0.0.1',
-            'redis_port' => 6379,
-            'redis_db' => 0,
-            'redis_password' => '',
-            'redis_prefix' => 'wpsc:',
-            'varnish_host' => '127.0.0.1',
-            'varnish_port' => 6081,
-            'excluded_urls' => [],
-            'excluded_css' => [],
-            'excluded_js' => [],
-            'preload_urls' => []
-        ];
+        // Must match Plugin::DEFAULT_SETTINGS
+        return \WPSCache\Plugin::DEFAULT_SETTINGS;
     }
 
     private function formStart(): void
@@ -158,6 +132,16 @@ class SettingsManager
     private function renderOptimizationTabContent(array $settings): void
     {
         $this->formStart();
+
+        // New Card: Speculative Loading
+        $this->renderer->renderCard('Instant Click (Speculative Loading)', 'Prerender pages before the user clicks. 0ms Navigation.', function () use ($settings) {
+            $this->renderer->renderToggle('speculative_loading', 'Enable Instant Click', 'Use Speculation Rules API to prerender pages on hover.', $settings);
+            $this->renderer->renderSelect('speculation_mode', 'Mode', 'Prerender fully renders the page (Fastest). Prefetch only downloads HTML (Saver).', $settings, [
+                'prerender' => 'Prerender (SOTA - 0ms)',
+                'prefetch'  => 'Prefetch (Standard)'
+            ]);
+        });
+
         $this->renderer->renderCard('CSS Optimization', 'Improve First Contentful Paint.', function () use ($settings) {
             $this->renderer->renderToggle('css_minify', 'Minify CSS', 'Strip whitespace/comments.', $settings);
             $this->renderer->renderToggle('css_async', 'Async CSS', 'Load non-critical CSS later.', $settings);

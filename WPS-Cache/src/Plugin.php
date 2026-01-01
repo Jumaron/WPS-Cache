@@ -9,6 +9,7 @@ use WPSCache\Admin\AdminPanelManager;
 use WPSCache\Cache\Drivers\{HTMLCache, RedisCache, VarnishCache, MinifyCSS, MinifyJS};
 use WPSCache\Server\ServerConfigManager;
 use WPSCache\Cron\CronManager;
+use WPSCache\Optimization\SpeculativeLoader;
 
 /**
  * Main plugin class handling initialization, DI container, and lifecycle management.
@@ -24,6 +25,11 @@ final class Plugin
         'js_minify'        => false,
         'js_defer'         => false,
         'js_delay'         => false,
+
+        // Speculative Loading (SOTA)
+        'speculative_loading' => false, // Feature Toggle
+        'speculation_mode'    => 'prerender', // 'prefetch' or 'prerender'
+
         'enable_metrics'   => true,
         'metrics_retention' => 14,
         'preload_interval' => 'daily',
@@ -47,8 +53,7 @@ final class Plugin
         'includes' => 'includes'
     ];
 
-    // Sentinel: Whitelist public assets while blocking everything else (e.g. .php, .log)
-    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all\n<FilesMatch \"\.(css|js|html|xml|txt)$\">\n    Order Allow,Deny\n    Allow from all\n</FilesMatch>";
+    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
     private const CACHE_CLEANUP_HOOK = 'wpsc_cache_cleanup';
 
     private static ?self $instance = null;
@@ -58,6 +63,7 @@ final class Plugin
     private ?ServerConfigManager $serverManager = null;
     private ?AdminPanelManager $adminPanelManager = null;
     private ?CronManager $cronManager = null;
+    private ?SpeculativeLoader $speculativeLoader = null; // Added
 
     public static function getInstance(): self
     {
@@ -83,7 +89,11 @@ final class Plugin
         $this->initializeCacheDrivers($settings);
         $this->setupHooks();
 
-        // Initialize Cron Listener (This registers the wpscac_settings_updated hook internally)
+        // Initialize Optimization Services
+        $this->speculativeLoader = new SpeculativeLoader($settings);
+        $this->speculativeLoader->initialize();
+
+        // Initialize Cron Listener
         $this->cronManager->initialize();
 
         if (is_admin()) {
