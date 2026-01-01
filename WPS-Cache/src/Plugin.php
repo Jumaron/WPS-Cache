@@ -19,6 +19,7 @@ use WPSCache\Optimization\SpeculativeLoader;
 use WPSCache\Optimization\DatabaseOptimizer;
 use WPSCache\Optimization\BloatOptimizer;
 use WPSCache\Optimization\CdnManager;
+use WPSCache\Compatibility\CommerceManager; // Added
 
 final class Plugin
 {
@@ -90,6 +91,9 @@ final class Plugin
         "db_clean_expired_transients" => true,
         "db_clean_all_transients" => false,
         "db_clean_optimize_tables" => true,
+
+        // Compatibility
+        "woo_support" => true, // Default ON
     ];
 
     private const REQUIRED_DIRECTORIES = [
@@ -112,6 +116,7 @@ final class Plugin
     private ?DatabaseOptimizer $databaseOptimizer = null;
     private ?BloatOptimizer $bloatOptimizer = null;
     private ?CdnManager $cdnManager = null;
+    private ?CommerceManager $commerceManager = null; // Added
 
     public static function getInstance(): self
     {
@@ -135,6 +140,13 @@ final class Plugin
             is_array($settings) ? $settings : [],
         );
 
+        // Initialize Compatibility Layer FIRST (Logic might be needed by Drivers)
+        $this->commerceManager = new CommerceManager($settings);
+
+        // Pass commerceManager to HTMLCache via constructor or setter if needed,
+        // OR HTMLCache can access Plugin singleton.
+        // Ideally, we pass it via initializeCacheDrivers logic below.
+
         $this->initializeCacheDrivers($settings);
         $this->setupHooks();
 
@@ -146,9 +158,8 @@ final class Plugin
         $this->bloatOptimizer = new BloatOptimizer($settings);
         $this->bloatOptimizer->initialize();
 
-        // Initialize CDN Manager
         $this->cdnManager = new CdnManager($settings);
-        $this->cdnManager->initialize(); // Registers the purge hook
+        $this->cdnManager->initialize();
 
         $this->cronManager->initialize();
 
@@ -194,10 +205,14 @@ final class Plugin
             define("WPSC_CACHE_DIR", WP_CONTENT_DIR . "/cache/wps-cache/");
         }
     }
+
     private function initializeCacheDrivers(array $settings): void
     {
+        // Inject CommerceManager into HTMLCache
         if ($settings["html_cache"]) {
-            $this->cacheManager->addDriver(new HTMLCache());
+            $this->cacheManager->addDriver(
+                new HTMLCache($this->commerceManager),
+            );
         }
         if ($settings["redis_cache"]) {
             $this->cacheManager->addDriver(

@@ -9,17 +9,20 @@ use WPSCache\Optimization\AsyncCSS;
 use WPSCache\Optimization\MediaOptimizer;
 use WPSCache\Optimization\FontOptimizer;
 use WPSCache\Optimization\CdnManager;
+use WPSCache\Compatibility\CommerceManager;
 
 final class HTMLCache extends AbstractCacheDriver
 {
     private string $cacheDir;
     private ?string $exclusionRegex = null;
 
+    private ?CommerceManager $commerceManager;
     private const BYPASS_PARAMS = ["add-to-cart", "wp_nonce", "preview", "s"];
 
-    public function __construct()
+    public function __construct(?CommerceManager $commerceManager = null)
     {
         parent::__construct();
+        $this->commerceManager = $commerceManager;
         $this->cacheDir = defined("WPSC_CACHE_DIR")
             ? WPSC_CACHE_DIR . "html/"
             : WP_CONTENT_DIR . "/cache/wps-cache/html/";
@@ -63,6 +66,11 @@ final class HTMLCache extends AbstractCacheDriver
             return false;
         }
 
+        // WooCommerce Compatibility Check (New)
+        if ($this->commerceManager && $this->commerceManager->shouldBypass()) {
+            return false;
+        }
+
         if (!empty($_GET)) {
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
@@ -77,6 +85,7 @@ final class HTMLCache extends AbstractCacheDriver
         if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
             return false;
         }
+
         return true;
     }
 
@@ -90,8 +99,7 @@ final class HTMLCache extends AbstractCacheDriver
 
         // --- OPTIMIZATION PIPELINE ---
 
-        // 1. CDN Rewrite (New - Do this first or early)
-        // We rewrite URLs before they are used by other optimizers or saved
+        // 1. CDN Rewrite
         try {
             $cdnManager = new CdnManager($this->settings);
             $content = $cdnManager->process($content);

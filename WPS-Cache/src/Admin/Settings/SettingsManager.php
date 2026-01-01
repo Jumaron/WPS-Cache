@@ -143,6 +143,7 @@ class SettingsManager
     private function renderCacheTabContent(array $settings): void
     {
         $this->formStart();
+
         $this->renderer->renderCard(
             "Caching Engines",
             "Backend storage configuration.",
@@ -161,6 +162,24 @@ class SettingsManager
                 );
             },
         );
+
+        // NEW: Compatibility Card
+        if (class_exists("WooCommerce")) {
+            $this->renderer->renderCard(
+                "eCommerce Compatibility",
+                "Automatic detection enabled.",
+                function () use ($settings) {
+                    // Read-only toggle or just an info toggle
+                    $this->renderer->renderToggle(
+                        "woo_support",
+                        "WooCommerce Optimization",
+                        "Automatically excludes Cart, Checkout, and My Account. Bypasses cache when items are in cart.",
+                        $settings,
+                    );
+                },
+            );
+        }
+
         $this->renderer->renderCard(
             "Redis Details",
             "Connection settings.",
