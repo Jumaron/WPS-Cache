@@ -18,6 +18,7 @@ use WPSCache\Cron\CronManager;
 use WPSCache\Optimization\SpeculativeLoader;
 use WPSCache\Optimization\DatabaseOptimizer;
 use WPSCache\Optimization\BloatOptimizer;
+use WPSCache\Optimization\CdnManager;
 
 final class Plugin
 {
@@ -32,13 +33,39 @@ final class Plugin
         "js_delay" => false,
         "speculative_loading" => false,
         "speculation_mode" => "prerender",
-        "font_localize_google" => true,
-        "font_display_swap" => true,
         "media_lazy_load" => true,
         "media_lazy_load_iframes" => true,
         "media_lazy_load_exclude_count" => 3,
         "media_add_dimensions" => false,
         "media_youtube_facade" => false,
+        "font_localize_google" => true,
+        "font_display_swap" => true,
+
+        // CDN & Cloudflare (New)
+        "cdn_enable" => false,
+        "cdn_url" => "",
+        "cf_enable" => false,
+        "cf_api_token" => "",
+        "cf_zone_id" => "",
+
+        // Bloat
+        "bloat_disable_emojis" => true,
+        "bloat_disable_embeds" => true,
+        "bloat_disable_xmlrpc" => true,
+        "bloat_hide_wp_version" => true,
+        "bloat_remove_wlw_rsd" => true,
+        "bloat_remove_shortlink" => true,
+        "bloat_disable_rss" => false,
+        "bloat_disable_self_pingbacks" => true,
+        "bloat_remove_jquery_migrate" => true,
+        "bloat_remove_dashicons" => true,
+        "bloat_remove_query_strings" => true,
+        "heartbeat_frequency" => 60,
+        "heartbeat_disable_admin" => false,
+        "heartbeat_disable_dashboard" => false,
+        "heartbeat_disable_editor" => false,
+        "heartbeat_disable_frontend" => true,
+
         "enable_metrics" => true,
         "metrics_retention" => 14,
         "preload_interval" => "daily",
@@ -63,26 +90,6 @@ final class Plugin
         "db_clean_expired_transients" => true,
         "db_clean_all_transients" => false,
         "db_clean_optimize_tables" => true,
-
-        // Tweaks / Bloat (New)
-        "bloat_disable_emojis" => true,
-        "bloat_disable_embeds" => true,
-        "bloat_disable_xmlrpc" => true,
-        "bloat_hide_wp_version" => true,
-        "bloat_remove_wlw_rsd" => true,
-        "bloat_remove_shortlink" => true,
-        "bloat_disable_rss" => false,
-        "bloat_disable_self_pingbacks" => true,
-        "bloat_remove_jquery_migrate" => true,
-        "bloat_remove_dashicons" => true,
-        "bloat_remove_query_strings" => true,
-
-        // Heartbeat
-        "heartbeat_frequency" => 60, // SOTA default: Slow (60s)
-        "heartbeat_disable_admin" => false,
-        "heartbeat_disable_dashboard" => false, // Dashboard widget area
-        "heartbeat_disable_editor" => false, // Post editor (be careful)
-        "heartbeat_disable_frontend" => true, // Usually safe
     ];
 
     private const REQUIRED_DIRECTORIES = [
@@ -103,7 +110,8 @@ final class Plugin
     private ?CronManager $cronManager = null;
     private ?SpeculativeLoader $speculativeLoader = null;
     private ?DatabaseOptimizer $databaseOptimizer = null;
-    private ?BloatOptimizer $bloatOptimizer = null; // Added
+    private ?BloatOptimizer $bloatOptimizer = null;
+    private ?CdnManager $cdnManager = null;
 
     public static function getInstance(): self
     {
@@ -135,8 +143,12 @@ final class Plugin
 
         $this->databaseOptimizer = new DatabaseOptimizer($settings);
 
-        $this->bloatOptimizer = new BloatOptimizer($settings); // Init
+        $this->bloatOptimizer = new BloatOptimizer($settings);
         $this->bloatOptimizer->initialize();
+
+        // Initialize CDN Manager
+        $this->cdnManager = new CdnManager($settings);
+        $this->cdnManager->initialize(); // Registers the purge hook
 
         $this->cronManager->initialize();
 

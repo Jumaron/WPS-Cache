@@ -31,6 +31,12 @@ class TabManager
                 "icon" => "dashicons-images-alt",
                 "order" => 25,
             ],
+            "cdn" => [
+                // NEW
+                "label" => __("CDN", "wps-cache"),
+                "icon" => "dashicons-cloud",
+                "order" => 28,
+            ],
             "css_js" => [
                 "label" => __("File Optimization", "wps-cache"),
                 "icon" => "dashicons-editor-code",

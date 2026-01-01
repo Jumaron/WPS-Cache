@@ -71,6 +71,10 @@ class SettingsManager
     {
         $this->renderMediaTabContent($this->getSettings());
     }
+    public function renderCdnTab(): void
+    {
+        $this->renderCdnTabContent($this->getSettings());
+    } // New
     public function renderOptimizationTab(): void
     {
         $this->renderOptimizationTabContent($this->getSettings());
@@ -78,7 +82,7 @@ class SettingsManager
     public function renderTweaksTab(): void
     {
         $this->renderTweaksTabContent($this->getSettings());
-    } // New
+    }
     public function renderAdvancedTab(): void
     {
         $this->renderAdvancedTabContent($this->getSettings());
@@ -88,7 +92,6 @@ class SettingsManager
         $this->renderDatabaseTabContent($this->getSettings());
     }
 
-    // ... [Other render methods remain unchanged: Dashboard, Cache, Media, Optimization] ...
     private function renderDashboardTabContent(array $settings): void
     {
         echo '<div style="margin-bottom: 20px; text-align:right;">';
@@ -264,10 +267,62 @@ class SettingsManager
         );
         $this->formEnd();
     }
-    private function renderOptimizationTabContent(array $settings): void
+
+    private function renderCdnTabContent(array $settings): void
     {
         $this->formStart();
 
+        $this->renderer->renderCard(
+            "CDN Configuration",
+            "Serve static assets from a global network.",
+            function () use ($settings) {
+                $this->renderer->renderToggle(
+                    "cdn_enable",
+                    "Enable CDN Rewrite",
+                    "Replace local URLs with CDN URLs.",
+                    $settings,
+                );
+                $this->renderer->renderInput(
+                    "cdn_url",
+                    "CDN CNAME / URL",
+                    "e.g. https://cdn.example.com",
+                    $settings,
+                );
+            },
+        );
+
+        $this->renderer->renderCard(
+            "Cloudflare Integration",
+            "Synchronize local cache with Cloudflare Edge.",
+            function () use ($settings) {
+                $this->renderer->renderToggle(
+                    "cf_enable",
+                    "Enable Cloudflare",
+                    "Purge Cloudflare cache when local cache is cleared.",
+                    $settings,
+                );
+                $this->renderer->renderInput(
+                    "cf_api_token",
+                    "API Token",
+                    'Cloudflare API Token with "Zone.Cache:Purge" permissions.',
+                    $settings,
+                    "password",
+                );
+                $this->renderer->renderInput(
+                    "cf_zone_id",
+                    "Zone ID",
+                    "Found in Cloudflare Dashboard Overview.",
+                    $settings,
+                );
+            },
+        );
+
+        $this->formEnd();
+    }
+
+    private function renderOptimizationTabContent(array $settings): void
+    {
+        $this->formStart();
         $this->renderer->renderCard(
             "Instant Click (Speculative Loading)",
             "Prerender pages before the user clicks. 0ms Navigation.",
@@ -290,8 +345,6 @@ class SettingsManager
                 );
             },
         );
-
-        // NEW: Font Optimization Card
         $this->renderer->renderCard(
             "Font Optimization",
             "Performance for Google Fonts and Local Fonts.",
@@ -310,7 +363,6 @@ class SettingsManager
                 );
             },
         );
-
         $this->renderer->renderCard(
             "CSS Optimization",
             "Improve First Contentful Paint.",
@@ -335,7 +387,6 @@ class SettingsManager
                 );
             },
         );
-
         $this->renderer->renderCard(
             "JavaScript Optimization",
             "Improve Time to Interactive.",
@@ -372,7 +423,6 @@ class SettingsManager
     private function renderTweaksTabContent(array $settings): void
     {
         $this->formStart();
-
         $this->renderer->renderCard(
             "Script & Header Cleanup",
             "Remove unnecessary code and version tracking.",
@@ -409,7 +459,6 @@ class SettingsManager
                 );
             },
         );
-
         $this->renderer->renderCard(
             "Security & Privacy Tweaks",
             "Harden your site headers.",
@@ -452,7 +501,6 @@ class SettingsManager
                 );
             },
         );
-
         $this->renderer->renderCard(
             "Heartbeat API Control",
             "Limit server resource usage.",
@@ -469,7 +517,6 @@ class SettingsManager
                         "120" => "120 Seconds (Very Slow)",
                     ],
                 );
-
                 echo '<p class="wpsc-setting-label" style="margin-top:15px;">Disable Heartbeat Locations</p>';
                 $this->renderer->renderToggle(
                     "heartbeat_disable_admin",
@@ -497,7 +544,31 @@ class SettingsManager
                 );
             },
         );
+        $this->formEnd();
+    }
 
+    private function renderAdvancedTabContent(array $settings): void
+    {
+        $this->formStart();
+        $this->renderer->renderCard(
+            "Varnish Details",
+            "Connection for PURGE requests.",
+            function () use ($settings) {
+                $this->renderer->renderInput(
+                    "varnish_host",
+                    "Host",
+                    "127.0.0.1",
+                    $settings,
+                );
+                $this->renderer->renderInput(
+                    "varnish_port",
+                    "Port",
+                    "6081",
+                    $settings,
+                    "number",
+                );
+            },
+        );
         $this->formEnd();
     }
 
@@ -595,30 +666,5 @@ class SettingsManager
         });
         </script>
         <?php
-    }
-
-    private function renderAdvancedTabContent(array $settings): void
-    {
-        $this->formStart();
-        $this->renderer->renderCard(
-            "Varnish Details",
-            "Connection for PURGE requests.",
-            function () use ($settings) {
-                $this->renderer->renderInput(
-                    "varnish_host",
-                    "Host",
-                    "127.0.0.1",
-                    $settings,
-                );
-                $this->renderer->renderInput(
-                    "varnish_port",
-                    "Port",
-                    "6081",
-                    $settings,
-                    "number",
-                );
-            },
-        );
-        $this->formEnd();
     }
 }
