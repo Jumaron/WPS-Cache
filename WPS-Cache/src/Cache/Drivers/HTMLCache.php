@@ -141,8 +141,13 @@ final class HTMLCache extends AbstractCacheDriver
             }
         }
 
-        // Add Timestamp
-        $content .= sprintf("\n<!-- WPS Cache: %s -->", gmdate("Y-m-d H:i:s"));
+        // Add Timestamp & Signature
+        $deviceType = $this->getMobileSuffix() ? "Mobile" : "Desktop";
+        $content .= sprintf(
+            "\n<!-- WPS Cache: %s (%s) -->",
+            gmdate("Y-m-d H:i:s"),
+            $deviceType,
+        );
 
         // Write to Disk
         $this->writeCacheFile($content);
@@ -172,14 +177,22 @@ final class HTMLCache extends AbstractCacheDriver
             $path .= "/";
         }
 
+        // Detect Mobile Suffix
+        $suffix = $this->getMobileSuffix();
+
         $query = parse_url($uri, PHP_URL_QUERY);
         if ($query) {
             parse_str($query, $queryParams);
             ksort($queryParams);
+            // SOTA: Use separate cache files for mobile to support mobile-specific themes/assets
             $filename =
-                "index-" . md5(http_build_query($queryParams)) . ".html";
+                "index" .
+                $suffix .
+                "-" .
+                md5(http_build_query($queryParams)) .
+                ".html";
         } else {
-            $filename = "index.html";
+            $filename = "index" . $suffix . ".html";
         }
 
         $fullPath = $this->cacheDir . $host . $path;
@@ -188,6 +201,30 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         $this->atomicWrite($fullPath . $filename, $content);
+    }
+
+    /**
+     * Efficiently detects mobile devices based on User-Agent.
+     * Matches common mobile identifiers.
+     */
+    private function getMobileSuffix(): string
+    {
+        $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
+        if (empty($ua)) {
+            return "";
+        }
+
+        // Regex covers: iPhone, Android, various mobile browsers
+        if (
+            preg_match(
+                "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
+                $ua,
+            )
+        ) {
+            return "-mobile";
+        }
+
+        return "";
     }
 
     private function sanitizePath(string $path): string

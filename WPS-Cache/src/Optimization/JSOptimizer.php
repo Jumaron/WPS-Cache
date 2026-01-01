@@ -48,6 +48,7 @@ class JSOptimizer
         }
 
         // 2. Parse Scripts
+        // SOTA Regex: Uses non-greedy matching and handles attributes spanning lines.
         $html = preg_replace_callback(
             "/<script\s*(.*?)>(.*?)<\/script>/is",
             [$this, "processScriptTag"],
@@ -127,8 +128,9 @@ class JSOptimizer
 
     /**
      * SOTA Bootloader:
-     * Waits for user interaction, then loads delayed scripts sequentially.
-     * Maintains execution order.
+     * 1. Uses requestIdleCallback to avoid Main Thread Blocking (Mobile friendly).
+     * 2. Loads scripts sequentially to maintain dependency order.
+     * 3. Wakes up on interaction OR timeout.
      */
     private function getBootloader(): string
     {
@@ -136,23 +138,40 @@ class JSOptimizer
         <script id="wpsc-bootloader">
         (function() {
             let triggered = false;
+            // Interaction events that signal user intent
             const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
 
             function wakeUp() {
                 if (triggered) return;
                 triggered = true;
 
+                // Cleanup listeners
                 events.forEach(e => window.removeEventListener(e, wakeUp, {passive: true}));
 
-                // Load Scripts
+                // Fetch all delayed scripts
                 const scripts = document.querySelectorAll('script[type="wpsc-delayed"]');
+
+                // Helper to load next script
                 const loadScript = (i) => {
                     if (i >= scripts.length) return;
 
+                    // SOTA: Use requestIdleCallback if available to unblock UI threads
+                    // This creates gaps for the browser to render frames/handle input
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(() => injectScript(i), { timeout: 1000 });
+                    } else {
+                        // Fallback for Safari/Older browsers: tiny timeout to break call stack
+                        setTimeout(() => injectScript(i), 10);
+                    }
+                };
+
+                const injectScript = (i) => {
                     const original = scripts[i];
                     const next = () => loadScript(i + 1);
 
                     const clone = document.createElement('script');
+
+                    // Copy attributes mapping data-wpsc-src back to src
                     [...original.attributes].forEach(attr => {
                         let name = attr.name;
                         let val = attr.value;
@@ -167,24 +186,27 @@ class JSOptimizer
 
                     clone.text = original.text;
 
+                    // Attach load handlers for external scripts to maintain order
                     if (clone.src) {
                         clone.onload = next;
                         clone.onerror = next;
                     } else {
-                        // Inline scripts run immediately
-                        setTimeout(next, 0);
+                        // Inline scripts run immediately, move to next
+                        next();
                     }
 
                     original.parentNode.insertBefore(clone, original);
                     original.remove();
                 };
 
+                // Start the chain
                 loadScript(0);
             }
 
+            // Attach Passive Listeners
             events.forEach(e => window.addEventListener(e, wakeUp, {passive: true}));
 
-            // Fallback: Wake up after 8 seconds anyway
+            // Safety Fallback: Wake up after 8s if no interaction occurs
             setTimeout(wakeUp, 8000);
         })();
         </script>
