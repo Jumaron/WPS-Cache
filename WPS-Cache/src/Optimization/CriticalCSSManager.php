@@ -14,6 +14,7 @@ use DOMXPath;
 class CriticalCSSManager
 {
     private array $settings;
+    private array $selectorCache = [];
 
     private const SAFELIST = [
         "active",
@@ -49,6 +50,7 @@ class CriticalCSSManager
             return;
         }
 
+        $this->selectorCache = [];
         $xpath = new DOMXPath($dom);
         $styles = $dom->getElementsByTagName("style");
         $nodesToRemove = [];
@@ -129,8 +131,13 @@ class CriticalCSSManager
 
     private function shouldKeep(string $selector, DOMXPath $xpath): bool
     {
+        if (isset($this->selectorCache[$selector])) {
+            return $this->selectorCache[$selector];
+        }
+
         foreach (self::SAFELIST as $safe) {
             if (str_contains($selector, $safe)) {
+                $this->selectorCache[$selector] = true;
                 return true;
             }
         }
@@ -139,14 +146,18 @@ class CriticalCSSManager
         $cleanSelector = trim($cleanSelector);
 
         if (empty($cleanSelector)) {
+            $this->selectorCache[$selector] = true;
             return true;
         }
 
         try {
             $query = $this->cssToXpath($cleanSelector);
             $nodes = $xpath->query($query);
-            return $nodes->length > 0;
+            $result = $nodes->length > 0;
+            $this->selectorCache[$selector] = $result;
+            return $result;
         } catch (\Throwable $e) {
+            $this->selectorCache[$selector] = true;
             return true;
         }
     }
