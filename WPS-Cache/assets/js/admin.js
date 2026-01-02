@@ -1,11 +1,16 @@
 document.addEventListener("DOMContentLoaded", function () {
+  initPreloader();
+  initCopyTriggers();
+});
+
+function initPreloader() {
   const preloadBtn = document.getElementById("wpsc-start-preload");
+  if (!preloadBtn) return;
+
   const progressDiv = document.getElementById("wpsc-preload-progress");
   const statusSpan = document.getElementById("wpsc-preload-status");
   const percentSpan = document.getElementById("wpsc-preload-percent");
   const progressBar = document.getElementById("wpsc-preload-bar");
-
-  if (!preloadBtn) return;
 
   const CONCURRENCY_LIMIT = 3;
   let queue = [];
@@ -131,8 +136,9 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }, 2000);
   }
+}
 
-  // Generic Copy Functionality
+function initCopyTriggers() {
   document.querySelectorAll(".wpsc-copy-trigger").forEach((btn) => {
     btn.addEventListener("click", function () {
       const targetId = this.dataset.copyTarget;
@@ -180,4 +186,4 @@ document.addEventListener("DOMContentLoaded", function () {
       btn.style.width = "";
     }, 2000);
   }
-});
+}
