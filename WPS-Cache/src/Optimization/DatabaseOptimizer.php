@@ -42,38 +42,47 @@ class DatabaseOptimizer
         global $wpdb;
         $stats = [];
 
-        // Posts
-        $stats["revisions"] = (int) $wpdb->get_var(
-            "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = 'revision'",
-        );
-        $stats["auto_drafts"] = (int) $wpdb->get_var(
-            "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = 'auto-draft'",
-        );
-        $stats["trashed_posts"] = (int) $wpdb->get_var(
-            "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_status = 'trash'",
-        );
-
-        // Comments
-        $stats["spam_comments"] = (int) $wpdb->get_var(
-            "SELECT COUNT(comment_ID) FROM $wpdb->comments WHERE comment_approved = 'spam'",
-        );
-        $stats["trashed_comments"] = (int) $wpdb->get_var(
-            "SELECT COUNT(comment_ID) FROM $wpdb->comments WHERE comment_approved = 'trash'",
+        // Posts (Revisions, Auto Drafts, Trashed)
+        // Optimization: Combine 3 queries into 1
+        $posts_stats = $wpdb->get_row(
+            "SELECT
+                SUM(CASE WHEN post_type = 'revision' THEN 1 ELSE 0 END) as revisions,
+                SUM(CASE WHEN post_type = 'auto-draft' THEN 1 ELSE 0 END) as auto_drafts,
+                SUM(CASE WHEN post_status = 'trash' THEN 1 ELSE 0 END) as trashed_posts
+             FROM $wpdb->posts
+             WHERE post_type IN ('revision', 'auto-draft') OR post_status = 'trash'"
         );
 
-        // Transients
+        $stats["revisions"] = (int) ($posts_stats->revisions ?? 0);
+        $stats["auto_drafts"] = (int) ($posts_stats->auto_drafts ?? 0);
+        $stats["trashed_posts"] = (int) ($posts_stats->trashed_posts ?? 0);
+
+        // Comments (Spam, Trash)
+        // Optimization: Combine 2 queries into 1
+        $comments_stats = $wpdb->get_row(
+            "SELECT
+                SUM(CASE WHEN comment_approved = 'spam' THEN 1 ELSE 0 END) as spam_comments,
+                SUM(CASE WHEN comment_approved = 'trash' THEN 1 ELSE 0 END) as trashed_comments
+             FROM $wpdb->comments
+             WHERE comment_approved IN ('spam', 'trash')"
+        );
+
+        $stats["spam_comments"] = (int) ($comments_stats->spam_comments ?? 0);
+        $stats["trashed_comments"] = (int) ($comments_stats->trashed_comments ?? 0);
+
+        // Transients (Expired, All)
+        // Optimization: Combine 2 queries into 1
         $time = time();
-        $stats["expired_transients"] = (int) $wpdb->get_var(
-            "SELECT COUNT(option_name) FROM $wpdb->options
-             WHERE option_name LIKE '_transient_timeout_%'
-             AND option_value < '$time'",
+        $transients_stats = $wpdb->get_row(
+            "SELECT
+                SUM(CASE WHEN option_name LIKE '_transient_timeout_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired_transients,
+                SUM(CASE WHEN option_name LIKE '_transient_%' THEN 1 ELSE 0 END) as all_transients
+             FROM $wpdb->options
+             WHERE option_name LIKE '_transient_%'"
         );
 
-        // Count all transients (approximate, based on timeout keys)
-        $stats["all_transients"] = (int) $wpdb->get_var(
-            "SELECT COUNT(option_name) FROM $wpdb->options
-             WHERE option_name LIKE '_transient_%'",
-        );
+        $stats["expired_transients"] = (int) ($transients_stats->expired_transients ?? 0);
+        $stats["all_transients"] = (int) ($transients_stats->all_transients ?? 0);
 
         // Overhead
         $stats["optimize_tables"] = $this->getTableOverhead($wpdb);
