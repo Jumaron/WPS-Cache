@@ -15,6 +15,7 @@ class CriticalCSSManager
 {
     private array $settings;
     private array $selectorCache = [];
+    private string $safelistRegex;
 
     private const SAFELIST = [
         "active",
@@ -41,6 +42,8 @@ class CriticalCSSManager
     public function __construct(array $settings)
     {
         $this->settings = $settings;
+        $quoted = array_map(fn($s) => preg_quote($s, "/"), self::SAFELIST);
+        $this->safelistRegex = "/" . implode("|", $quoted) . "/";
     }
 
     // New shared method
@@ -135,11 +138,9 @@ class CriticalCSSManager
             return $this->selectorCache[$selector];
         }
 
-        foreach (self::SAFELIST as $safe) {
-            if (str_contains($selector, $safe)) {
-                $this->selectorCache[$selector] = true;
-                return true;
-            }
+        if (preg_match($this->safelistRegex, $selector)) {
+            $this->selectorCache[$selector] = true;
+            return true;
         }
 
         $cleanSelector = preg_replace("/:[a-zA-Z-]+(\(.*?\))?/", "", $selector);
