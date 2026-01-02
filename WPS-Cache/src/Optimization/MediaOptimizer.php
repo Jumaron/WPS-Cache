@@ -24,29 +24,49 @@ class MediaOptimizer
 
     public function process(string $html): string
     {
-        // 1. Process Images (Lazy Load + Dimensions)
-        if (
-            !empty($this->settings["media_lazy_load"]) ||
-            !empty($this->settings["media_add_dimensions"])
-        ) {
-            $html = preg_replace_callback(
-                "/<img\s+([^>]+)>/i",
-                [$this, "processImage"],
-                $html,
-            );
+        $tags = [];
+        $processImages = !empty($this->settings["media_lazy_load"]) || !empty($this->settings["media_add_dimensions"]);
+        $processIframes = !empty($this->settings["media_lazy_load_iframes"]) || !empty($this->settings["media_youtube_facade"]);
+
+        if ($processImages) {
+            $tags[] = "img";
+        }
+        if ($processIframes) {
+            $tags[] = "iframe";
         }
 
-        // 2. Process Iframes (Lazy Load + YouTube Facade)
-        if (
-            !empty($this->settings["media_lazy_load_iframes"]) ||
-            !empty($this->settings["media_youtube_facade"])
-        ) {
-            $html = preg_replace_callback(
-                "/<iframe\s+([^>]+)>/i",
-                [$this, "processIframe"],
-                $html,
-            );
+        if (empty($tags)) {
+            // Even if no tags to process, we might need to inject facade assets if they were added previously?
+            // Original logic only injected assets if "wpsc-youtube-wrapper" existed.
+            // That wrapper is added by processIframe.
+            // If processIframes is false, processIframe is never called, so wrapper never exists.
+            // So we can safely return early.
+            return $html;
         }
+
+        // Optimization: Combine Regex passes into one O(N) scan
+        $pattern = "/<(" . implode("|", $tags) . ")\s+([^>]+)>/i";
+
+        $html = preg_replace_callback(
+            $pattern,
+            function ($matches) {
+                // $matches[0] = full tag
+                // $matches[1] = tag name (img|iframe)
+                // $matches[2] = attributes
+
+                $tagName = strtolower($matches[1]);
+                $subMatches = [$matches[0], $matches[2]]; // [Tag, Attributes]
+
+                if ($tagName === "img") {
+                    return $this->processImage($subMatches);
+                }
+                if ($tagName === "iframe") {
+                    return $this->processIframe($subMatches);
+                }
+                return $matches[0];
+            },
+            $html,
+        );
 
         // 3. Inject YouTube Facade CSS/JS if needed
         if (
