@@ -107,6 +107,11 @@ class AnalyticsManager
             $_POST["wpsc_action"] === "refresh_stats"
         ) {
             check_admin_referer("wpsc_refresh_stats");
+
+            if (!current_user_can("manage_options")) {
+                wp_die("Unauthorized");
+            }
+
             delete_transient("wpsc_stats_cache");
             echo "<script>window.location.reload();</script>";
         }
