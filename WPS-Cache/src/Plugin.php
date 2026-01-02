@@ -239,6 +239,8 @@ final class Plugin
     }
     private function setupHooks(): void
     {
+        add_action("send_headers", [$this->serverManager, "sendSecurityHeaders"]);
+
         $clear_hooks = [
             "wpsc_clear_cache",
             "switch_theme",
