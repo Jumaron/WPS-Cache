@@ -21,3 +21,7 @@
 ## 2024-05-30 - [Regex over Iterative Search in HTMLCache]
 **Learning:** Checking excluded URLs using a loop with `str_contains` is O(N) and runs on every request.
 **Action:** Pre-compiled exclusions into a single Regex in `HTMLCache` constructor. This matches the optimization in `JSOptimizer` and provides O(1) (amortized) lookup performance for URL exclusions.
+
+## 2024-05-31 - [Avoid Stat Calls for Cached Images]
+**Learning:** `filesize($path)` and `file_exists($path)` are stat calls that hit the filesystem. Using them to generate a cache key for image dimensions means we pay the I/O cost on every request, even if the result is cached.
+**Action:** Changed the cache key to depend only on the file path. The cache lookup now happens *before* any file system check. This saves N*2 stat calls per page (where N is the number of local images), significantly reducing I/O overhead.

@@ -167,16 +167,16 @@ class MediaOptimizer
         // Remove query strings
         $path = strtok($path, "?");
 
-        if (!file_exists($path)) {
-            return $tag;
-        }
-
         // SOTA: Cache the result to avoid disk I/O on every request
-        // Key is hashed path + filesize (invalidates if file changes)
-        $cacheKey = "wpsc_dim_" . md5($path . filesize($path));
+        // Key is hashed path (invalidates via TTL or manual flush)
+        $cacheKey = "wpsc_dim_" . md5($path);
         $dims = get_transient($cacheKey);
 
         if (!$dims) {
+            if (!file_exists($path)) {
+                return $tag;
+            }
+
             $dims = @getimagesize($path);
             if ($dims) {
                 set_transient($cacheKey, $dims, MONTH_IN_SECONDS);
