@@ -163,9 +163,13 @@ class DatabaseOptimizer
         }
 
         if (in_array("optimize_tables", $items)) {
-            $tables = $wpdb->get_col("SHOW TABLES");
+            // Sentinel Fix: Limit optimization to this site's tables and escape table names
+            // Prevents touching shared DB tables and mitigates potential injection risks
+            $like = $wpdb->esc_like($wpdb->prefix) . "%";
+            $tables = $wpdb->get_col($wpdb->prepare("SHOW TABLES LIKE %s", $like));
+
             foreach ($tables as $table) {
-                $wpdb->query("OPTIMIZE TABLE $table");
+                $wpdb->query("OPTIMIZE TABLE `$table`");
             }
             $count++;
         }
