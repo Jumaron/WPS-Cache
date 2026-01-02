@@ -27,7 +27,7 @@ function initPreloader() {
     }
     // Set loading state
     preloadBtn.innerHTML =
-      '<span class="dashicons dashicons-update wpsc-spin"></span> ' +
+      '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true"></span> ' +
       wpsc_admin.strings.preload_loading;
 
     progressDiv.style.display = "block";
@@ -125,7 +125,7 @@ function initPreloader() {
 
     // Show success state
     preloadBtn.innerHTML =
-      '<span class="dashicons dashicons-yes"></span> ' +
+      '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' +
       wpsc_admin.strings.preload_done;
 
     setTimeout(() => {
