@@ -25,30 +25,30 @@ class MetricsCollector
      */
     public function getStats(): array
     {
-        $settings = get_option('wpsc_settings', []);
+        $settings = get_option("wpsc_settings", []);
 
-        if (empty($settings['enable_metrics'])) {
+        if (empty($settings["enable_metrics"])) {
             return [
-                'timestamp' => current_time('mysql'),
-                'html'      => ['enabled' => false, 'files' => 0, 'size' => '0 B'],
-                'redis'     => ['enabled' => false],
-                'system'    => $this->getSystemStats()
+                "timestamp" => current_time("mysql"),
+                "html" => ["enabled" => false, "files" => 0, "size" => "0 B"],
+                "redis" => ["enabled" => false],
+                "system" => $this->getSystemStats(),
             ];
         }
 
-        $cached = get_transient('wpsc_stats_cache');
+        $cached = get_transient("wpsc_stats_cache");
         if ($cached !== false) {
             return $cached;
         }
 
         $stats = [
-            'timestamp' => current_time('mysql'),
-            'html'      => $this->getHtmlStats(),
-            'redis'     => $this->getRedisStats(),
-            'system'    => $this->getSystemStats()
+            "timestamp" => current_time("mysql"),
+            "html" => $this->getHtmlStats(),
+            "redis" => $this->getRedisStats(),
+            "system" => $this->getSystemStats(),
         ];
 
-        set_transient('wpsc_stats_cache', $stats, 5 * MINUTE_IN_SECONDS);
+        set_transient("wpsc_stats_cache", $stats, 5 * MINUTE_IN_SECONDS);
 
         return $stats;
     }
@@ -58,21 +58,26 @@ class MetricsCollector
      */
     private function getHtmlStats(): array
     {
-        $dir = defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR . 'html/' : WP_CONTENT_DIR . '/cache/wps-cache/html/';
+        $dir = defined("WPSC_CACHE_DIR")
+            ? WPSC_CACHE_DIR . "html/"
+            : WP_CONTENT_DIR . "/cache/wps-cache/html/";
 
         $count = 0;
         $size = 0;
 
-        // NOTE: We cannot track "Hits" for HTML cache because Apache serves the file 
+        // NOTE: We cannot track "Hits" for HTML cache because Apache serves the file
         // before PHP starts. We can only track "Files Created" and "Disk Usage".
         if (is_dir($dir)) {
             try {
                 $iterator = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+                    new \RecursiveDirectoryIterator(
+                        $dir,
+                        \FilesystemIterator::SKIP_DOTS,
+                    ),
                 );
 
                 foreach ($iterator as $file) {
-                    if ($file->isFile() && $file->getExtension() === 'html') {
+                    if ($file->isFile() && $file->getExtension() === "html") {
                         $count++;
                         $size += $file->getSize();
                     }
@@ -84,9 +89,10 @@ class MetricsCollector
         }
 
         return [
-            'enabled' => (bool) get_option('wpsc_settings')['html_cache'] ?? false,
-            'files'   => $count,
-            'size'    => size_format($size),
+            "enabled" =>
+                (bool) get_option("wpsc_settings")["html_cache"] ?? false,
+            "files" => $count,
+            "size" => size_format($size),
         ];
     }
 
@@ -95,10 +101,10 @@ class MetricsCollector
      */
     private function getRedisStats(): array
     {
-        $driver = $this->cacheManager->getDriver('redis');
+        $driver = $this->cacheManager->getDriver("redis");
 
-        if (!$driver || !method_exists($driver, 'getConnection')) {
-            return ['enabled' => false];
+        if (!$driver || !method_exists($driver, "getConnection")) {
+            return ["enabled" => false];
         }
 
         try {
@@ -106,38 +112,42 @@ class MetricsCollector
             $redis = $driver->getConnection();
 
             if (!$redis) {
-                return ['enabled' => true, 'connected' => false];
+                return ["enabled" => true, "connected" => false];
             }
 
             $info = $redis->info();
 
             // Calculate Hit Ratio
-            $hits = $info['keyspace_hits'] ?? 0;
-            $misses = $info['keyspace_misses'] ?? 0;
+            $hits = $info["keyspace_hits"] ?? 0;
+            $misses = $info["keyspace_misses"] ?? 0;
             $total = $hits + $misses;
             $ratio = $total > 0 ? round(($hits / $total) * 100, 2) : 0;
 
             return [
-                'enabled'     => true,
-                'connected'   => true,
-                'memory_used' => $info['used_memory_human'] ?? '0B',
-                'hit_ratio'   => $ratio, // THIS is the valid Hit Ratio (Redis Only)
-                'hits'        => $hits,
-                'misses'      => $misses,
-                'uptime'      => $info['uptime_in_days'] ?? 0
+                "enabled" => true,
+                "connected" => true,
+                "memory_used" => $info["used_memory_human"] ?? "0B",
+                "hit_ratio" => $ratio, // THIS is the valid Hit Ratio (Redis Only)
+                "hits" => $hits,
+                "misses" => $misses,
+                "uptime" => $info["uptime_in_days"] ?? 0,
             ];
         } catch (\Throwable $e) {
-            return ['enabled' => true, 'connected' => false, 'error' => $e->getMessage()];
+            return [
+                "enabled" => true,
+                "connected" => false,
+                "error" => $e->getMessage(),
+            ];
         }
     }
 
     private function getSystemStats(): array
     {
         return [
-            'php_version' => PHP_VERSION,
-            'server'      => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-            'memory_limit' => ini_get('memory_limit'),
-            'max_exec'    => ini_get('max_execution_time')
+            "php_version" => PHP_VERSION,
+            "server" => $_SERVER["SERVER_SOFTWARE"] ?? "Unknown",
+            "memory_limit" => ini_get("memory_limit"),
+            "max_exec" => ini_get("max_execution_time"),
         ];
     }
 }

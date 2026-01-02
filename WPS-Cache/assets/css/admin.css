@@ -1,242 +1,244 @@
 :root {
-  --wpsc-primary: #2563eb; /* Modern Royal Blue */
-  --wpsc-primary-hover: #1d4ed8;
-  --wpsc-bg: #f3f4f6;
-  --wpsc-sidebar-bg: #ffffff;
-  --wpsc-card-bg: #ffffff;
-  --wpsc-text-main: #111827;
-  --wpsc-text-muted: #6b7280;
-  --wpsc-border: #e5e7eb;
-  --wpsc-success: #10b981;
-  --wpsc-warning: #f59e0b;
-  --wpsc-danger: #ef4444;
-  --wpsc-radius: 12px;
-  --wpsc-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  --wpsc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --wpsc-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --wpsc-primary: #2563eb; /* Modern Royal Blue */
+    --wpsc-primary-hover: #1d4ed8;
+    --wpsc-bg: #f3f4f6;
+    --wpsc-sidebar-bg: #ffffff;
+    --wpsc-card-bg: #ffffff;
+    --wpsc-text-main: #111827;
+    --wpsc-text-muted: #6b7280;
+    --wpsc-border: #e5e7eb;
+    --wpsc-success: #10b981;
+    --wpsc-warning: #f59e0b;
+    --wpsc-danger: #ef4444;
+    --wpsc-radius: 12px;
+    --wpsc-shadow:
+        0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --wpsc-shadow-lg:
+        0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --wpsc-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Reset & Container */
 .wpsc-wrap {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  color: var(--wpsc-text-main);
-  background: var(--wpsc-bg);
-  min-height: calc(100vh - 32px);
-  margin: 0 0 0 -20px; /* Counteract WP padding */
-  padding: 0;
-  display: flex;
-  flex-direction: column;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+        sans-serif;
+    color: var(--wpsc-text-main);
+    background: var(--wpsc-bg);
+    min-height: calc(100vh - 32px);
+    margin: 0 0 0 -20px; /* Counteract WP padding */
+    padding: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .wpsc-header {
-  background: #fff;
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--wpsc-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+    background: #fff;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--wpsc-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .wpsc-logo h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--wpsc-primary);
-  letter-spacing: -0.025em;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--wpsc-primary);
+    letter-spacing: -0.025em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .wpsc-version {
-  font-size: 0.75rem;
-  background: #eff6ff;
-  color: var(--wpsc-primary);
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 600;
+    font-size: 0.75rem;
+    background: #eff6ff;
+    color: var(--wpsc-primary);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
 }
 
 /* Layout Grid */
 .wpsc-layout {
-  display: flex;
-  flex: 1;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
+    display: flex;
+    flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 /* Sidebar Navigation */
 .wpsc-sidebar {
-  width: 260px;
-  background: var(--wpsc-sidebar-bg);
-  border-right: 1px solid var(--wpsc-border);
-  padding: 2rem 1rem;
-  flex-shrink: 0;
+    width: 260px;
+    background: var(--wpsc-sidebar-bg);
+    border-right: 1px solid var(--wpsc-border);
+    padding: 2rem 1rem;
+    flex-shrink: 0;
 }
 
 .wpsc-nav-item {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-  border-radius: var(--wpsc-radius);
-  color: var(--wpsc-text-muted);
-  text-decoration: none;
-  font-weight: 500;
-  transition: var(--wpsc-transition);
-  border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--wpsc-radius);
+    color: var(--wpsc-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--wpsc-transition);
+    border: 1px solid transparent;
 }
 
 .wpsc-nav-item:hover {
-  background: #f9fafb;
-  color: var(--wpsc-primary);
+    background: #f9fafb;
+    color: var(--wpsc-primary);
 }
 
 .wpsc-nav-item.active {
-  background: #eff6ff;
-  color: var(--wpsc-primary);
-  border-color: #dbeafe;
-  font-weight: 600;
+    background: #eff6ff;
+    color: var(--wpsc-primary);
+    border-color: #dbeafe;
+    font-weight: 600;
 }
 
 .wpsc-nav-item .dashicons {
-  margin-right: 12px;
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
+    margin-right: 12px;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
 }
 
 /* Main Content Area */
 .wpsc-content {
-  flex: 1;
-  padding: 2rem;
-  max-width: 1000px;
+    flex: 1;
+    padding: 2rem;
+    max-width: 1000px;
 }
 
 /* Cards & Sections */
 .wpsc-card {
-  background: var(--wpsc-card-bg);
-  border-radius: var(--wpsc-radius);
-  box-shadow: var(--wpsc-shadow);
-  border: 1px solid var(--wpsc-border);
-  margin-bottom: 2rem;
-  overflow: hidden;
-  transition: var(--wpsc-transition);
+    background: var(--wpsc-card-bg);
+    border-radius: var(--wpsc-radius);
+    box-shadow: var(--wpsc-shadow);
+    border: 1px solid var(--wpsc-border);
+    margin-bottom: 2rem;
+    overflow: hidden;
+    transition: var(--wpsc-transition);
 }
 
 .wpsc-card:hover {
-  box-shadow: var(--wpsc-shadow-lg);
-  transform: translateY(-2px);
+    box-shadow: var(--wpsc-shadow-lg);
+    transform: translateY(-2px);
 }
 
 .wpsc-card-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--wpsc-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--wpsc-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .wpsc-card-header h2 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
 }
 
 .wpsc-card-body {
-  padding: 1.5rem;
+    padding: 1.5rem;
 }
 
 /* Form Elements & Toggles */
 .wpsc-setting-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 1.25rem 0;
-  border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .wpsc-setting-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
 .wpsc-setting-info {
-  padding-right: 2rem;
-  flex: 1;
+    padding-right: 2rem;
+    flex: 1;
 }
 
 .wpsc-setting-label {
-  display: block;
-  font-weight: 600;
-  color: var(--wpsc-text-main);
-  margin-bottom: 0.25rem;
-  font-size: 0.95rem;
+    display: block;
+    font-weight: 600;
+    color: var(--wpsc-text-main);
+    margin-bottom: 0.25rem;
+    font-size: 0.95rem;
 }
 
 .wpsc-setting-desc {
-  font-size: 0.875rem;
-  color: var(--wpsc-text-muted);
-  line-height: 1.4;
-  margin: 0;
+    font-size: 0.875rem;
+    color: var(--wpsc-text-muted);
+    line-height: 1.4;
+    margin: 0;
 }
 
 .wpsc-setting-control {
-  flex-shrink: 0;
+    flex-shrink: 0;
 }
 
 /* Modern Toggle Switch */
 .wpsc-switch {
-  position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 26px;
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
 }
 
 .wpsc-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
+    opacity: 0;
+    width: 0;
+    height: 0;
 }
 
 .wpsc-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #e5e7eb;
-  transition: 0.3s;
-  border-radius: 34px;
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #e5e7eb;
+    transition: 0.3s;
+    border-radius: 34px;
 }
 
 .wpsc-slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 input:checked + .wpsc-slider {
-  background-color: var(--wpsc-primary);
+    background-color: var(--wpsc-primary);
 }
 
 input:focus + .wpsc-slider {
-  box-shadow: 0 0 1px var(--wpsc-primary);
+    box-shadow: 0 0 1px var(--wpsc-primary);
 }
 
 input:checked + .wpsc-slider:before {
-  transform: translateX(22px);
+    transform: translateX(22px);
 }
 
 /* Inputs */
@@ -244,182 +246,186 @@ input:checked + .wpsc-slider:before {
 .wpsc-input-number,
 .wpsc-input-password,
 .wpsc-textarea {
-  width: 100%;
-  max-width: 400px;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--wpsc-border);
-  border-radius: 6px;
-  font-size: 0.875rem;
-  transition: var(--wpsc-transition);
-  background: #f9fafb;
+    width: 100%;
+    max-width: 400px;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--wpsc-border);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: var(--wpsc-transition);
+    background: #f9fafb;
 }
 
 .wpsc-input-text:focus,
 .wpsc-textarea:focus {
-  background: #fff;
-  border-color: var(--wpsc-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  outline: none;
+    background: #fff;
+    border-color: var(--wpsc-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    outline: none;
 }
 
 /* Buttons */
 .button-primary.wpsc-btn-primary {
-  background: var(--wpsc-primary) !important;
-  border-color: var(--wpsc-primary) !important;
-  color: white !important;
-  padding: 0.625rem 1.25rem !important;
-  font-size: 0.875rem !important;
-  font-weight: 500 !important;
-  border-radius: 6px !important;
-  transition: var(--wpsc-transition);
-  height: auto !important;
-  line-height: normal !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    background: var(--wpsc-primary) !important;
+    border-color: var(--wpsc-primary) !important;
+    color: white !important;
+    padding: 0.625rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    border-radius: 6px !important;
+    transition: var(--wpsc-transition);
+    height: auto !important;
+    line-height: normal !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .button-primary.wpsc-btn-primary:hover {
-  background: var(--wpsc-primary-hover) !important;
-  transform: translateY(-1px);
+    background: var(--wpsc-primary-hover) !important;
+    transform: translateY(-1px);
 }
 
 .wpsc-btn-secondary {
-  background: white;
-  border: 1px solid var(--wpsc-border);
-  color: var(--wpsc-text-main);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: var(--wpsc-transition);
+    background: white;
+    border: 1px solid var(--wpsc-border);
+    color: var(--wpsc-text-main);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: var(--wpsc-transition);
 }
 
 .wpsc-btn-secondary:hover {
-  border-color: var(--wpsc-text-muted);
-  background: #f9fafb;
+    border-color: var(--wpsc-text-muted);
+    background: #f9fafb;
 }
 
 /* Dashboard / Analytics Grid */
 .wpsc-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .wpsc-stat-card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: var(--wpsc-radius);
-  border: 1px solid var(--wpsc-border);
-  box-shadow: var(--wpsc-shadow);
-  display: flex;
-  flex-direction: column;
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--wpsc-radius);
+    border: 1px solid var(--wpsc-border);
+    box-shadow: var(--wpsc-shadow);
+    display: flex;
+    flex-direction: column;
 }
 
 .wpsc-stat-card h3 {
-  font-size: 0.875rem;
-  color: var(--wpsc-text-muted);
-  margin: 0 0 0.5rem 0;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+    font-size: 0.875rem;
+    color: var(--wpsc-text-muted);
+    margin: 0 0 0.5rem 0;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .wpsc-stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--wpsc-text-main);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--wpsc-text-main);
 }
 
 /* NOTICES (Updated) */
 .wpsc-notice {
-  background: white;
-  border-left: 4px solid var(--wpsc-primary);
-  box-shadow: var(--wpsc-shadow);
-  padding: 1rem 1.5rem;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+    background: white;
+    border-left: 4px solid var(--wpsc-primary);
+    box-shadow: var(--wpsc-shadow);
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
 }
 .wpsc-notice.success {
-  border-left-color: var(--wpsc-success);
+    border-left-color: var(--wpsc-success);
 }
 .wpsc-notice.error {
-  border-left-color: var(--wpsc-danger);
+    border-left-color: var(--wpsc-danger);
 }
 .wpsc-notice-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 /* Custom Dismiss Button */
 .wpsc-dismiss-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--wpsc-text-muted);
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--wpsc-text-muted);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
 }
 .wpsc-dismiss-btn:hover {
-  color: var(--wpsc-danger);
+    color: var(--wpsc-danger);
 }
 .wpsc-dismiss-btn .dashicons {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
 }
 
 /* Utilities */
 .wpsc-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.625rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 .wpsc-badge-success {
-  background: #d1fae5;
-  color: #065f46;
+    background: #d1fae5;
+    color: #065f46;
 }
 .wpsc-badge-error {
-  background: #fee2e2;
-  color: #991b1b;
+    background: #fee2e2;
+    color: #991b1b;
 }
 
 /* Responsive */
 @media (max-width: 782px) {
-  .wpsc-layout {
-    flex-direction: column;
-  }
-  .wpsc-sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--wpsc-border);
-    padding: 1rem;
-  }
-  .wpsc-nav-item {
-    display: inline-flex;
-    margin-right: 0.5rem;
-  }
-  .wpsc-content {
-    padding: 1rem;
-  }
-  .wpsc-wrap {
-    margin-left: -10px;
-  }
+    .wpsc-layout {
+        flex-direction: column;
+    }
+    .wpsc-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--wpsc-border);
+        padding: 1rem;
+    }
+    .wpsc-nav-item {
+        display: inline-flex;
+        margin-right: 0.5rem;
+    }
+    .wpsc-content {
+        padding: 1rem;
+    }
+    .wpsc-wrap {
+        margin-left: -10px;
+    }
 }
 @keyframes wpsc-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 .wpsc-spin {
-  animation: wpsc-spin 2s infinite linear;
+    animation: wpsc-spin 2s infinite linear;
 }

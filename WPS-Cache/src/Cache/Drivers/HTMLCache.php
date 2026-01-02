@@ -4,32 +4,65 @@ declare(strict_types=1);
 
 namespace WPSCache\Cache\Drivers;
 
+use DOMDocument;
 use WPSCache\Optimization\JSOptimizer;
-use WPSCache\Optimization\AsyncCSS;
+use WPSCache\Optimization\MediaOptimizer;
+use WPSCache\Optimization\FontOptimizer;
+use WPSCache\Optimization\CdnManager;
+use WPSCache\Optimization\CriticalCSSManager;
+use WPSCache\Compatibility\CommerceManager;
 
 final class HTMLCache extends AbstractCacheDriver
 {
     private string $cacheDir;
     private ?string $exclusionRegex = null;
 
-    private const BYPASS_PARAMS = ['add-to-cart', 'wp_nonce', 'preview', 's'];
+    private ?CommerceManager $commerceManager;
+    private const BYPASS_PARAMS = ["add-to-cart", "wp_nonce", "preview", "s"];
 
-    public function __construct()
+    // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
+    private const IGNORED_EXTENSIONS = [
+        "xml",
+        "json",
+        "map",
+        "css",
+        "js",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "ico",
+        "svg",
+        "webp",
+        "avif",
+        "woff",
+        "woff2",
+        "ttf",
+        "eot",
+        "otf",
+        "txt",
+        "md",
+        "xsl",
+    ];
+
+    public function __construct(?CommerceManager $commerceManager = null)
     {
         parent::__construct();
-        $this->cacheDir = defined('WPSC_CACHE_DIR') ? WPSC_CACHE_DIR . 'html/' : WP_CONTENT_DIR . '/cache/wps-cache/html/';
+        $this->commerceManager = $commerceManager;
+        $this->cacheDir = defined("WPSC_CACHE_DIR")
+            ? WPSC_CACHE_DIR . "html/"
+            : WP_CONTENT_DIR . "/cache/wps-cache/html/";
         $this->ensureDirectory($this->cacheDir);
 
-        // Compile exclusion patterns into a single regex for O(1) matching
-        $excluded = $this->settings['excluded_urls'] ?? [];
+        $excluded = $this->settings["excluded_urls"] ?? [];
         if (!empty($excluded)) {
-            // Filter empty strings to prevent "match all" regex (e.g. "foo|")
             $excluded = array_filter($excluded);
             if (!empty($excluded)) {
-                // Deduplicate and escape for regex
-                $quoted = array_map(fn($s) => preg_quote($s, '/'), array_unique($excluded));
-                // Use case-sensitive matching to align with str_contains behavior
-                $this->exclusionRegex = '/' . implode('|', $quoted) . '/';
+                $quoted = array_map(
+                    fn($s) => preg_quote($s, "/"),
+                    array_unique($excluded),
+                );
+                $this->exclusionRegex = "/" . implode("|", $quoted) . "/";
             }
         }
     }
@@ -39,27 +72,46 @@ final class HTMLCache extends AbstractCacheDriver
         if ($this->initialized || !$this->shouldCacheRequest()) {
             return;
         }
-        ob_start([$this, 'processOutput']);
+        ob_start([$this, "processOutput"]);
         $this->initialized = true;
     }
 
     private function shouldCacheRequest(): bool
     {
-        if (empty($this->settings['html_cache'])) return false;
-        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return false;
-        if (is_user_logged_in() || is_admin()) return false;
+        if (empty($this->settings["html_cache"])) {
+            return false;
+        }
+        if (($_SERVER["REQUEST_METHOD"] ?? "GET") !== "GET") {
+            return false;
+        }
+        if (is_user_logged_in() || is_admin()) {
+            return false;
+        }
+
+        // 1. EXTENSION GUARD
+        $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if (in_array($ext, self::IGNORED_EXTENSIONS, true)) {
+            return false;
+        }
+
+        if ($this->commerceManager && $this->commerceManager->shouldBypass()) {
+            return false;
+        }
 
         if (!empty($_GET)) {
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
-                if (in_array($key, self::BYPASS_PARAMS, true)) return false;
+                if (in_array($key, self::BYPASS_PARAMS, true)) {
+                    return false;
+                }
             }
         }
 
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
-
-        // Optimized: Single regex match instead of loop + str_contains (O(1) vs O(N))
-        if ($this->exclusionRegex && preg_match($this->exclusionRegex, $uri)) {
+        if (
+            $this->exclusionRegex &&
+            preg_match($this->exclusionRegex, $_SERVER["REQUEST_URI"] ?? "/")
+        ) {
             return false;
         }
 
@@ -68,41 +120,84 @@ final class HTMLCache extends AbstractCacheDriver
 
     public function processOutput(string $buffer): string
     {
-        if (empty($buffer) || http_response_code() !== 200) return $buffer;
+        if (empty($buffer) || http_response_code() !== 200) {
+            return $buffer;
+        }
 
-        // --- DISABLE HTML OPTIMIZATION FOR STABILITY ---
-        // Elementor and other builders rely on whitespace for inline-block layout.
-        // We skip $this->optimizeHTML($buffer) entirely to ensure 100% visual compatibility.
+        // --- PHASE 1: DOM MANIPULATION (Robust & Safe) ---
+        $useDomPipeline =
+            !empty($this->settings["remove_unused_css"]) ||
+            !empty($this->settings["js_delay"]) ||
+            !empty($this->settings["js_defer"]);
+
         $content = $buffer;
 
-        // --- ASSET OPTIMIZATION ---
-        // We still apply JS and CSS optimizations as they are handled safely by SOTA drivers.
+        if ($useDomPipeline) {
+            libxml_use_internal_errors(true);
+            $dom = new DOMDocument();
+            // Hack: force UTF-8
+            @$dom->loadHTML(
+                '<?xml encoding="utf-8" ?>' . $content,
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
+            );
+            libxml_clear_errors();
 
-        // 1. JS Delay/Defer
-        if (!empty($this->settings['js_delay']) || !empty($this->settings['js_defer'])) {
-            try {
-                $jsOpt = new JSOptimizer($this->settings);
-                $content = $jsOpt->process($content);
-            } catch (\Throwable $e) {
-                // Fail safe: if optimizer crashes, keep original content
-                $content = $buffer;
+            // 1. Remove Unused CSS (DOM)
+            if (!empty($this->settings["remove_unused_css"])) {
+                try {
+                    $cssShaker = new CriticalCSSManager($this->settings);
+                    $cssShaker->processDom($dom);
+                } catch (\Throwable $e) {
+                }
             }
+
+            // 2. JS Optimization (Delay/Defer - DOM)
+            if (
+                !empty($this->settings["js_delay"]) ||
+                !empty($this->settings["js_defer"])
+            ) {
+                try {
+                    $jsOpt = new JSOptimizer($this->settings);
+                    $jsOpt->processDom($dom);
+                } catch (\Throwable $e) {
+                }
+            }
+
+            $content = $dom->saveHTML();
+            $content = str_replace('<?xml encoding="utf-8" ?>', "", $content);
         }
 
-        // 2. CSS Async
-        if (!empty($this->settings['css_async'])) {
-            try {
-                $cssOpt = new AsyncCSS($this->settings);
-                $content = $cssOpt->process($content);
-            } catch (\Throwable $e) {
-                // Fail safe
-            }
+        // --- PHASE 2: STRING/REGEX MANIPULATION ---
+
+        // 3. CDN Rewrite
+        try {
+            $cdnManager = new CdnManager($this->settings);
+            $content = $cdnManager->process($content);
+        } catch (\Throwable $e) {
         }
 
-        // Add Timestamp
-        $content .= sprintf("\n<!-- WPS Cache: %s -->", gmdate('Y-m-d H:i:s'));
+        // 4. Font Optimization
+        try {
+            $fontOpt = new FontOptimizer($this->settings);
+            $content = $fontOpt->process($content);
+        } catch (\Throwable $e) {
+        }
 
-        // Write to Disk
+        // 5. Media Optimization
+        try {
+            $mediaOpt = new MediaOptimizer($this->settings);
+            $content = $mediaOpt->process($content);
+        } catch (\Throwable $e) {
+        }
+
+        // Add Timestamp & Signature
+        $deviceType = $this->getMobileSuffix() ? "Mobile" : "Desktop";
+        $content .= sprintf(
+            "\n<!-- WPS Cache: %s (%s) -->",
+            gmdate("Y-m-d H:i:s"),
+            $deviceType,
+        );
+
         $this->writeCacheFile($content);
 
         return $content;
@@ -110,76 +205,83 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function writeCacheFile(string $content): void
     {
-        $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
-
-        // Sentinel Fix: Prevent Directory Traversal via Host Header
-        // 1. Remove port
-        $host = explode(':', $host)[0];
-        // 2. Strict whitelist (alphanumeric, dot, dash)
-        $host = preg_replace('/[^a-z0-9\-\.]/i', '', $host);
-        // 3. Remove consecutive dots (..) to prevent traversal
-        $host = preg_replace('/\.+/', '.', $host);
-        // 4. Trim leading/trailing dots
-        $host = trim($host, '.');
+        $host = $_SERVER["HTTP_HOST"] ?? "unknown";
+        $host = explode(":", $host)[0];
+        $host = preg_replace("/[^a-z0-9\-\.]/i", "", $host);
+        $host = preg_replace("/\.+/", ".", $host);
+        $host = trim($host, ".");
 
         if (empty($host)) {
-            $host = 'unknown';
+            $host = "unknown";
         }
 
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
-
-        // Sentinel: Prevent path traversal by sanitizing the path
+        $uri = $_SERVER["REQUEST_URI"] ?? "/";
         $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
 
-        if (substr($path, -1) !== '/' && !preg_match('/\.[a-z0-9]{2,4}$/i', $path)) {
-            $path .= '/';
+        if (
+            substr($path, -1) !== "/" &&
+            !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
+        ) {
+            $path .= "/";
         }
 
+        $suffix = $this->getMobileSuffix();
         $query = parse_url($uri, PHP_URL_QUERY);
+
         if ($query) {
             parse_str($query, $queryParams);
             ksort($queryParams);
-            $filename = 'index-' . md5(http_build_query($queryParams)) . '.html';
+            $filename =
+                "index" .
+                $suffix .
+                "-" .
+                md5(http_build_query($queryParams)) .
+                ".html";
         } else {
-            $filename = 'index.html';
+            $filename = "index" . $suffix . ".html";
         }
 
         $fullPath = $this->cacheDir . $host . $path;
-        if (substr($fullPath, -1) !== '/') $fullPath .= '/';
+        if (substr($fullPath, -1) !== "/") {
+            $fullPath .= "/";
+        }
 
         $this->atomicWrite($fullPath . $filename, $content);
     }
 
-    /**
-     * Sentinel: Sanitize path to prevent Directory Traversal.
-     * Removes dot segments (./ and ../) and enforces strict path structure.
-     */
+    private function getMobileSuffix(): string
+    {
+        $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
+        if (empty($ua)) {
+            return "";
+        }
+        if (
+            preg_match(
+                "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
+                $ua,
+            )
+        ) {
+            return "-mobile";
+        }
+        return "";
+    }
+
     private function sanitizePath(string $path): string
     {
-        // 1. Remove null bytes
-        $path = str_replace(chr(0), '', $path);
-
-        // 2. Explode and filter parts
-        $parts = explode('/', $path);
+        $path = str_replace(chr(0), "", $path);
+        $parts = explode("/", $path);
         $safeParts = [];
-
         foreach ($parts as $part) {
-            if ($part === '' || $part === '.') {
+            if ($part === "" || $part === ".") {
                 continue;
             }
-
-            if ($part === '..') {
-                // Determine behavior: skip or pop?
-                // Standard URL resolution pops the last segment.
-                // If we are at root, we ignore it.
+            if ($part === "..") {
                 array_pop($safeParts);
             } else {
                 $safeParts[] = $part;
             }
         }
-
-        // 3. Rebuild path
-        return '/' . implode('/', $safeParts);
+        return "/" . implode("/", $safeParts);
     }
 
     public function set(string $key, mixed $value, int $ttl = 3600): void {}

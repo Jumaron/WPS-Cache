@@ -24,13 +24,13 @@ final class RedisCache extends AbstractCacheDriver
     private string $salt;
 
     public function __construct(
-        string $host = '127.0.0.1',
+        string $host = "127.0.0.1",
         int $port = 6379,
         int $db = 0,
         float $timeout = 1.0,
         float $readTimeout = 1.0,
-        string $password = '',
-        string $prefix = 'wpsc:'
+        string $password = "",
+        string $prefix = "wpsc:",
     ) {
         parent::__construct();
         $this->host = $host;
@@ -42,37 +42,37 @@ final class RedisCache extends AbstractCacheDriver
 
         // Sentinel: Initialize Salt for HMAC signing
         // Use standard WP keys if available.
-        if (defined('WP_REDIS_SIGNING_KEY')) {
+        if (defined("WP_REDIS_SIGNING_KEY")) {
             $this->salt = WP_REDIS_SIGNING_KEY;
-        } elseif (defined('WP_CACHE_KEY_SALT')) {
+        } elseif (defined("WP_CACHE_KEY_SALT")) {
             $this->salt = WP_CACHE_KEY_SALT;
-        } elseif (defined('SECURE_AUTH_KEY')) {
+        } elseif (defined("SECURE_AUTH_KEY")) {
             $this->salt = SECURE_AUTH_KEY;
-        } elseif (defined('LOGGED_IN_KEY')) {
+        } elseif (defined("LOGGED_IN_KEY")) {
             $this->salt = LOGGED_IN_KEY;
-        } elseif (defined('NONCE_KEY')) {
+        } elseif (defined("NONCE_KEY")) {
             $this->salt = NONCE_KEY;
-        } elseif (function_exists('wp_salt')) {
-            $this->salt = wp_salt('auth');
+        } elseif (function_exists("wp_salt")) {
+            $this->salt = wp_salt("auth");
         } else {
             // Sentinel Fix: Use DB credentials to generate a consistent, site-specific salt.
             // This prevents using the hardcoded fallback which is publicly known.
             // We use constants available in wp-config.php which is loaded before plugins.
-            $secret  = (defined('DB_NAME') ? DB_NAME : '');
-            $secret .= (defined('DB_USER') ? DB_USER : '');
-            $secret .= (defined('DB_PASSWORD') ? DB_PASSWORD : '');
+            $secret = defined("DB_NAME") ? DB_NAME : "";
+            $secret .= defined("DB_USER") ? DB_USER : "";
+            $secret .= defined("DB_PASSWORD") ? DB_PASSWORD : "";
 
             if (empty($secret)) {
-                $secret = 'wpsc_fallback_entropy_' . __FILE__;
+                $secret = "wpsc_fallback_entropy_" . __FILE__;
             }
 
-            $this->salt = hash('sha256', $secret);
+            $this->salt = hash("sha256", $secret);
         }
     }
 
     public function isSupported(): bool
     {
-        return extension_loaded('redis') && class_exists('Redis');
+        return extension_loaded("redis") && class_exists("Redis");
     }
 
     public function initialize(): void
@@ -84,7 +84,7 @@ final class RedisCache extends AbstractCacheDriver
         try {
             $this->connect();
         } catch (RedisException $e) {
-            $this->logError('Redis Connection Failed: ' . $e->getMessage());
+            $this->logError("Redis Connection Failed: " . $e->getMessage());
         }
     }
 
@@ -94,20 +94,22 @@ final class RedisCache extends AbstractCacheDriver
 
         // 1. Connection (Support TLS via 'tls://' host prefix)
         if (!$this->redis->connect($this->host, $this->port, $this->timeout)) {
-            throw new RedisException('Unable to connect to Redis server.');
+            throw new RedisException("Unable to connect to Redis server.");
         }
 
         // 2. Authentication
         if (!empty($this->password)) {
-            $auth = is_array($this->password) ? $this->password : [$this->password];
+            $auth = is_array($this->password)
+                ? $this->password
+                : [$this->password];
             if (!$this->redis->auth($auth)) {
-                throw new RedisException('Redis authentication failed.');
+                throw new RedisException("Redis authentication failed.");
             }
         }
 
         // 3. Select Database
         if ($this->db !== 0 && !$this->redis->select($this->db)) {
-            throw new RedisException('Redis DB selection failed.');
+            throw new RedisException("Redis DB selection failed.");
         }
 
         // 4. Set Prefix
@@ -118,20 +120,33 @@ final class RedisCache extends AbstractCacheDriver
         // We now handle serialization manually with HMAC signing to prevent Object Injection.
 
         // Use ZSTD or LZ4 compression if available (Greatly reduces network/RAM usage)
-        if (defined('Redis::COMPRESSION_ZSTD') && extension_loaded('zstd')) {
-            $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_ZSTD);
+        if (defined("Redis::COMPRESSION_ZSTD") && extension_loaded("zstd")) {
+            $this->redis->setOption(
+                Redis::OPT_COMPRESSION,
+                Redis::COMPRESSION_ZSTD,
+            );
             $this->redis->setOption(Redis::OPT_COMPRESSION_LEVEL, 3); // Balanced level
-        } elseif (defined('Redis::COMPRESSION_LZ4') && extension_loaded('lz4')) {
-            $this->redis->setOption(Redis::OPT_COMPRESSION, Redis::COMPRESSION_LZ4);
+        } elseif (
+            defined("Redis::COMPRESSION_LZ4") &&
+            extension_loaded("lz4")
+        ) {
+            $this->redis->setOption(
+                Redis::OPT_COMPRESSION,
+                Redis::COMPRESSION_LZ4,
+            );
         }
     }
 
     public function get(string $key): mixed
     {
-        if (!$this->redis) return null;
+        if (!$this->redis) {
+            return null;
+        }
         try {
             $result = $this->redis->get($key);
-            if ($result === false) return null;
+            if ($result === false) {
+                return null;
+            }
 
             // Sentinel: Verify signature and unserialize
             // Returns [success, value] to strictly distinguish between valid 'false' value and error.
@@ -149,7 +164,9 @@ final class RedisCache extends AbstractCacheDriver
 
     public function set(string $key, mixed $value, int $ttl = 3600): void
     {
-        if (!$this->redis) return;
+        if (!$this->redis) {
+            return;
+        }
         try {
             // Sentinel: Serialize and sign all values to preserve types and ensure security
             $value = $this->maybeSerialize($value);
@@ -166,9 +183,11 @@ final class RedisCache extends AbstractCacheDriver
 
     public function delete(string $key): void
     {
-        if (!$this->redis) return;
+        if (!$this->redis) {
+            return;
+        }
         try {
-            if (method_exists($this->redis, 'unlink')) {
+            if (method_exists($this->redis, "unlink")) {
                 $this->redis->unlink($key);
             } else {
                 $this->redis->del($key);
@@ -198,7 +217,7 @@ final class RedisCache extends AbstractCacheDriver
             // But if we are the only user of this DB, flushDB is faster.
             if (empty($this->prefix)) {
                 // Async flush if available (Redis 4.0+)
-                if (version_compare(phpversion('redis'), '3.1.3', '>=')) {
+                if (version_compare(phpversion("redis"), "3.1.3", ">=")) {
                     $this->redis->flushDB(true);
                 } else {
                     $this->redis->flushDB();
@@ -206,16 +225,16 @@ final class RedisCache extends AbstractCacheDriver
                 return;
             }
 
-            // If we have a prefix, we must scan and delete specific keys 
+            // If we have a prefix, we must scan and delete specific keys
             // because Redis::OPT_PREFIX is transparent handling.
             $this->redis->setOption(Redis::OPT_SCAN, Redis::SCAN_RETRY);
             $iterator = null;
 
             // Note: When OPT_PREFIX is set, 'scan' automatically filters by prefix in phpredis
             // We loop until iterator returns to 0
-            while ($keys = $this->redis->scan($iterator, '*', 100)) {
+            while ($keys = $this->redis->scan($iterator, "*", 100)) {
                 if (!empty($keys)) {
-                    if (method_exists($this->redis, 'unlink')) {
+                    if (method_exists($this->redis, "unlink")) {
                         $this->redis->unlink($keys);
                     } else {
                         $this->redis->del($keys);
@@ -223,7 +242,7 @@ final class RedisCache extends AbstractCacheDriver
                 }
             }
         } catch (RedisException $e) {
-            $this->logError('Clear failed', $e);
+            $this->logError("Clear failed", $e);
         }
     }
 
@@ -236,10 +255,10 @@ final class RedisCache extends AbstractCacheDriver
     private function maybeSerialize(mixed $value): string
     {
         $serialized = serialize($value);
-        $hash = hash_hmac('sha256', $serialized, $this->salt);
+        $hash = hash_hmac("sha256", $serialized, $this->salt);
 
         // S:{hash}:{serialized_data}
-        return 'S:' . $hash . ':' . $serialized;
+        return "S:" . $hash . ":" . $serialized;
     }
 
     /**
@@ -257,12 +276,12 @@ final class RedisCache extends AbstractCacheDriver
         }
 
         // Sentinel: Verify signed payloads
-        if (str_starts_with($value, 'S:')) {
-            $parts = explode(':', $value, 3);
+        if (str_starts_with($value, "S:")) {
+            $parts = explode(":", $value, 3);
             if (count($parts) === 3) {
                 $hash = $parts[1];
                 $payload = $parts[2];
-                $calc = hash_hmac('sha256', $payload, $this->salt);
+                $calc = hash_hmac("sha256", $payload, $this->salt);
 
                 if (hash_equals($hash, $calc)) {
                     try {

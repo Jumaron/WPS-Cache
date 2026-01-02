@@ -19,7 +19,7 @@ class SettingsValidator
     public function sanitizeSettings(array $input): array
     {
         // 1. Fetch current DB state to preserve values from other tabs
-        $current = get_option('wpsc_settings', []);
+        $current = get_option("wpsc_settings", []);
         if (!is_array($current)) {
             $current = [];
         }
@@ -43,10 +43,14 @@ class SettingsValidator
 
             if (array_key_exists($key, $input)) {
                 // Sentinel Fix: Don't overwrite sensitive fields with empty strings (prevents accidental clearing when masked)
-                if ($key === 'redis_password' && empty($input[$key])) {
+                if ($key === "redis_password" && empty($input[$key])) {
                     $clean[$key] = $current[$key];
                 } else {
-                    $clean[$key] = $this->sanitizeValue($key, $input[$key], $defaultValue);
+                    $clean[$key] = $this->sanitizeValue(
+                        $key,
+                        $input[$key],
+                        $defaultValue,
+                    );
                 }
             } else {
                 $clean[$key] = $current[$key];
@@ -54,33 +58,36 @@ class SettingsValidator
         }
 
         // FIXED: Fire action so ServerConfigManager and CronManager know settings changed
-        do_action('wpscac_settings_updated', $clean);
+        do_action("wpscac_settings_updated", $clean);
 
         return $clean;
     }
 
-    private function sanitizeValue(string $key, mixed $value, mixed $defaultValue): mixed
-    {
+    private function sanitizeValue(
+        string $key,
+        mixed $value,
+        mixed $defaultValue,
+    ): mixed {
         // Determine type based on default value
         $type = gettype($defaultValue);
 
         switch ($type) {
-            case 'boolean':
-                return (string)$value === '1';
+            case "boolean":
+                return (string) $value === "1";
 
-            case 'integer':
+            case "integer":
                 // Apply specific ranges for known keys
                 return $this->sanitizeInt($key, $value);
 
-            case 'array':
+            case "array":
                 return $this->sanitizeLines($value);
 
-            case 'string':
+            case "string":
                 return $this->sanitizeString($key, $value);
 
             default:
                 // Fallback for unknown types (shouldn't happen with strict typing in Plugin)
-                return sanitize_text_field((string)$value);
+                return sanitize_text_field((string) $value);
         }
     }
 
@@ -94,20 +101,20 @@ class SettingsValidator
         $max = PHP_INT_MAX;
 
         switch ($key) {
-            case 'cache_lifetime':
+            case "cache_lifetime":
                 $min = 60;
                 $max = 31536000;
                 break;
-            case 'metrics_retention':
+            case "metrics_retention":
                 $min = 1;
                 $max = 365;
                 break;
-            case 'redis_port':
-            case 'varnish_port':
+            case "redis_port":
+            case "varnish_port":
                 $min = 1;
                 $max = 65535;
                 break;
-            case 'redis_db':
+            case "redis_db":
                 $min = 0;
                 $max = 15;
                 break;
@@ -118,9 +125,9 @@ class SettingsValidator
 
     private function sanitizeString(string $key, mixed $value): string
     {
-        $val = (string)$value;
+        $val = (string) $value;
 
-        if ($key === 'redis_host' || $key === 'varnish_host') {
+        if ($key === "redis_host" || $key === "varnish_host") {
             return $this->sanitizeHost($val);
         }
 
@@ -130,7 +137,7 @@ class SettingsValidator
     private function sanitizeHost(string $host): string
     {
         $host = sanitize_text_field(trim($host));
-        return preg_replace('/[^a-zA-Z0-9\-\.:]/', '', $host);
+        return preg_replace("/[^a-zA-Z0-9\-\.:]/", "", $host);
     }
 
     private function sanitizeLines(array|string $input): array
@@ -144,8 +151,8 @@ class SettingsValidator
             return [];
         }
 
-        $lines = array_map('trim', $input);
+        $lines = array_map("trim", $input);
         $lines = array_filter($lines);
-        return array_map('sanitize_text_field', $lines);
+        return array_map("sanitize_text_field", $lines);
     }
 }

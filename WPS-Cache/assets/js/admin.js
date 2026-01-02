@@ -21,7 +21,9 @@ document.addEventListener("DOMContentLoaded", function () {
       preloadBtn.dataset.originalText = preloadBtn.innerHTML;
     }
     // Set loading state
-    preloadBtn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin"></span> ' + wpsc_admin.strings.preload_loading;
+    preloadBtn.innerHTML =
+      '<span class="dashicons dashicons-update wpsc-spin"></span> ' +
+      wpsc_admin.strings.preload_loading;
 
     progressDiv.style.display = "block";
     statusSpan.textContent = wpsc_admin.strings.preload_start;
@@ -92,16 +94,16 @@ document.addEventListener("DOMContentLoaded", function () {
           // Error - ignore
         })
         .finally(() => {
-            activeRequests--;
-            processed++;
-            updateProgress();
-            processQueue();
+          activeRequests--;
+          processed++;
+          updateProgress();
+          processQueue();
         });
     }
   }
 
   function updateStatus() {
-     statusSpan.textContent = `Processing ${processed}/${total} (${activeRequests} active)`;
+    statusSpan.textContent = `Processing ${processed}/${total} (${activeRequests} active)`;
   }
 
   function updateProgress() {
@@ -117,20 +119,22 @@ document.addEventListener("DOMContentLoaded", function () {
     percentSpan.textContent = "100%";
 
     // Show success state
-    preloadBtn.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + wpsc_admin.strings.preload_done;
+    preloadBtn.innerHTML =
+      '<span class="dashicons dashicons-yes"></span> ' +
+      wpsc_admin.strings.preload_done;
 
     setTimeout(() => {
-        preloadBtn.disabled = false;
-        // Restore original text
-        if (preloadBtn.dataset.originalText) {
-            preloadBtn.innerHTML = preloadBtn.dataset.originalText;
-        }
+      preloadBtn.disabled = false;
+      // Restore original text
+      if (preloadBtn.dataset.originalText) {
+        preloadBtn.innerHTML = preloadBtn.dataset.originalText;
+      }
     }, 2000);
   }
 
   // Generic Copy Functionality
-  document.querySelectorAll('.wpsc-copy-trigger').forEach(btn => {
-    btn.addEventListener('click', function() {
+  document.querySelectorAll(".wpsc-copy-trigger").forEach((btn) => {
+    btn.addEventListener("click", function () {
       const targetId = this.dataset.copyTarget;
       const targetEl = document.getElementById(targetId);
 
@@ -140,7 +144,10 @@ document.addEventListener("DOMContentLoaded", function () {
       targetEl.setSelectionRange(0, 99999);
 
       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(targetEl.value).then(() => showSuccess(btn), () => fallbackCopy(targetEl, btn));
+        navigator.clipboard.writeText(targetEl.value).then(
+          () => showSuccess(btn),
+          () => fallbackCopy(targetEl, btn),
+        );
       } else {
         fallbackCopy(targetEl, btn);
       }
@@ -149,10 +156,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function fallbackCopy(targetEl, btn) {
     try {
-      document.execCommand('copy');
+      document.execCommand("copy");
       showSuccess(btn);
     } catch (err) {
-      console.error('Copy failed', err);
+      console.error("Copy failed", err);
     }
   }
 
@@ -160,16 +167,17 @@ document.addEventListener("DOMContentLoaded", function () {
     const originalHtml = btn.innerHTML;
     const originalWidth = btn.offsetWidth;
 
-    btn.style.width = originalWidth + 'px';
-    btn.innerHTML = '<span class="dashicons dashicons-yes" style="vertical-align: middle;"></span> Copied!';
-    btn.classList.remove('wpsc-btn-secondary');
-    btn.classList.add('button-primary', 'wpsc-btn-primary');
+    btn.style.width = originalWidth + "px";
+    btn.innerHTML =
+      '<span class="dashicons dashicons-yes" style="vertical-align: middle;"></span> Copied!';
+    btn.classList.remove("wpsc-btn-secondary");
+    btn.classList.add("button-primary", "wpsc-btn-primary");
 
     setTimeout(() => {
       btn.innerHTML = originalHtml;
-      btn.classList.remove('button-primary', 'wpsc-btn-primary');
-      btn.classList.add('wpsc-btn-secondary');
-      btn.style.width = '';
+      btn.classList.remove("button-primary", "wpsc-btn-primary");
+      btn.classList.add("wpsc-btn-secondary");
+      btn.style.width = "";
     }, 2000);
   }
 });

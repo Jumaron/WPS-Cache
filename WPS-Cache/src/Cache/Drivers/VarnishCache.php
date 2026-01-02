@@ -15,10 +15,11 @@ final class VarnishCache extends AbstractCacheDriver
     private int $defaultTtl;
 
     public function __construct(
-        string $host = '127.0.0.1',
+        string $host = "127.0.0.1",
         int $port = 6081,
-        int $defaultTtl = 604800 // 1 week
+        int $defaultTtl = 604800,
     ) {
+        // 1 week
         parent::__construct();
         $this->host = $host;
         $this->port = $port;
@@ -29,14 +30,14 @@ final class VarnishCache extends AbstractCacheDriver
     {
         // Add headers on frontend requests
         if (!is_admin()) {
-            add_action('send_headers', [$this, 'addCacheHeaders']);
+            add_action("send_headers", [$this, "addCacheHeaders"]);
         }
 
         // Hook into WP update actions for intelligent purging
-        add_action('save_post', [$this, 'purgePost']);
-        add_action('comment_post', [$this, 'purgePost']);
-        add_action('wp_update_nav_menu', [$this, 'purgeAll']); // Menu change affects all pages
-        add_action('switch_theme', [$this, 'purgeAll']);
+        add_action("save_post", [$this, "purgePost"]);
+        add_action("comment_post", [$this, "purgePost"]);
+        add_action("wp_update_nav_menu", [$this, "purgeAll"]); // Menu change affects all pages
+        add_action("switch_theme", [$this, "purgeAll"]);
     }
 
     /**
@@ -46,11 +47,11 @@ final class VarnishCache extends AbstractCacheDriver
     public function addCacheHeaders(): void
     {
         if (is_user_logged_in() || is_feed() || is_trackback()) {
-            header('X-Do-Not-Cache: true');
+            header("X-Do-Not-Cache: true");
             return;
         }
 
-        $tags = ['global'];
+        $tags = ["global"];
 
         if (is_singular()) {
             $id = get_the_ID();
@@ -71,8 +72,8 @@ final class VarnishCache extends AbstractCacheDriver
             }
         }
 
-        header('X-Cache-Tags: ' . implode(',', $tags));
-        header('Cache-Control: public, max-age=' . $this->defaultTtl);
+        header("X-Cache-Tags: " . implode(",", $tags));
+        header("Cache-Control: public, max-age=" . $this->defaultTtl);
     }
 
     /**
@@ -80,19 +81,23 @@ final class VarnishCache extends AbstractCacheDriver
      */
     public function purgePost(int $post_id): void
     {
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (defined("DOING_AUTOSAVE") && DOING_AUTOSAVE) {
+            return;
+        }
 
         // 1. Purge the post itself
-        $this->sendPurgeRequest(['X-Purge-Tags' => "post-{$post_id}"]);
+        $this->sendPurgeRequest(["X-Purge-Tags" => "post-{$post_id}"]);
 
         // 2. Purge Homepage/Archives (generic)
-        $this->sendPurgeRequest(['X-Purge-Tags' => "archive"]);
+        $this->sendPurgeRequest(["X-Purge-Tags" => "archive"]);
 
         // 3. Purge Categories associated with this post
         $categories = get_the_category($post_id);
         if ($categories) {
             foreach ($categories as $cat) {
-                $this->sendPurgeRequest(['X-Purge-Tags' => "term-{$cat->term_id}"]);
+                $this->sendPurgeRequest([
+                    "X-Purge-Tags" => "term-{$cat->term_id}",
+                ]);
             }
         }
     }
@@ -102,7 +107,10 @@ final class VarnishCache extends AbstractCacheDriver
      */
     public function purgeAll(): void
     {
-        $this->sendPurgeRequest(['X-Purge-Method' => 'regex', 'X-Purge-Tags' => '.*']);
+        $this->sendPurgeRequest([
+            "X-Purge-Method" => "regex",
+            "X-Purge-Tags" => ".*",
+        ]);
     }
 
     /**
@@ -110,20 +118,23 @@ final class VarnishCache extends AbstractCacheDriver
      */
     private function sendPurgeRequest(array $headers): void
     {
-        $url = sprintf('http://%s:%d/', $this->host, $this->port);
+        $url = sprintf("http://%s:%d/", $this->host, $this->port);
 
         // Merge standard headers
-        $headers = array_merge([
-            'Host' => $_SERVER['HTTP_HOST'] ?? 'localhost',
-            'User-Agent' => 'WPS-Cache-Purger/1.0'
-        ], $headers);
+        $headers = array_merge(
+            [
+                "Host" => $_SERVER["HTTP_HOST"] ?? "localhost",
+                "User-Agent" => "WPS-Cache-Purger/1.0",
+            ],
+            $headers,
+        );
 
         wp_remote_request($url, [
-            'method'      => 'PURGE',
-            'headers'     => $headers,
-            'blocking'    => false, // Async: Don't wait for Varnish to reply
-            'timeout'     => 1,
-            'sslverify'   => false
+            "method" => "PURGE",
+            "headers" => $headers,
+            "blocking" => false, // Async: Don't wait for Varnish to reply
+            "timeout" => 1,
+            "sslverify" => false,
         ]);
     }
 
