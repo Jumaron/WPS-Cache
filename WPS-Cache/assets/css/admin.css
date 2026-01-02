@@ -97,6 +97,13 @@
     color: var(--wpsc-primary);
 }
 
+.wpsc-nav-item:focus-visible {
+    outline: none;
+    background: #f9fafb;
+    color: var(--wpsc-primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
 .wpsc-nav-item.active {
     background: #eff6ff;
     color: var(--wpsc-primary);
@@ -234,7 +241,7 @@ input:checked + .wpsc-slider {
 }
 
 input:focus + .wpsc-slider {
-    box-shadow: 0 0 1px var(--wpsc-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
 }
 
 input:checked + .wpsc-slider:before {
@@ -298,6 +305,12 @@ input:checked + .wpsc-slider:before {
 .wpsc-btn-secondary:hover {
     border-color: var(--wpsc-text-muted);
     background: #f9fafb;
+}
+
+.wpsc-btn-secondary:focus-visible {
+    outline: none;
+    border-color: var(--wpsc-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 /* Dashboard / Analytics Grid */
@@ -370,6 +383,12 @@ input:checked + .wpsc-slider:before {
 }
 .wpsc-dismiss-btn:hover {
     color: var(--wpsc-danger);
+}
+.wpsc-dismiss-btn:focus-visible {
+    outline: none;
+    color: var(--wpsc-danger);
+    background: #fef2f2;
+    border-radius: 4px;
 }
 .wpsc-dismiss-btn .dashicons {
     font-size: 18px;
