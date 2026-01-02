@@ -131,6 +131,11 @@ class SettingsValidator
             return $this->sanitizeHost($val);
         }
 
+        // Sentinel Fix: Ensure cdn_url is a valid URL to prevent XSS
+        if ($key === "cdn_url") {
+            return esc_url_raw($val);
+        }
+
         return sanitize_text_field($val);
     }
 
