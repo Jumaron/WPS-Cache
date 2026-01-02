@@ -53,7 +53,7 @@ class ToolsManager
                 <div style="margin-top: 15px;">
                     <?php if ($object_cache_installed): ?>
                         <div class="wpsc-notice success" style="display:inline-flex; margin-bottom: 15px;">
-                            <span class="dashicons dashicons-yes" style="margin-right:8px;"></span> Installed & Active
+                            <span class="dashicons dashicons-yes" aria-hidden="true" style="margin-right:8px;"></span> Installed & Active
                         </div>
                         <form method="post" action="<?php echo esc_url(
                             admin_url("admin-post.php"),
@@ -67,7 +67,7 @@ class ToolsManager
                         </form>
                     <?php else: ?>
                         <div class="wpsc-notice warning" style="display:inline-flex; margin-bottom: 15px;">
-                            <span class="dashicons dashicons-warning" style="margin-right:8px;"></span> Not Installed
+                            <span class="dashicons dashicons-warning" aria-hidden="true" style="margin-right:8px;"></span> Not Installed
                         </div>
                         <form method="post" action="<?php echo esc_url(
                             admin_url("admin-post.php"),

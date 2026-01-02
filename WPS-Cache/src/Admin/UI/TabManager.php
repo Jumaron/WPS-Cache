@@ -100,7 +100,7 @@ class TabManager
 ); ?>"<?php echo $ariaCurrent; ?>>
                 <span class="dashicons <?php echo esc_attr(
                     $data["icon"],
-                ); ?>"></span>
+                ); ?>" aria-hidden="true"></span>
                 <?php echo esc_html($data["label"]); ?>
             </a>
 <?php
