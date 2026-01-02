@@ -175,7 +175,7 @@ function initCopyTriggers() {
 
     btn.style.width = originalWidth + "px";
     btn.innerHTML =
-      '<span class="dashicons dashicons-yes" style="vertical-align: middle;"></span> Copied!';
+      '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> Copied!';
     btn.classList.remove("wpsc-btn-secondary");
     btn.classList.add("button-primary", "wpsc-btn-primary");
 
