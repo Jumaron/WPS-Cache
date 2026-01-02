@@ -16,10 +16,12 @@ class MediaOptimizer
 {
     private array $settings;
     private int $imageCount = 0;
+    private string $siteUrl;
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
+        $this->siteUrl = site_url();
     }
 
     public function process(string $html): string
@@ -174,13 +176,13 @@ class MediaOptimizer
         $url = $srcMatch[1];
 
         // Only handle local images
-        if (strpos($url, site_url()) !== 0 && strpos($url, "/") !== 0) {
+        if (strpos($url, $this->siteUrl) !== 0 && strpos($url, "/") !== 0) {
             return $tag;
         }
 
         // Convert URL to Path
         $path = str_replace(
-            [site_url(), "wp-content"],
+            [$this->siteUrl, "wp-content"],
             [ABSPATH, "wp-content"],
             $url,
         );
