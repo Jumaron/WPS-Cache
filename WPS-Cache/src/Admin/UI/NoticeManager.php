@@ -51,7 +51,7 @@ class NoticeManager
 
                     <span class="dashicons <?php echo esc_attr(
                         $icon,
-                    ); ?>"></span>
+                    ); ?>" aria-hidden="true"></span>
                     <span><?php echo wp_kses_post($notice["message"]); ?></span>
                 </div>
                 <!-- Custom Dismiss Button (No WP Core classes) -->
@@ -60,7 +60,7 @@ class NoticeManager
                         "Dismiss this notice",
                         "wps-cache",
                     ); ?>">
-                    <span class="dashicons dashicons-dismiss"></span>
+                    <span class="dashicons dashicons-dismiss" aria-hidden="true"></span>
                 </button>
             </div>
             <?php

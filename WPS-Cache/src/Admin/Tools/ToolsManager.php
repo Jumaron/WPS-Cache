@@ -124,7 +124,7 @@ class ToolsManager
                         $this->getSystemReport(),
                     ); ?></textarea>
                 <button type="button" class="button wpsc-btn-secondary wpsc-copy-trigger" data-copy-target="wpsc-system-report">
-                    <span class="dashicons dashicons-clipboard" style="vertical-align: middle;"></span> Copy Report
+                    <span class="dashicons dashicons-clipboard" aria-hidden="true" style="vertical-align: middle;"></span> Copy Report
                 </button>
             </div>
         </div>
