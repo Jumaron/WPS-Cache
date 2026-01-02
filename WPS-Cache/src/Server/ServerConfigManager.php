@@ -37,6 +37,21 @@ class ServerConfigManager
         }
     }
 
+    /**
+     * Sends security headers for dynamic PHP responses.
+     * Aligns with the .htaccess rules for cached files to ensure consistent security.
+     */
+    public function sendSecurityHeaders(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        header("X-Content-Type-Options: nosniff");
+        header("X-Frame-Options: SAMEORIGIN");
+        header("Referrer-Policy: strict-origin-when-cross-origin");
+    }
+
     private function isApacheOrLiteSpeed(): bool
     {
         $software = $_SERVER["SERVER_SOFTWARE"] ?? "";
