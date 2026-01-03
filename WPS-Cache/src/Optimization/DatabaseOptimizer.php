@@ -165,8 +165,13 @@ class DatabaseOptimizer
         }
 
         if (in_array("all_transients", $items)) {
+            // Optimization: Split into 2 queries to ensure MySQL uses the index range scan
+            // instead of a full table scan or inefficient index merge caused by OR.
             $wpdb->query(
-                "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_%' OR option_name LIKE '_site_transient_%'",
+                "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_%'",
+            );
+            $wpdb->query(
+                "DELETE FROM $wpdb->options WHERE option_name LIKE '_site_transient_%'",
             );
             $count++;
         }

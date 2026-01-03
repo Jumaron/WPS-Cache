@@ -154,10 +154,14 @@ final class CacheManager
             // Delete transient data (covers both data and timeouts)
             // _transient_% covers _transient_timeout_%
             // _site_transient_% covers _site_transient_timeout_%
+
+            // Optimization: Split into 2 queries to ensure MySQL uses the index range scan
+            // instead of a full table scan or inefficient index merge caused by OR.
             $wpdb->query(
-                "DELETE FROM {$wpdb->options}
-                 WHERE option_name LIKE '\_transient\_%'
-                 OR option_name LIKE '\_site\_transient\_%'",
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%'",
+            );
+            $wpdb->query(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_site\_transient\_%'",
             );
         } catch (Throwable $e) {
             $this->errorLog["db"] = $e->getMessage();
