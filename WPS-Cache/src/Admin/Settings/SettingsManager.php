@@ -101,7 +101,7 @@ class SettingsManager
                 admin_url("admin-post.php?action=wpsc_clear_cache"),
                 "wpsc_clear_cache",
             ) .
-            '" class="button wpsc-btn-secondary" style="color: #ef4444; border-color: #ef4444;" onclick="return confirm(\'' . $confirm . '\');"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Purge All Caches</a>';
+            '" class="button wpsc-btn-danger" onclick="return confirm(\'' . $confirm . '\');"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Purge All Caches</a>';
         echo "</div>";
         $this->formStart();
         $this->renderer->renderCard(

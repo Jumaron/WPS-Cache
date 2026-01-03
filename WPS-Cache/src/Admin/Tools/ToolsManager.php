@@ -60,8 +60,13 @@ class ToolsManager
                         ); ?>">
                             <?php wp_nonce_field("wpsc_remove_object_cache"); ?>
                             <input type="hidden" name="action" value="wpsc_remove_object_cache">
-                            <button type="submit" class="button wpsc-btn-secondary"
-                                style="color: var(--wpsc-danger); border-color: var(--wpsc-danger);">
+                            <button type="submit" class="button wpsc-btn-danger"
+                                onclick="return confirm('<?php echo esc_js(
+                                    __(
+                                        "Are you sure you want to uninstall the Object Cache Drop-in? This will disable object caching.",
+                                        "wps-cache",
+                                    ),
+                                ); ?>');">
                                 Uninstall Drop-in
                             </button>
                         </form>
