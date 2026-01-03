@@ -11,3 +11,7 @@
 ## 2024-05-24 - Focus Visible
 **Learning:** Custom components often miss the `:focus-visible` styles that browsers provide by default, leading to poor keyboard navigation.
 **Action:** Add explicit `:focus-visible` styles using `box-shadow` rings (matching the brand color) to all interactive custom elements.
+
+## 2024-05-24 - Placeholders in Technical Forms
+**Learning:** Technical configuration forms (like Redis/CDN settings) often confuse users about the expected format (e.g., "127.0.0.1" vs "localhost").
+**Action:** Always provide explicit examples in the `placeholder` attribute for technical inputs to reduce cognitive load and validation errors.

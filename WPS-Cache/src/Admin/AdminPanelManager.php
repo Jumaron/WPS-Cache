@@ -135,7 +135,7 @@ final class AdminPanelManager
         <div class="wpsc-wrap">
             <div class="wpsc-header">
                 <div class="wpsc-logo">
-                    <h1><span class="dashicons dashicons-performance"
+                    <h1><span class="dashicons dashicons-performance" aria-hidden="true"
                             style="font-size: 28px; width: 28px; height: 28px;"></span> WPS Cache <span
                             class="wpsc-version">v<?php echo esc_html(
                                 WPSC_VERSION,

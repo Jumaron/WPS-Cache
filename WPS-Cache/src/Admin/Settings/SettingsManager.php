@@ -188,6 +188,8 @@ class SettingsManager
                     "Host",
                     "e.g., 127.0.0.1",
                     $settings,
+                    "text",
+                    ["placeholder" => "127.0.0.1"],
                 );
                 $this->renderer->renderInput(
                     "redis_port",
@@ -195,6 +197,7 @@ class SettingsManager
                     "Default: 6379",
                     $settings,
                     "number",
+                    ["placeholder" => "6379"],
                 );
                 $this->renderer->renderInput(
                     "redis_password",
@@ -209,12 +212,15 @@ class SettingsManager
                     "Default: 0",
                     $settings,
                     "number",
+                    ["placeholder" => "0"],
                 );
                 $this->renderer->renderInput(
                     "redis_prefix",
                     "Prefix",
                     "Key prefix.",
                     $settings,
+                    "text",
+                    ["placeholder" => "wpsc_"],
                 );
             },
         );
@@ -305,6 +311,8 @@ class SettingsManager
                     "CDN CNAME / URL",
                     "e.g. https://cdn.example.com",
                     $settings,
+                    "text",
+                    ["placeholder" => "https://cdn.example.com"],
                 );
             },
         );
@@ -331,6 +339,8 @@ class SettingsManager
                     "Zone ID",
                     "Found in Cloudflare Dashboard Overview.",
                     $settings,
+                    "text",
+                    ["placeholder" => "e.g. 023e105f4ecef8ad9ca31a8372d0c353"],
                 );
             },
         );
@@ -577,6 +587,8 @@ class SettingsManager
                     "Host",
                     "127.0.0.1",
                     $settings,
+                    "text",
+                    ["placeholder" => "127.0.0.1"],
                 );
                 $this->renderer->renderInput(
                     "varnish_port",
@@ -584,6 +596,7 @@ class SettingsManager
                     "6081",
                     $settings,
                     "number",
+                    ["placeholder" => "6081"],
                 );
             },
         );
