@@ -635,7 +635,7 @@ class SettingsManager
                 echo '<div style="margin-bottom: 20px; display:flex; justify-content:flex-end;">';
                 echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary"><span class="dashicons dashicons-database" aria-hidden="true" style="vertical-align: middle;"></span> Optimize Selected Now</button>';
                 echo "</div>";
-                echo '<div id="wpsc-db-status" style="margin-bottom:20px; text-align:right; font-weight:600; color:var(--wpsc-success);"></div>';
+                echo '<div id="wpsc-db-status" role="status" aria-live="polite" style="margin-bottom:20px; text-align:right; font-weight:600;"></div>';
                 foreach ($items as $key => $label) {
 
                     $count = $stats[$key] ?? 0;
@@ -682,17 +682,34 @@ class SettingsManager
             btn.addEventListener('click', function() {
                 const items = [];
                 document.querySelectorAll('.wpsc-db-checkbox:checked').forEach(el => { items.push(el.dataset.key); });
-                if (items.length === 0) { alert('Please select at least one item to clean.'); return; }
+                if (items.length === 0) {
+                    status.style.color = 'var(--wpsc-danger)';
+                    status.textContent = 'Please select at least one item to clean.';
+                    return;
+                }
                 if (!btn.dataset.originalText) { btn.dataset.originalText = btn.innerHTML; }
-                btn.disabled = true; btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> Optimizing...'; status.innerHTML = '';
+                btn.disabled = true;
+                btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> Optimizing...';
+                status.textContent = '';
                 fetch(wpsc_admin.ajax_url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce, 'items[]': items })
                 }).then(res => res.json()).then(res => {
                     btn.disabled = false; btn.innerHTML = btn.dataset.originalText;
-                    if(res.success) { status.innerHTML = res.data; setTimeout(() => window.location.reload(), 1500); }
-                    else { alert(res.data); }
+                    if(res.success) {
+                        status.style.color = 'var(--wpsc-success)';
+                        status.textContent = res.data;
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        status.style.color = 'var(--wpsc-danger)';
+                        status.textContent = res.data;
+                    }
+                }).catch(err => {
+                    btn.disabled = false;
+                    btn.innerHTML = btn.dataset.originalText;
+                    status.style.color = 'var(--wpsc-danger)';
+                    status.textContent = 'Optimization failed. Please try again.';
                 });
             });
         });
