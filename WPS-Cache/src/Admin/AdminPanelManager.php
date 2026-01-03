@@ -103,6 +103,8 @@ final class AdminPanelManager
                 "preload_loading" => "Preloading...",
                 "preload_done" => "Done!",
                 "preload_complete" => "Preloading Complete!",
+                "copied" => __("Copied!", "wps-cache"),
+                "copied_announcement" => __("Copied to clipboard!", "wps-cache"),
             ],
         ]);
     }

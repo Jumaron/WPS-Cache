@@ -138,6 +138,25 @@ function initPreloader() {
   }
 }
 
+function announce(message) {
+  let announcer = document.getElementById("wpsc-a11y-speak");
+  if (!announcer) {
+    announcer = document.createElement("div");
+    announcer.id = "wpsc-a11y-speak";
+    announcer.setAttribute("aria-live", "polite");
+    announcer.setAttribute("aria-atomic", "true");
+    announcer.style.position = "absolute";
+    announcer.style.width = "1px";
+    announcer.style.height = "1px";
+    announcer.style.overflow = "hidden";
+    announcer.style.clip = "rect(0, 0, 0, 0)";
+    announcer.style.whiteSpace = "nowrap";
+    announcer.style.border = "0";
+    document.body.appendChild(announcer);
+  }
+  announcer.textContent = message;
+}
+
 function initCopyTriggers() {
   document.querySelectorAll(".wpsc-copy-trigger").forEach((btn) => {
     btn.addEventListener("click", function () {
@@ -175,9 +194,12 @@ function initCopyTriggers() {
 
     btn.style.width = originalWidth + "px";
     btn.innerHTML =
-      '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> Copied!';
+      '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+      wpsc_admin.strings.copied;
     btn.classList.remove("wpsc-btn-secondary");
     btn.classList.add("button-primary", "wpsc-btn-primary");
+
+    announce(wpsc_admin.strings.copied_announcement);
 
     setTimeout(() => {
       btn.innerHTML = originalHtml;
