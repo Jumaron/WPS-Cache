@@ -25,3 +25,7 @@
 ## 2024-05-31 - [Avoid Stat Calls for Cached Images]
 **Learning:** `filesize($path)` and `file_exists($path)` are stat calls that hit the filesystem. Using them to generate a cache key for image dimensions means we pay the I/O cost on every request, even if the result is cached.
 **Action:** Changed the cache key to depend only on the file path. The cache lookup now happens *before* any file system check. This saves N*2 stat calls per page (where N is the number of local images), significantly reducing I/O overhead.
+
+## 2026-01-03 - [PHP Memoization]
+**Learning:** Memoization is powerful in PHP's shared-nothing architecture, especially for repetitive tasks within a single request (like processing a list of posts).
+**Action:** Always look for loops or repeated function calls (like `processImage`) that might access the same data. Adding a simple array property for memoization reduces external calls (DB/Cache/Filesystem) to O(1) after the first hit.

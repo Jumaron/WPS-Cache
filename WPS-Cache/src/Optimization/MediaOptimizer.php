@@ -17,6 +17,7 @@ class MediaOptimizer
     private array $settings;
     private int $imageCount = 0;
     private string $siteUrl;
+    private array $dimensionCache = [];
 
     public function __construct(array $settings)
     {
@@ -189,20 +190,28 @@ class MediaOptimizer
         // Remove query strings
         $path = strtok($path, "?");
 
-        // SOTA: Cache the result to avoid disk I/O on every request
-        // Key is hashed path (invalidates via TTL or manual flush)
-        $cacheKey = "wpsc_dim_" . md5($path);
-        $dims = get_transient($cacheKey);
+        // SOTA: Check in-memory cache first
+        if (isset($this->dimensionCache[$path])) {
+            $dims = $this->dimensionCache[$path];
+        } else {
+            // SOTA: Cache the result to avoid disk I/O on every request
+            // Key is hashed path (invalidates via TTL or manual flush)
+            $cacheKey = "wpsc_dim_" . md5($path);
+            $dims = get_transient($cacheKey);
 
-        if (!$dims) {
-            if (!file_exists($path)) {
-                return $tag;
-            }
+            if (!$dims) {
+                if (!file_exists($path)) {
+                    // Cache the failure too to avoid repeated checks
+                    $this->dimensionCache[$path] = false;
+                    return $tag;
+                }
 
-            $dims = @getimagesize($path);
-            if ($dims) {
-                set_transient($cacheKey, $dims, MONTH_IN_SECONDS);
+                $dims = @getimagesize($path);
+                if ($dims) {
+                    set_transient($cacheKey, $dims, MONTH_IN_SECONDS);
+                }
             }
+            $this->dimensionCache[$path] = $dims;
         }
 
         if ($dims) {
