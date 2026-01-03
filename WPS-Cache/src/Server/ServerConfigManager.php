@@ -50,6 +50,7 @@ class ServerConfigManager
         header("X-Content-Type-Options: nosniff");
         header("X-Frame-Options: SAMEORIGIN");
         header("Referrer-Policy: strict-origin-when-cross-origin");
+        header("Permissions-Policy: camera=(), microphone=(), payment=()");
     }
 
     private function isApacheOrLiteSpeed(): bool
