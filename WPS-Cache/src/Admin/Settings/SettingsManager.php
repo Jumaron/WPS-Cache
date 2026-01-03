@@ -100,7 +100,7 @@ class SettingsManager
                 admin_url("admin-post.php?action=wpsc_clear_cache"),
                 "wpsc_clear_cache",
             ) .
-            '" class="button wpsc-btn-secondary" style="color: #ef4444; border-color: #ef4444;"><span class="dashicons dashicons-trash" style="vertical-align:text-bottom"></span> Purge All Caches</a>';
+            '" class="button wpsc-btn-secondary" style="color: #ef4444; border-color: #ef4444;"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align:text-bottom"></span> Purge All Caches</a>';
         echo "</div>";
         $this->formStart();
         $this->renderer->renderCard(
@@ -619,7 +619,7 @@ class SettingsManager
             "Select items to clean.",
             function () use ($settings, $stats, $items) {
                 echo '<div style="margin-bottom: 20px; display:flex; justify-content:flex-end;">';
-                echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary">Optimize Selected Now</button>';
+                echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary"><span class="dashicons dashicons-database" aria-hidden="true" style="vertical-align: middle;"></span> Optimize Selected Now</button>';
                 echo "</div>";
                 echo '<div id="wpsc-db-status" style="margin-bottom:20px; text-align:right; font-weight:600; color:var(--wpsc-success);"></div>';
                 foreach ($items as $key => $label) {
@@ -669,13 +669,14 @@ class SettingsManager
                 const items = [];
                 document.querySelectorAll('.wpsc-db-checkbox:checked').forEach(el => { items.push(el.dataset.key); });
                 if (items.length === 0) { alert('Please select at least one item to clean.'); return; }
-                btn.disabled = true; btn.innerHTML = 'Optimizing...'; status.innerHTML = '';
+                if (!btn.dataset.originalText) { btn.dataset.originalText = btn.innerHTML; }
+                btn.disabled = true; btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> Optimizing...'; status.innerHTML = '';
                 fetch(wpsc_admin.ajax_url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce, 'items[]': items })
                 }).then(res => res.json()).then(res => {
-                    btn.disabled = false; btn.innerHTML = 'Optimize Selected Now';
+                    btn.disabled = false; btn.innerHTML = btn.dataset.originalText;
                     if(res.success) { status.innerHTML = res.data; setTimeout(() => window.location.reload(), 1500); }
                     else { alert(res.data); }
                 });
