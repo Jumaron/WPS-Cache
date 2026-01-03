@@ -190,6 +190,21 @@ class MediaOptimizer
         // Remove query strings
         $path = strtok($path, "?");
 
+        // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
+        $realPath = realpath($path);
+        if ($realPath === false || !str_starts_with($realPath, ABSPATH)) {
+            return $tag;
+        }
+
+        // Sentinel Fix: Ensure strictly Image extension
+        $ext = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
+        if (!in_array($ext, ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"], true)) {
+            return $tag;
+        }
+
+        // Use realPath for subsequent operations
+        $path = $realPath;
+
         // SOTA: Check in-memory cache first
         if (isset($this->dimensionCache[$path])) {
             $dims = $this->dimensionCache[$path];
