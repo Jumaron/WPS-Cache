@@ -71,6 +71,9 @@ final class AdminPanelManager
             "id" => "wpsc-purge",
             "title" => "Purge All Caches",
             "href" => $purge_url,
+            "meta" => [
+                "onclick" => "return confirm('" . esc_js(__("Are you sure you want to purge all caches?", "wps-cache")) . "');",
+            ],
         ]);
     }
 
