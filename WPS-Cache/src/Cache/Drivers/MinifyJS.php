@@ -345,10 +345,27 @@ final class MinifyJS extends AbstractCacheDriver
                 $start = $i;
                 // Optimization: Use strspn to skip all whitespace at once (much faster than loop)
                 $len_ws = strspn($js, " \t\n\r\v\f", $i);
-                $i += $len_ws;
+                $limit = $i + $len_ws;
+
+                // Optimization: Avoid substr allocation for whitespace.
+                // We only need to know if it contains a newline for ASI.
+                $hasNewline = false;
+
+                // Check for newline in the chunk without allocating substring
+                $p = strpos($js, "\n", $i);
+                if ($p !== false && $p < $limit) {
+                    $hasNewline = true;
+                } else {
+                    $p = strpos($js, "\r", $i);
+                    if ($p !== false && $p < $limit) {
+                        $hasNewline = true;
+                    }
+                }
+
+                $i = $limit;
                 yield [
                     "type" => self::T_WHITESPACE,
-                    "value" => substr($js, $start, $len_ws),
+                    "value" => $hasNewline ? "\n" : " ",
                 ];
                 continue;
             }
