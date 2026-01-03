@@ -133,7 +133,19 @@ class SettingsValidator
 
         // Sentinel Fix: Ensure cdn_url is a valid URL to prevent XSS
         if ($key === "cdn_url") {
-            return esc_url_raw($val);
+            $url = esc_url_raw($val);
+            // Strict Scheme Validation (Http/Https/Protocol-Relative only)
+            if ($url && !preg_match('/^(https?:)?\/\//', $url)) {
+                return "";
+            }
+            return $url;
+        }
+
+        // Sentinel Fix: Strict validation for Redis Prefix to prevent key injection
+        if ($key === "redis_prefix") {
+            // Allow alphanumeric, colons, underscores, hyphens. Limit length.
+            $val = sanitize_text_field($val);
+            return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
         }
 
         return sanitize_text_field($val);
