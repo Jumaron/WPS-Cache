@@ -71,18 +71,30 @@ class DatabaseOptimizer
         $stats["trashed_comments"] = (int) ($comments_stats->trashed_comments ?? 0);
 
         // Transients (Expired, All)
-        // Optimization: Combine 2 queries into 1
+        // Optimization: Split into 2 queries (Regular + Site) to maximize index usage (range scan)
+        // and avoid OR conditions which can be slow. Also escape underscores to prevent wildcard matching.
         $time = time();
-        $transients_stats = $wpdb->get_row(
+
+        // 1. Regular Transients
+        $transients_local = $wpdb->get_row(
             "SELECT
-                SUM(CASE WHEN option_name LIKE '_transient_timeout_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired_transients,
-                SUM(CASE WHEN option_name LIKE '_transient_%' THEN 1 ELSE 0 END) as all_transients
+                SUM(CASE WHEN option_name LIKE '\_transient\_timeout\_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired,
+                SUM(CASE WHEN option_name LIKE '\_transient\_%' THEN 1 ELSE 0 END) as total
              FROM $wpdb->options
-             WHERE option_name LIKE '_transient_%'"
+             WHERE option_name LIKE '\_transient\_%'"
         );
 
-        $stats["expired_transients"] = (int) ($transients_stats->expired_transients ?? 0);
-        $stats["all_transients"] = (int) ($transients_stats->all_transients ?? 0);
+        // 2. Site Transients (often missed)
+        $transients_site = $wpdb->get_row(
+            "SELECT
+                SUM(CASE WHEN option_name LIKE '\_site\_transient\_timeout\_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired,
+                SUM(CASE WHEN option_name LIKE '\_site\_transient\_%' THEN 1 ELSE 0 END) as total
+             FROM $wpdb->options
+             WHERE option_name LIKE '\_site\_transient\_%'"
+        );
+
+        $stats["expired_transients"] = (int) ($transients_local->expired ?? 0) + (int) ($transients_site->expired ?? 0);
+        $stats["all_transients"] = (int) ($transients_local->total ?? 0) + (int) ($transients_site->total ?? 0);
 
         // Overhead
         $stats["optimize_tables"] = $this->getTableOverhead($wpdb);
