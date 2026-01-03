@@ -29,3 +29,7 @@
 ## 2026-01-03 - [PHP Memoization]
 **Learning:** Memoization is powerful in PHP's shared-nothing architecture, especially for repetitive tasks within a single request (like processing a list of posts).
 **Action:** Always look for loops or repeated function calls (like `processImage`) that might access the same data. Adding a simple array property for memoization reduces external calls (DB/Cache/Filesystem) to O(1) after the first hit.
+
+## 2026-01-04 - [Optimize Orphan Cleanup]
+**Learning:** `DELETE FROM table WHERE id NOT IN (SELECT id FROM other_table)` is often inefficient (O(N*M) or O(N log M)) compared to `DELETE T1 FROM T1 LEFT JOIN T2 ON T1.id = T2.id WHERE T2.id IS NULL`, which leverages indexes for a faster merge (O(N)).
+**Action:** Replaced `NOT IN` subqueries with `LEFT JOIN` deletes for orphaned comment meta cleanup. Also batched multiple cleanup flags to run this expensive operation only once per request.
