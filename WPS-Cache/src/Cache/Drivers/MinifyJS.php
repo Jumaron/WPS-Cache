@@ -410,30 +410,52 @@ final class MinifyJS extends AbstractCacheDriver
                     $start = $i;
                     $i++;
                     $inClass = false;
+
                     while ($i < $len) {
+                        // Optimization: Use strcspn to skip safe characters
+                        // If in class [...], we look for ] or \ or newline
+                        // If not in class, we look for / or [ or \ or newline
+                        $mask = $inClass ? "\\\n\r]" : "\\\n\r/[";
+                        $len_chunk = strcspn($js, $mask, $i);
+                        $i += $len_chunk;
+
+                        if ($i >= $len) {
+                            break;
+                        }
+
                         $c = $js[$i];
+
                         if ($c === "\\") {
                             $i += 2;
                             continue;
                         }
+
                         if ($c === "[") {
                             $inClass = true;
+                            $i++;
+                            continue;
                         }
+
                         if ($c === "]") {
                             $inClass = false;
-                        }
-                        if ($c === "/" && !$inClass) {
                             $i++;
+                            continue;
+                        }
+
+                        if ($c === "/") {
+                            // End of regex (guaranteed !inClass by mask logic)
+                            $i++;
+                            // Consume flags
                             while ($i < $len && ctype_alpha($js[$i])) {
                                 $i++;
                             }
                             break;
                         }
-                        if ($c === "\n" || $c === "\r") {
-                            break;
-                        }
-                        $i++;
+
+                        // Newline means invalid regex literal
+                        break;
                     }
+
                     yield ($lastMeaningfulToken = [
                         "type" => self::T_REGEX,
                         "value" => substr($js, $start, $i - $start),
@@ -454,19 +476,29 @@ final class MinifyJS extends AbstractCacheDriver
                 $quote = $char;
                 $start = $i;
                 $i++;
+                $mask = "\\\n\r" . $quote;
+
                 while ($i < $len) {
-                    if ($js[$i] === "\\") {
-                        $i += 2;
-                        continue;
+                    $len_chunk = strcspn($js, $mask, $i);
+                    $i += $len_chunk;
+
+                    if ($i >= $len) {
+                        break;
                     }
-                    if ($js[$i] === $quote) {
+
+                    $c = $js[$i];
+
+                    if ($c === $quote) {
                         $i++;
                         break;
                     }
-                    if ($js[$i] === "\n" || $js[$i] === "\r") {
-                        break;
+                    if ($c === "\\") {
+                        $i += 2;
+                        continue;
                     }
-                    $i++;
+
+                    // Newline means unterminated string
+                    break;
                 }
                 yield ($lastMeaningfulToken = [
                     "type" => self::T_STRING,
@@ -479,16 +511,26 @@ final class MinifyJS extends AbstractCacheDriver
             if ($char === "`") {
                 $start = $i;
                 $i++;
+                $mask = "\\`";
+
                 while ($i < $len) {
-                    if ($js[$i] === "\\") {
-                        $i += 2;
-                        continue;
+                    $len_chunk = strcspn($js, $mask, $i);
+                    $i += $len_chunk;
+
+                    if ($i >= $len) {
+                        break;
                     }
-                    if ($js[$i] === "`") {
+
+                    $c = $js[$i];
+
+                    if ($c === "`") {
                         $i++;
                         break;
                     }
-                    $i++;
+                    if ($c === "\\") {
+                        $i += 2;
+                        continue;
+                    }
                 }
                 yield ($lastMeaningfulToken = [
                     "type" => self::T_TEMPLATE,
