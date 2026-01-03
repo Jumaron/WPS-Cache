@@ -168,6 +168,7 @@ class ServerConfigManager
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
+                Header set Permissions-Policy "camera=(), microphone=(), payment=()"
             </FilesMatch>
         </IfModule>
         # END WPS Cache
