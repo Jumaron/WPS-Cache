@@ -18,31 +18,39 @@ final class HTMLCache extends AbstractCacheDriver
     private ?string $exclusionRegex = null;
 
     private ?CommerceManager $commerceManager;
-    private const BYPASS_PARAMS = ["add-to-cart", "wp_nonce", "preview", "s"];
+
+    // Optimization: Use hash map for O(1) lookups
+    private const BYPASS_PARAMS = [
+        "add-to-cart" => true,
+        "wp_nonce" => true,
+        "preview" => true,
+        "s" => true,
+    ];
 
     // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
+    // Optimization: Use hash map for O(1) lookups
     private const IGNORED_EXTENSIONS = [
-        "xml",
-        "json",
-        "map",
-        "css",
-        "js",
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "ico",
-        "svg",
-        "webp",
-        "avif",
-        "woff",
-        "woff2",
-        "ttf",
-        "eot",
-        "otf",
-        "txt",
-        "md",
-        "xsl",
+        "xml" => true,
+        "json" => true,
+        "map" => true,
+        "css" => true,
+        "js" => true,
+        "png" => true,
+        "jpg" => true,
+        "jpeg" => true,
+        "gif" => true,
+        "ico" => true,
+        "svg" => true,
+        "webp" => true,
+        "avif" => true,
+        "woff" => true,
+        "woff2" => true,
+        "ttf" => true,
+        "eot" => true,
+        "otf" => true,
+        "txt" => true,
+        "md" => true,
+        "xsl" => true,
     ];
 
     public function __construct(?CommerceManager $commerceManager = null)
@@ -91,7 +99,7 @@ final class HTMLCache extends AbstractCacheDriver
         // 1. EXTENSION GUARD
         $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        if (in_array($ext, self::IGNORED_EXTENSIONS, true)) {
+        if (isset(self::IGNORED_EXTENSIONS[$ext])) {
             return false;
         }
 
@@ -102,7 +110,7 @@ final class HTMLCache extends AbstractCacheDriver
         if (!empty($_GET)) {
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
-                if (in_array($key, self::BYPASS_PARAMS, true)) {
+                if (isset(self::BYPASS_PARAMS[$key])) {
                     return false;
                 }
             }
