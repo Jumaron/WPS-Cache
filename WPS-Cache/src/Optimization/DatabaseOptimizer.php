@@ -145,13 +145,13 @@ class DatabaseOptimizer
             $count++;
         }
 
+        $clean_orphaned_commentmeta = false;
+
         if (in_array("spam_comments", $items)) {
             $wpdb->query(
                 "DELETE FROM $wpdb->comments WHERE comment_approved = 'spam'",
             );
-            $wpdb->query(
-                "DELETE FROM $wpdb->commentmeta WHERE comment_id NOT IN (SELECT comment_ID FROM $wpdb->comments)",
-            );
+            $clean_orphaned_commentmeta = true;
             $count++;
         }
 
@@ -159,10 +159,18 @@ class DatabaseOptimizer
             $wpdb->query(
                 "DELETE FROM $wpdb->comments WHERE comment_approved = 'trash'",
             );
-            $wpdb->query(
-                "DELETE FROM $wpdb->commentmeta WHERE comment_id NOT IN (SELECT comment_ID FROM $wpdb->comments)",
-            );
+            $clean_orphaned_commentmeta = true;
             $count++;
+        }
+
+        if ($clean_orphaned_commentmeta) {
+            // Optimization: Use LEFT JOIN ... IS NULL instead of expensive NOT IN (subquery)
+            // Also batches the cleanup so it only runs once even if multiple comment types are selected.
+            $wpdb->query(
+                "DELETE meta FROM $wpdb->commentmeta meta
+                 LEFT JOIN $wpdb->comments comments ON meta.comment_id = comments.comment_ID
+                 WHERE comments.comment_ID IS NULL"
+            );
         }
 
         if (in_array("expired_transients", $items)) {
