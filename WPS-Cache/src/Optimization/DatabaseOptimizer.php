@@ -104,7 +104,12 @@ class DatabaseOptimizer
 
     private function getTableOverhead($wpdb): string
     {
-        $tables = $wpdb->get_results("SHOW TABLE STATUS WHERE Data_free > 0");
+        // Optimization: Restrict status check to this site's tables only.
+        // Prevents scanning thousands of tables in shared databases.
+        $like = $wpdb->esc_like($wpdb->prefix) . "%";
+        $sql = $wpdb->prepare("SHOW TABLE STATUS WHERE Name LIKE %s AND Data_free > 0", $like);
+
+        $tables = $wpdb->get_results($sql);
         $overhead = 0;
         foreach ($tables as $table) {
             $overhead += (float) $table->Data_free;
