@@ -46,12 +46,22 @@ final class RedisCache extends AbstractCacheDriver
             $this->salt = WP_REDIS_SIGNING_KEY;
         } elseif (defined("WP_CACHE_KEY_SALT")) {
             $this->salt = WP_CACHE_KEY_SALT;
+        } elseif (defined("AUTH_KEY")) {
+            $this->salt = AUTH_KEY;
         } elseif (defined("SECURE_AUTH_KEY")) {
             $this->salt = SECURE_AUTH_KEY;
         } elseif (defined("LOGGED_IN_KEY")) {
             $this->salt = LOGGED_IN_KEY;
         } elseif (defined("NONCE_KEY")) {
             $this->salt = NONCE_KEY;
+        } elseif (defined("AUTH_SALT")) {
+            $this->salt = AUTH_SALT;
+        } elseif (defined("SECURE_AUTH_SALT")) {
+            $this->salt = SECURE_AUTH_SALT;
+        } elseif (defined("LOGGED_IN_SALT")) {
+            $this->salt = LOGGED_IN_SALT;
+        } elseif (defined("NONCE_SALT")) {
+            $this->salt = NONCE_SALT;
         } elseif (function_exists("wp_salt")) {
             $this->salt = wp_salt("auth");
         } else {
