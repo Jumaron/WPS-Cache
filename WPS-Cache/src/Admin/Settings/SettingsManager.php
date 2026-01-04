@@ -54,7 +54,9 @@ class SettingsManager
     private function formEnd(): void
     {
         echo '<div style="margin-top: 20px;">';
-        submit_button("Save Changes", "primary wpsc-btn-primary");
+        echo '<button type="submit" name="submit" id="submit" class="button button-primary wpsc-btn-primary">';
+        echo esc_html__("Save Changes", "wps-cache");
+        echo '</button>';
         echo "</div>";
         echo "</form>";
     }

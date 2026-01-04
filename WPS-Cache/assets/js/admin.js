@@ -1,7 +1,30 @@
 document.addEventListener("DOMContentLoaded", function () {
   initPreloader();
   initCopyTriggers();
+  initFormSubmissions();
 });
+
+function initFormSubmissions() {
+  document.querySelectorAll("form.wpsc-form").forEach((form) => {
+    form.addEventListener("submit", function () {
+      const btn = form.querySelector('button[type="submit"]');
+      if (!btn) return;
+
+      // Prevent double submission visually
+      if (btn.classList.contains("disabled")) {
+        return;
+      }
+
+      // Lock width to prevent jumping if possible, or just let it reflow
+      // btn.style.width = btn.offsetWidth + "px";
+
+      btn.classList.add("disabled");
+      btn.innerHTML =
+        '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+        wpsc_admin.strings.saving;
+    });
+  });
+}
 
 function initPreloader() {
   const preloadBtn = document.getElementById("wpsc-start-preload");
