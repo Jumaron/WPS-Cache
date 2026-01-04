@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace WPSCache\Optimization;
 
 use DOMDocument;
-use DOMXPath;
 
 /**
  * SOTA CSS Tree Shaking.
@@ -16,6 +15,7 @@ class CriticalCSSManager
     private array $settings;
     private array $selectorCache = [];
     private string $safelistRegex;
+    private array $domStats = [];
 
     private const SAFELIST = [
         "active",
@@ -53,8 +53,10 @@ class CriticalCSSManager
             return;
         }
 
+        // Optimization: Scan DOM once (O(N)) to build O(1) lookup maps
+        $this->prepareDomStats($dom);
         $this->selectorCache = [];
-        $xpath = new DOMXPath($dom);
+
         $styles = $dom->getElementsByTagName("style");
         $nodesToRemove = [];
 
@@ -64,7 +66,7 @@ class CriticalCSSManager
                 continue;
             }
 
-            $optimizedCss = $this->treeShakeCss($css, $xpath);
+            $optimizedCss = $this->treeShakeCss($css);
 
             if (empty(trim($optimizedCss))) {
                 $nodesToRemove[] = $style;
@@ -99,10 +101,49 @@ class CriticalCSSManager
         return str_replace('<?xml encoding="utf-8" ?>', "", $output);
     }
 
-    private function treeShakeCss(string $css, DOMXPath $xpath): string
+    private function prepareDomStats(DOMDocument $dom): void
+    {
+        $this->domStats = [
+            "ids" => [],
+            "classes" => [],
+            "tags" => [],
+        ];
+
+        $nodes = $dom->getElementsByTagName("*");
+        foreach ($nodes as $node) {
+            // Tags (always lowercase in DOM for HTML)
+            $this->domStats["tags"][strtolower($node->nodeName)] = true;
+
+            // ID
+            if ($id = $node->getAttribute("id")) {
+                $this->domStats["ids"][$id] = true;
+            }
+
+            // Classes
+            if ($class = $node->getAttribute("class")) {
+                // Split by whitespace
+                $classes = preg_split(
+                    '/\s+/',
+                    trim($class),
+                    -1,
+                    PREG_SPLIT_NO_EMPTY,
+                );
+                foreach ($classes as $c) {
+                    $this->domStats["classes"][$c] = true;
+                }
+            }
+        }
+    }
+
+    private function treeShakeCss(string $css): string
     {
         $keptRules = [];
-        preg_match_all("/([^{]+)\{([^}]+)\}/s", $css, $matches, PREG_SET_ORDER);
+        preg_match_all(
+            "/([^{]+)\{([^}]+)\}/s",
+            $css,
+            $matches,
+            PREG_SET_ORDER,
+        );
 
         foreach ($matches as $match) {
             $fullSelector = trim($match[1]);
@@ -118,7 +159,7 @@ class CriticalCSSManager
 
             foreach ($subSelectors as $sel) {
                 $sel = trim($sel);
-                if ($this->shouldKeep($sel, $xpath)) {
+                if ($this->shouldKeep($sel)) {
                     $keptSubSelectors[] = $sel;
                 }
             }
@@ -132,7 +173,7 @@ class CriticalCSSManager
         return implode("\n", $keptRules);
     }
 
-    private function shouldKeep(string $selector, DOMXPath $xpath): bool
+    private function shouldKeep(string $selector): bool
     {
         if (isset($this->selectorCache[$selector])) {
             return $this->selectorCache[$selector];
@@ -143,7 +184,11 @@ class CriticalCSSManager
             return true;
         }
 
-        $cleanSelector = preg_replace("/:[a-zA-Z-]+(\(.*?\))?/", "", $selector);
+        $cleanSelector = preg_replace(
+            "/:[a-zA-Z-]+(\(.*?\))?/",
+            "",
+            $selector,
+        );
         $cleanSelector = trim($cleanSelector);
 
         if (empty($cleanSelector)) {
@@ -151,35 +196,30 @@ class CriticalCSSManager
             return true;
         }
 
-        try {
-            $query = $this->cssToXpath($cleanSelector);
-            $nodes = $xpath->query($query);
-            $result = $nodes->length > 0;
-            $this->selectorCache[$selector] = $result;
-            return $result;
-        } catch (\Throwable $e) {
+        // Optimization: Use O(1) hash map lookups instead of slow DOMXPath queries
+        $parts = preg_split("/[\s>+~]+/", $cleanSelector);
+        $target = end($parts);
+
+        // Safe Fallback: If we can't easily parse the target, keep it
+        if ($target === false) {
             $this->selectorCache[$selector] = true;
             return true;
         }
-    }
-
-    private function cssToXpath(string $selector): string
-    {
-        $parts = preg_split("/[\s>+~]+/", $selector);
-        $target = end($parts);
 
         if (str_starts_with($target, "#")) {
             $id = substr($target, 1);
-            return "//*[@id='$id']";
+            $result = isset($this->domStats["ids"][$id]);
         } elseif (str_starts_with($target, ".")) {
             $class = substr($target, 1);
-            return "//*[contains(concat(' ', normalize-space(@class), ' '), ' $class ')]";
+            $result = isset($this->domStats["classes"][$class]);
+        } elseif (ctype_alnum($target)) {
+            $result = isset($this->domStats["tags"][strtolower($target)]);
         } else {
-            if (ctype_alnum($target)) {
-                return "//" . $target;
-            } else {
-                throw new \Exception("Complex selector");
-            }
+            // Complex selector (e.g. attributes [type="text"]), default to Keep
+            $result = true;
         }
+
+        $this->selectorCache[$selector] = $result;
+        return $result;
     }
 }
