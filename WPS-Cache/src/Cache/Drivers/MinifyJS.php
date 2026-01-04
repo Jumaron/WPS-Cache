@@ -28,6 +28,18 @@ final class MinifyJS extends AbstractCacheDriver
     // Used for strcspn optimization in tokenizer
     private const TOKENIZER_MASK = " \t\n\r\v\f/\"'`{}()[],:;?^~.!<>=+-*%&|";
 
+    // Optimization: O(1) lookup for single-character operators
+    private const SINGLE_CHAR_OPERATORS = [
+        "{" => true, "}" => true, "(" => true, ")" => true, "[" => true, "]" => true,
+        "," => true, ":" => true, ";" => true, "?" => true, "^" => true, "~" => true,
+    ];
+
+    // Optimization: O(1) lookup for characters that start complex operators
+    private const COMPLEX_OPERATORS_START = [
+        "." => true, "!" => true, "<" => true, ">" => true, "=" => true,
+        "+" => true, "-" => true, "*" => true, "%" => true, "&" => true, "|" => true,
+    ];
+
     // Optimization: Pre-computed hash maps for O(1) lookup
     private const REGEX_START_KEYWORDS = [
         "case" => true,
@@ -540,7 +552,8 @@ final class MinifyJS extends AbstractCacheDriver
             }
 
             // Operators
-            if (str_contains("{}()[],:;?^~", $char)) {
+            // Optimization: Use O(1) lookup instead of O(N) str_contains
+            if (isset(self::SINGLE_CHAR_OPERATORS[$char])) {
                 yield ($lastMeaningfulToken = [
                     "type" => self::T_OPERATOR,
                     "value" => $char,
@@ -548,7 +561,7 @@ final class MinifyJS extends AbstractCacheDriver
                 $i++;
                 continue;
             }
-            if (str_contains(".!<>=+-*%&|", $char)) {
+            if (isset(self::COMPLEX_OPERATORS_START[$char])) {
                 $start = $i;
                 // Optimization: Use strspn to match consecutive operator characters at once
                 $len_op = strspn($js, ".!<>=+-*%&|", $i);
