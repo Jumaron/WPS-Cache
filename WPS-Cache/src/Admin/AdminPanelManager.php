@@ -106,6 +106,8 @@ final class AdminPanelManager
                 "copied" => __("Copied!", "wps-cache"),
                 "copied_announcement" => __("Copied to clipboard!", "wps-cache"),
                 "saving" => __("Saving...", "wps-cache"),
+                "purge_confirm" => __("Are you sure you want to purge all caches?", "wps-cache"),
+                "purging" => __("Purging...", "wps-cache"),
             ],
         ]);
     }

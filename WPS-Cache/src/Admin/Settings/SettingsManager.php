@@ -97,13 +97,12 @@ class SettingsManager
     private function renderDashboardTabContent(array $settings): void
     {
         echo '<div style="margin-bottom: 20px; text-align:right;">';
-        $confirm = esc_js(__("Are you sure you want to purge all caches?", "wps-cache"));
         echo '<a href="' .
             wp_nonce_url(
                 admin_url("admin-post.php?action=wpsc_clear_cache"),
                 "wpsc_clear_cache",
             ) .
-            '" class="button wpsc-btn-danger" onclick="return confirm(\'' . $confirm . '\');"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Purge All Caches</a>';
+            '" id="wpsc-purge-all" role="button" class="button wpsc-btn-danger"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Purge All Caches</a>';
         echo "</div>";
         $this->formStart();
         $this->renderer->renderCard(
