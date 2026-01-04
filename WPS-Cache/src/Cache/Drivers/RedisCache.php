@@ -85,6 +85,15 @@ final class RedisCache extends AbstractCacheDriver
         return extension_loaded("redis") && class_exists("Redis");
     }
 
+    /**
+     * Sentinel Enhancement: Safely expose the Redis connection for metrics.
+     * Returns null if not connected.
+     */
+    public function getConnection(): ?Redis
+    {
+        return $this->redis;
+    }
+
     public function initialize(): void
     {
         if (!$this->isSupported() || $this->redis) {
@@ -94,7 +103,9 @@ final class RedisCache extends AbstractCacheDriver
         try {
             $this->connect();
         } catch (RedisException $e) {
-            $this->logError("Redis Connection Failed: " . $e->getMessage());
+            // Sentinel Fix: Redact sensitive info from error logs
+            $safeMsg = $this->redactSensitiveInfo($e->getMessage());
+            $this->logError("Redis Connection Failed: " . $safeMsg);
         }
     }
 
@@ -103,6 +114,8 @@ final class RedisCache extends AbstractCacheDriver
         $this->redis = new Redis();
 
         // 1. Connection (Support TLS via 'tls://' host prefix)
+        // Note: connect() throws RedisException on failure (phpredis > 5.0)
+        // or returns false (which we check).
         if (!$this->redis->connect($this->host, $this->port, $this->timeout)) {
             throw new RedisException("Unable to connect to Redis server.");
         }
@@ -112,8 +125,16 @@ final class RedisCache extends AbstractCacheDriver
             $auth = is_array($this->password)
                 ? $this->password
                 : [$this->password];
-            if (!$this->redis->auth($auth)) {
-                throw new RedisException("Redis authentication failed.");
+            // Don't pass the password here if we can avoid it in stack traces,
+            // but phpredis needs it. We handle the exception to redact it.
+            try {
+                if (!$this->redis->auth($auth)) {
+                    throw new RedisException("Redis authentication failed.");
+                }
+            } catch (RedisException $e) {
+                // Re-throw with redacted message if it contains the password
+                $safeMsg = $this->redactSensitiveInfo($e->getMessage());
+                throw new RedisException($safeMsg, 0, $e);
             }
         }
 
@@ -147,6 +168,31 @@ final class RedisCache extends AbstractCacheDriver
         }
     }
 
+    /**
+     * Sentinel Security: Scrub sensitive data (like passwords) from error messages.
+     */
+    private function redactSensitiveInfo(string $message): string
+    {
+        if (empty($this->password)) {
+            return $message;
+        }
+
+        // Handle array passwords (ACL users)
+        $passwords = is_array($this->password) ? $this->password : [$this->password];
+
+        foreach ($passwords as $pwd) {
+            if (is_string($pwd) && !empty($pwd)) {
+                $message = str_replace($pwd, "******", $message);
+            }
+        }
+
+        // Also scrub host/port if they appear in standard connection strings to be safe
+        // e.g., "redis://user:pass@1.2.3.4:6379"
+        $message = preg_replace('/redis:\/\/[^@]+@/', 'redis://***@', $message);
+
+        return $message;
+    }
+
     public function get(string $key): mixed
     {
         if (!$this->redis) {
@@ -168,6 +214,7 @@ final class RedisCache extends AbstractCacheDriver
 
             return $unpacked[1];
         } catch (RedisException $e) {
+            // No logging here to prevent log flooding on cache misses/errors
             return null;
         }
     }
@@ -187,7 +234,9 @@ final class RedisCache extends AbstractCacheDriver
                 $this->redis->set($key, $value);
             }
         } catch (RedisException $e) {
-            $this->logError("Set Failed for key $key", $e);
+            // Sentinel Fix: Redact sensitive info
+            $safeMsg = $this->redactSensitiveInfo($e->getMessage());
+            $this->logError("Set Failed for key $key: " . $safeMsg);
         }
     }
 
@@ -252,7 +301,9 @@ final class RedisCache extends AbstractCacheDriver
                 }
             }
         } catch (RedisException $e) {
-            $this->logError("Clear failed", $e);
+            // Sentinel Fix: Redact sensitive info
+            $safeMsg = $this->redactSensitiveInfo($e->getMessage());
+            $this->logError("Clear failed: " . $safeMsg);
         }
     }
 
