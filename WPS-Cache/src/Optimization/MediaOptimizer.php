@@ -190,42 +190,36 @@ class MediaOptimizer
         // Remove query strings
         $path = strtok($path, "?");
 
-        // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
-        $realPath = realpath($path);
-        if ($realPath === false || !str_starts_with($realPath, ABSPATH)) {
-            return $tag;
-        }
+        // Cache Key from raw path (Avoids realpath I/O on hit)
+        $cacheKey = "wpsc_dim_" . md5($path);
+        $dims = false;
 
-        // Sentinel Fix: Ensure strictly Image extension
-        $ext = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
-        if (!in_array($ext, ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"], true)) {
-            return $tag;
-        }
-
-        // Use realPath for subsequent operations
-        $path = $realPath;
-
-        // SOTA: Check in-memory cache first
+        // 1. Check Memory Cache
         if (isset($this->dimensionCache[$path])) {
             $dims = $this->dimensionCache[$path];
         } else {
-            // SOTA: Cache the result to avoid disk I/O on every request
-            // Key is hashed path (invalidates via TTL or manual flush)
-            $cacheKey = "wpsc_dim_" . md5($path);
+            // 2. Check Transient Cache
             $dims = get_transient($cacheKey);
 
-            if (!$dims) {
-                if (!file_exists($path)) {
-                    // Cache the failure too to avoid repeated checks
-                    $this->dimensionCache[$path] = false;
-                    return $tag;
-                }
+            if ($dims === false) {
+                // 3. Cache Miss: Fallback to File System (Heavy I/O)
 
-                $dims = @getimagesize($path);
-                if ($dims) {
-                    set_transient($cacheKey, $dims, MONTH_IN_SECONDS);
+                // Sentinel Fix: Prevent Path Traversal & Source Code Disclosure
+                $realPath = realpath($path);
+
+                if ($realPath !== false && str_starts_with($realPath, ABSPATH)) {
+                    // Sentinel Fix: Ensure strictly Image extension
+                    $ext = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
+
+                    if (in_array($ext, ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"], true)) {
+                        $dims = @getimagesize($realPath);
+                        if ($dims) {
+                            set_transient($cacheKey, $dims, MONTH_IN_SECONDS);
+                        }
+                    }
                 }
             }
+            // Update Memory Cache (stores false on failure to avoid re-check)
             $this->dimensionCache[$path] = $dims;
         }
 
