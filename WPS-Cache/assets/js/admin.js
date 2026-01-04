@@ -2,7 +2,26 @@ document.addEventListener("DOMContentLoaded", function () {
   initPreloader();
   initCopyTriggers();
   initFormSubmissions();
+  initPurgeButton();
 });
+
+function initPurgeButton() {
+  const purgeBtn = document.getElementById("wpsc-purge-all");
+  if (!purgeBtn) return;
+
+  purgeBtn.addEventListener("click", function (e) {
+    if (!confirm(wpsc_admin.strings.purge_confirm)) {
+      e.preventDefault();
+    } else {
+      // User confirmed, link will be followed.
+      // Show loading state immediately.
+      purgeBtn.classList.add("disabled");
+      purgeBtn.innerHTML =
+        '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+        wpsc_admin.strings.purging;
+    }
+  });
+}
 
 function initFormSubmissions() {
   document.querySelectorAll("form.wpsc-form").forEach((form) => {
