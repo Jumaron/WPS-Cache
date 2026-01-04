@@ -123,6 +123,11 @@ class SettingsValidator
         return max($min, min($max, $val));
     }
 
+    private function sanitizeEnum(mixed $value, array $allowed, mixed $default): mixed
+    {
+        return in_array($value, $allowed, true) ? $value : $default;
+    }
+
     private function sanitizeString(string $key, mixed $value): string
     {
         $val = (string) $value;
@@ -163,6 +168,17 @@ class SettingsValidator
             // Allow alphanumeric, colons, underscores, hyphens. Limit length.
             $val = sanitize_text_field($val);
             return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
+        }
+
+        // Sentinel Fix: Strict Enum Validation to prevent DoS via schedule abuse or logic breaks
+        if ($key === "speculation_mode") {
+            return $this->sanitizeEnum($val, ["prerender", "prefetch"], "prerender");
+        }
+        if ($key === "preload_interval") {
+            return $this->sanitizeEnum($val, ["hourly", "daily", "weekly", "disabled"], "daily");
+        }
+        if ($key === "db_schedule") {
+            return $this->sanitizeEnum($val, ["disabled", "daily", "weekly", "monthly"], "disabled");
         }
 
         // Sentinel Fix: Enforce general length limit to prevent DoS/Storage issues
