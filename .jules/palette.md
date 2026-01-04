@@ -15,3 +15,7 @@
 ## 2024-05-24 - Placeholders in Technical Forms
 **Learning:** Technical configuration forms (like Redis/CDN settings) often confuse users about the expected format (e.g., "127.0.0.1" vs "localhost").
 **Action:** Always provide explicit examples in the `placeholder` attribute for technical inputs to reduce cognitive load and validation errors.
+
+## 2024-05-24 - Manual Settings vs Renderer
+**Learning:** Manually constructing setting rows in loops (like database cleanup items) often leads to missing accessibility attributes (like `aria-describedby`) that the standardized `SettingsRenderer` handles automatically.
+**Action:** When manually looping to render inputs, explicitly replicate the accessibility attributes (ID generation and `aria-describedby`) that the `SettingsRenderer` would otherwise provide.

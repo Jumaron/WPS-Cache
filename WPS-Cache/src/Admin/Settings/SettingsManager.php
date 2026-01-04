@@ -651,13 +651,14 @@ class SettingsManager
                             ? "Overhead: {$count}"
                             : "Count: {$count}";
                     $checked = !empty($settings["db_clean_" . $key]);
+                    $descId = "wpsc_db_desc_" . esc_attr($key);
                     ?>
                 <div class="wpsc-setting-row">
                     <div class="wpsc-setting-info">
                         <label class="wpsc-setting-label" for="wpsc_db_clean_<?php echo esc_attr(
                             $key,
                         ); ?>"><?php echo esc_html($label); ?></label>
-                        <p class="wpsc-setting-desc" style="color: var(--wpsc-primary);"><?php echo esc_html(
+                        <p class="wpsc-setting-desc" id="<?php echo $descId; ?>" style="color: var(--wpsc-primary);"><?php echo esc_html(
                             $display,
                         ); ?></p>
                     </div>
@@ -666,7 +667,7 @@ class SettingsManager
                             $key,
                         ); ?>]" value="0">
                         <label class="wpsc-switch">
-                            <input type="checkbox" class="wpsc-db-checkbox" data-key="<?php echo esc_attr(
+                            <input type="checkbox" class="wpsc-db-checkbox" aria-describedby="<?php echo $descId; ?>" data-key="<?php echo esc_attr(
                                 $key,
                             ); ?>" id="wpsc_db_clean_<?php echo esc_attr(
     $key,
@@ -703,12 +704,18 @@ class SettingsManager
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce, 'items[]': items })
                 }).then(res => res.json()).then(res => {
-                    btn.disabled = false; btn.innerHTML = btn.dataset.originalText;
                     if(res.success) {
+                        btn.innerHTML = '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> Cleaned!';
+                        btn.style.backgroundColor = 'var(--wpsc-success)';
+                        btn.style.borderColor = 'var(--wpsc-success)';
+                        btn.style.color = 'white';
                         status.style.color = 'var(--wpsc-success)';
                         status.textContent = res.data;
+                        if (typeof announce === "function") { announce(res.data); }
                         setTimeout(() => window.location.reload(), 1500);
                     } else {
+                        btn.disabled = false;
+                        btn.innerHTML = btn.dataset.originalText;
                         status.style.color = 'var(--wpsc-danger)';
                         status.textContent = res.data;
                     }
