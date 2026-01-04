@@ -141,6 +141,23 @@ class SettingsValidator
             return $url;
         }
 
+        // Sentinel Fix: Strict validation for Cloudflare settings to prevent XSS/Injection
+        if ($key === "cf_zone_id") {
+            $val = sanitize_text_field($val);
+            // Zone ID is a 32-character hex string
+            if (!preg_match('/^[a-fA-F0-9]{32}$/', $val)) {
+                return "";
+            }
+            return $val;
+        }
+
+        if ($key === "cf_api_token") {
+            $val = sanitize_text_field($val);
+            // Token should only contain safe chars and be reasonably limited
+            // Allow alphanumeric, underscore, hyphen, dot
+            return preg_replace('/[^a-zA-Z0-9_\-\.]/', "", substr($val, 0, 128));
+        }
+
         // Sentinel Fix: Strict validation for Redis Prefix to prevent key injection
         if ($key === "redis_prefix") {
             // Allow alphanumeric, colons, underscores, hyphens. Limit length.
@@ -148,7 +165,8 @@ class SettingsValidator
             return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
         }
 
-        return sanitize_text_field($val);
+        // Sentinel Fix: Enforce general length limit to prevent DoS/Storage issues
+        return substr(sanitize_text_field($val), 0, 1024);
     }
 
     private function sanitizeHost(string $host): string
