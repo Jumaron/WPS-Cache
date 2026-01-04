@@ -233,12 +233,14 @@ class SettingsManager
                 "Default: 3600",
                 $settings,
                 "number",
+                ["placeholder" => "3600"],
             );
             $this->renderer->renderTextarea(
                 "excluded_urls",
                 "Excluded URLs",
                 "One URL or path per line.",
                 $settings,
+                ["placeholder" => "e.g. /my-account/\n/checkout/"],
             );
         });
         $this->formEnd();
@@ -268,6 +270,7 @@ class SettingsManager
                     "Number of images to skip from top (prevents LCP delay). Recommended: 3",
                     $settings,
                     "number",
+                    ["placeholder" => "3"],
                 );
             },
         );
@@ -412,6 +415,7 @@ class SettingsManager
                     "Exclude CSS",
                     "Filenames to skip.",
                     $settings,
+                    ["placeholder" => "e.g. style.css\nbootstrap.min.css"],
                 );
             },
         );
@@ -442,6 +446,7 @@ class SettingsManager
                     "Exclude JS",
                     "Filenames to skip.",
                     $settings,
+                    ["placeholder" => "e.g. jquery.js\nanalytics.js"],
                 );
             },
         );
