@@ -133,10 +133,15 @@ class MetricsCollector
                 "uptime" => $info["uptime_in_days"] ?? 0,
             ];
         } catch (\Throwable $e) {
+            // Sentinel Fix: Sanitize error message before storing in DB (Transient)
+            // Even though RedisCache::getConnection() shouldn't throw leaks now, this is defense in depth.
+            $msg = $e->getMessage();
+            $msg = preg_replace('/redis:\/\/[^@]+@/', 'redis://***@', $msg);
+
             return [
                 "enabled" => true,
                 "connected" => false,
-                "error" => $e->getMessage(),
+                "error" => $msg,
             ];
         }
     }
