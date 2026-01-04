@@ -173,11 +173,18 @@ class SettingsRenderer
         string $label,
         string $description,
         array $settings,
+        array $attrs = [],
     ): void {
         $value = $settings[$key] ?? "";
         $descId = $description ? "wpsc_" . esc_attr($key) . "_desc" : "";
         if (is_array($value)) {
             $value = implode("\n", $value);
+        }
+
+        // Build attributes string
+        $attrStr = "";
+        foreach ($attrs as $k => $v) {
+            $attrStr .= esc_attr($k) . '="' . esc_attr($v) . '" ';
         }
         ?>
         <div class="wpsc-setting-row" style="align-items: flex-start;">
@@ -201,7 +208,9 @@ class SettingsRenderer
                         $key,
                     ); ?>]" rows="5" <?php echo $descId
     ? 'aria-describedby="' . $descId . '"'
-    : ""; ?> spellcheck="false"><?php echo esc_textarea($value); ?></textarea>
+    : ""; ?> spellcheck="false" <?php echo $attrStr; ?>><?php echo esc_textarea(
+    $value,
+); ?></textarea>
             </div>
         </div>
         <?php
