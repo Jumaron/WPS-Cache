@@ -58,7 +58,7 @@ class ServerConfigManager
         header("Content-Security-Policy: frame-ancestors 'self'");
         header("Referrer-Policy: strict-origin-when-cross-origin");
         header(
-            "Permissions-Policy: camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=()",
+            "Permissions-Policy: camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()",
         );
     }
 
@@ -179,7 +179,7 @@ class ServerConfigManager
                 Header set X-Frame-Options "SAMEORIGIN"
                 Header set Content-Security-Policy "frame-ancestors 'self'"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
-                Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=()"
+                Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()"
             </FilesMatch>
         </IfModule>
         # END WPS Cache
