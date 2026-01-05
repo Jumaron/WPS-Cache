@@ -60,7 +60,7 @@ final class HTMLCache extends AbstractCacheDriver
         $this->cacheDir = defined("WPSC_CACHE_DIR")
             ? WPSC_CACHE_DIR . "html/"
             : WP_CONTENT_DIR . "/cache/wps-cache/html/";
-        $this->ensureDirectory($this->cacheDir);
+        // Optimization: Removed ensureDirectory here. It's handled lazily in atomicWrite.
 
         $excluded = $this->settings["excluded_urls"] ?? [];
         if (!empty($excluded)) {

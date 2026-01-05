@@ -25,10 +25,7 @@ class FontOptimizer
         $this->settings = $settings;
         $this->fontCacheDir = WPSC_CACHE_DIR . "fonts/";
         $this->fontCacheUrl = content_url("cache/wps-cache/fonts/");
-
-        if (!is_dir($this->fontCacheDir)) {
-            @mkdir($this->fontCacheDir, 0755, true);
-        }
+        // Optimization: Lazy creation of cache directory
     }
 
     public function process(string $html): string
@@ -121,6 +118,10 @@ class FontOptimizer
                 if (!$css) {
                     return $originalTag;
                 }
+                // Check if directory exists before writing
+                if (!is_dir($this->fontCacheDir)) {
+                    @mkdir($this->fontCacheDir, 0755, true);
+                }
                 file_put_contents($cacheFile, $css);
                 set_transient($cacheKey, $css, MONTH_IN_SECONDS);
             }
@@ -193,6 +194,10 @@ class FontOptimizer
             $content = wp_safe_remote_get($url);
             if (!is_wp_error($content)) {
                 $body = wp_remote_retrieve_body($content);
+                // Check if directory exists before writing
+                if (!is_dir($this->fontCacheDir)) {
+                    @mkdir($this->fontCacheDir, 0755, true);
+                }
                 file_put_contents($localPath, $body);
             } else {
                 return $url; // Fallback to remote if download fails
