@@ -18,6 +18,7 @@ class FontOptimizer
     private array $settings;
     private string $fontCacheDir;
     private string $fontCacheUrl;
+    private array $cssCache = [];
 
     public function __construct(array $settings)
     {
@@ -74,22 +75,47 @@ class FontOptimizer
 
         // Create a cache ID based on the CLEAN URL
         $cacheFilename = md5($url) . ".css";
-        $cacheFile = $this->fontCacheDir . $cacheFilename;
+        $cacheKey = "wpsc_font_css_" . md5($url);
 
-        if (file_exists($cacheFile)) {
-            $css = file_get_contents($cacheFile);
-        } else {
-            $css = $this->downloadAndProcessFont($url);
-            if (!$css) {
-                return $originalTag;
-            }
-            file_put_contents($cacheFile, $css);
+        // 1. Check Runtime Memory Cache
+        if (isset($this->cssCache[$cacheKey])) {
+            $css = $this->cssCache[$cacheKey];
+            return $this->formatCss($css, $cacheFilename);
         }
 
-        // Return inline CSS to prevent render blocking
+        // 2. Check Object Cache (Transient)
+        $css = get_transient($cacheKey);
+
+        if ($css === false) {
+            $cacheFile = $this->fontCacheDir . $cacheFilename;
+
+            // 3. Fallback to File System
+            if (file_exists($cacheFile)) {
+                $css = file_get_contents($cacheFile);
+                if ($css) {
+                    set_transient($cacheKey, $css, MONTH_IN_SECONDS);
+                }
+            } else {
+                // 4. Download and Process
+                $css = $this->downloadAndProcessFont($url);
+                if (!$css) {
+                    return $originalTag;
+                }
+                file_put_contents($cacheFile, $css);
+                set_transient($cacheKey, $css, MONTH_IN_SECONDS);
+            }
+        }
+
+        $this->cssCache[$cacheKey] = $css;
+
+        return $this->formatCss($css, $cacheFilename);
+    }
+
+    private function formatCss(string $css, string $filename): string
+    {
         return sprintf(
             '<style id="wpsc-local-font-%s">%s</style>',
-            substr($cacheFilename, 0, 8),
+            substr($filename, 0, 8),
             $css,
         );
     }
