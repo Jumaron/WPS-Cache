@@ -6,20 +6,28 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function initPurgeButton() {
-  const purgeBtn = document.getElementById("wpsc-purge-all");
-  if (!purgeBtn) return;
+  const triggers = document.querySelectorAll(
+    "#wpsc-purge-all, .wpsc-purge-trigger a",
+  );
 
-  purgeBtn.addEventListener("click", function (e) {
-    if (!confirm(wpsc_admin.strings.purge_confirm)) {
-      e.preventDefault();
-    } else {
-      // User confirmed, link will be followed.
-      // Show loading state immediately.
-      purgeBtn.classList.add("disabled");
-      purgeBtn.innerHTML =
-        '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
-        wpsc_admin.strings.purging;
+  triggers.forEach((trigger) => {
+    // Remove inline onclick to prevent double confirmation dialogs (Progressive Enhancement)
+    if (trigger.hasAttribute("onclick")) {
+      trigger.removeAttribute("onclick");
     }
+
+    trigger.addEventListener("click", function (e) {
+      if (!confirm(wpsc_admin.strings.purge_confirm)) {
+        e.preventDefault();
+      } else {
+        // User confirmed, link will be followed.
+        // Show loading state immediately.
+        trigger.classList.add("disabled");
+        trigger.innerHTML =
+          '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+          wpsc_admin.strings.purging;
+      }
+    });
   });
 }
 
