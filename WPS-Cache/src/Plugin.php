@@ -395,15 +395,17 @@ final class Plugin
 
         if (file_exists($dest)) {
             $content = file_get_contents($dest);
+            // If it's not ours, back it up
             if (
-                str_contains($content, "WPS Cache") ||
-                str_contains($content, "WPS-Cache")
+                !str_contains($content, "WPS Cache") &&
+                !str_contains($content, "WPS-Cache")
             ) {
-                @copy($src, $dest);
+                @rename($dest, $dest . ".bak");
             }
-        } else {
-            @copy($src, $dest);
         }
+
+        // Always copy (overwrite/install)
+        @copy($src, $dest);
     }
     private function removeDropIns(): void
     {
