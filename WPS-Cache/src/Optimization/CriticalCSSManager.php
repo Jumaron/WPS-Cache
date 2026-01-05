@@ -121,15 +121,31 @@ class CriticalCSSManager
 
             // Classes
             if ($class = $node->getAttribute("class")) {
-                // Split by whitespace
-                $classes = preg_split(
-                    '/\s+/',
-                    trim($class),
-                    -1,
-                    PREG_SPLIT_NO_EMPTY,
-                );
-                foreach ($classes as $c) {
-                    $this->domStats["classes"][$c] = true;
+                $trimmed = trim($class);
+                if ($trimmed === "") {
+                    continue;
+                }
+
+                // Optimization: Use explode for standard space-separated classes (faster than regex)
+                // Check for non-space whitespace (tabs, newlines, etc)
+                if (strpbrk($trimmed, "\t\n\r\f\v") === false) {
+                    $classes = explode(" ", $trimmed);
+                    foreach ($classes as $c) {
+                        if ($c !== "") {
+                            $this->domStats["classes"][$c] = true;
+                        }
+                    }
+                } else {
+                    // Fallback for complex whitespace
+                    $classes = preg_split(
+                        '/\s+/',
+                        $trimmed,
+                        -1,
+                        PREG_SPLIT_NO_EMPTY,
+                    );
+                    foreach ($classes as $c) {
+                        $this->domStats["classes"][$c] = true;
+                    }
                 }
             }
         }
