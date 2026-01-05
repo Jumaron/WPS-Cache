@@ -686,18 +686,37 @@ class SettingsManager
         document.addEventListener('DOMContentLoaded', function() {
             const btn = document.getElementById('wpsc-db-optimize');
             const status = document.getElementById('wpsc-db-status');
+            const checkboxes = document.querySelectorAll('.wpsc-db-checkbox');
+
+            function updateButtonState() {
+                // Do not update state if operation is in progress (button has originalText)
+                if (btn.dataset.originalText) return;
+
+                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                btn.disabled = !anyChecked;
+            }
+
+            checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
+            updateButtonState();
+
             btn.addEventListener('click', function() {
                 const items = [];
                 document.querySelectorAll('.wpsc-db-checkbox:checked').forEach(el => { items.push(el.dataset.key); });
+
                 if (items.length === 0) {
-                    status.style.color = 'var(--wpsc-danger)';
-                    status.textContent = 'Please select at least one item to clean.';
                     return;
                 }
+
                 if (!btn.dataset.originalText) { btn.dataset.originalText = btn.innerHTML; }
+                const originalText = btn.dataset.originalText;
+
+                // Disable everything
                 btn.disabled = true;
+                checkboxes.forEach(cb => cb.disabled = true);
+
                 btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> Optimizing...';
                 status.textContent = '';
+
                 fetch(wpsc_admin.ajax_url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -713,17 +732,21 @@ class SettingsManager
                         if (typeof announce === "function") { announce(res.data); }
                         setTimeout(() => window.location.reload(), 1500);
                     } else {
-                        btn.disabled = false;
-                        btn.innerHTML = btn.dataset.originalText;
-                        status.style.color = 'var(--wpsc-danger)';
-                        status.textContent = res.data;
+                        restoreState(res.data);
                     }
                 }).catch(err => {
-                    btn.disabled = false;
-                    btn.innerHTML = btn.dataset.originalText;
-                    status.style.color = 'var(--wpsc-danger)';
-                    status.textContent = 'Optimization failed. Please try again.';
+                    restoreState('Optimization failed. Please try again.');
                 });
+
+                function restoreState(msg) {
+                    delete btn.dataset.originalText; // Clear processing flag
+                    checkboxes.forEach(cb => cb.disabled = false);
+                    updateButtonState(); // Re-evaluate based on checkboxes
+
+                    btn.innerHTML = originalText;
+                    status.style.color = 'var(--wpsc-danger)';
+                    status.textContent = msg;
+                }
             });
         });
         </script>
