@@ -134,7 +134,7 @@ final class MinifyJS extends AbstractCacheDriver
     {
         parent::__construct();
         $this->cache_dir = WPSC_CACHE_DIR . "js/";
-        $this->ensureDirectory($this->cache_dir);
+        // Optimization: Removed ensureDirectory here. atomicWrite handles it.
 
         if (!empty($this->settings["excluded_js"])) {
             $this->compileExclusionRegex($this->settings["excluded_js"]);
