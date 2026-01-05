@@ -302,6 +302,7 @@ final class Plugin
     {
         if ($settings["html_cache"] ?? false) {
             $this->serverManager->applyConfiguration();
+            $this->installAdvancedCache();
         } else {
             $this->serverManager->removeConfiguration();
         }
@@ -387,7 +388,20 @@ final class Plugin
     {
         $src = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
         $dest = WP_CONTENT_DIR . "/advanced-cache.php";
-        if (file_exists($src) && !file_exists($dest)) {
+
+        if (!file_exists($src)) {
+            return;
+        }
+
+        if (file_exists($dest)) {
+            $content = file_get_contents($dest);
+            if (
+                str_contains($content, "WPS Cache") ||
+                str_contains($content, "WPS-Cache")
+            ) {
+                @copy($src, $dest);
+            }
+        } else {
             @copy($src, $dest);
         }
     }
