@@ -263,4 +263,45 @@ class SettingsRenderer
         </div>
         <?php
     }
+
+    /**
+     * Renders a Radio Button Group (for small sets of options).
+     */
+    public function renderRadioGroup(
+        string $key,
+        string $label,
+        string $description,
+        array $settings,
+        array $options,
+    ): void {
+        $current = $settings[$key] ?? "";
+        $descId = $description ? "wpsc_" . esc_attr($key) . "_desc" : "";
+        $labelId = "wpsc_" . esc_attr($key) . "_label";
+        ?>
+        <div class="wpsc-setting-row">
+            <div class="wpsc-setting-info">
+                <span class="wpsc-setting-label" id="<?php echo $labelId; ?>">
+                    <?php echo esc_html($label); ?>
+                </span>
+                <?php if ($description): ?>
+                    <p class="wpsc-setting-desc" id="<?php echo $descId; ?>">
+                        <?php echo esc_html($description); ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+            <div class="wpsc-setting-control" role="radiogroup" aria-labelledby="<?php echo $labelId; ?>">
+                <?php foreach ($options as $optValue => $optLabel): ?>
+                    <label style="display: flex; align-items: center; margin-bottom: 6px; cursor: pointer;">
+                        <input type="radio"
+                               name="wpsc_settings[<?php echo esc_attr($key); ?>]"
+                               value="<?php echo esc_attr($optValue); ?>"
+                               <?php checked($current, $optValue); ?>
+                               style="margin-top: 0;">
+                        <span style="margin-left: 8px;"><?php echo esc_html($optLabel); ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+    }
 }

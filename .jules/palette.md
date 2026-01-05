@@ -15,3 +15,7 @@
 ## 2024-05-25 - Preventative UX
 **Learning:** Instead of allowing users to click a button and then showing an error message (like "Please select an item"), disable the button until the condition is met. This reduces cognitive load and frustration.
 **Action:** Use `disabled` state on buttons that require user input, and update state via event listeners.
+
+## 2024-05-26 - Radio Groups for Small Sets
+**Learning:** Dropdowns hide options and require two clicks to change. For small option sets (2-4 items), Radio Groups are superior as they expose all options immediately and allow single-click changes.
+**Action:** Use `renderRadioGroup` (or similar pattern) instead of `<select>` when there are 4 or fewer mutually exclusive options.
