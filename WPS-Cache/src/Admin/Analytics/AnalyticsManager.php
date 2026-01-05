@@ -94,10 +94,12 @@ class AnalyticsManager
         </div>
 
         <div style="text-align: right; margin-top: 1rem;">
-            <form method="post">
+            <form method="post" class="wpsc-form">
                 <?php wp_nonce_field("wpsc_refresh_stats"); ?>
                 <input type="hidden" name="wpsc_action" value="refresh_stats">
-                <button type="submit" class="button wpsc-btn-secondary">Refresh Statistics</button>
+                <button type="submit" class="button wpsc-btn-secondary" data-loading-text="Refreshing...">
+                    <span class="dashicons dashicons-update" aria-hidden="true" style="vertical-align: middle;"></span> Refresh Statistics
+                </button>
             </form>
         </div>
         <?php // Handle manual refresh
