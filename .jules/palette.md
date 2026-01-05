@@ -19,3 +19,7 @@
 ## 2024-05-26 - Radio Groups for Small Sets
 **Learning:** Dropdowns hide options and require two clicks to change. For small option sets (2-4 items), Radio Groups are superior as they expose all options immediately and allow single-click changes.
 **Action:** Use `renderRadioGroup` (or similar pattern) instead of `<select>` when there are 4 or fewer mutually exclusive options.
+
+## 2024-05-27 - Bulk Actions in Lists
+**Learning:** Requiring users to manually select 5+ checkboxes individually causes friction. A single "Select All" toggle drastically improves usability for batch operations.
+**Action:** Always provide "Select All / Deselect All" controls for lists with multiple selectable items.

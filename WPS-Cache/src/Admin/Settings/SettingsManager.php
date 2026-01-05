@@ -638,7 +638,10 @@ class SettingsManager
             "Cleanup Options & Manual Run",
             "Select items to clean.",
             function () use ($settings, $stats, $items) {
-                echo '<div style="margin-bottom: 20px; display:flex; justify-content:flex-end;">';
+                echo '<div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">';
+                echo '<button type="button" id="wpsc-db-toggle-all" class="wpsc-btn-secondary" style="font-size: 13px; padding: 6px 12px; display: inline-flex; align-items: center;">';
+                echo '<span class="dashicons dashicons-yes" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px; margin-right: 6px;"></span>Select All';
+                echo '</button>';
                 echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary"><span class="dashicons dashicons-database" aria-hidden="true" style="vertical-align: middle;"></span> Optimize Selected Now</button>';
                 echo "</div>";
                 echo '<div id="wpsc-db-status" role="status" aria-live="polite" style="margin-bottom:20px; text-align:right; font-weight:600;"></div>';
@@ -685,6 +688,7 @@ class SettingsManager
         <script>
         document.addEventListener('DOMContentLoaded', function() {
             const btn = document.getElementById('wpsc-db-optimize');
+            const toggleBtn = document.getElementById('wpsc-db-toggle-all');
             const status = document.getElementById('wpsc-db-status');
             const checkboxes = document.querySelectorAll('.wpsc-db-checkbox');
 
@@ -694,7 +698,30 @@ class SettingsManager
 
                 const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
                 btn.disabled = !anyChecked;
+
+                updateToggleState();
             }
+
+            function updateToggleState() {
+                if (checkboxes.length === 0) {
+                    toggleBtn.style.display = 'none';
+                    return;
+                }
+                const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                if (allChecked) {
+                    toggleBtn.innerHTML = '<span class="dashicons dashicons-dismiss" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px; margin-right: 6px;"></span>Deselect All';
+                    toggleBtn.dataset.state = 'deselect';
+                } else {
+                    toggleBtn.innerHTML = '<span class="dashicons dashicons-yes" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px; margin-right: 6px;"></span>Select All';
+                    toggleBtn.dataset.state = 'select';
+                }
+            }
+
+            toggleBtn.addEventListener('click', function() {
+                const isSelect = toggleBtn.dataset.state !== 'deselect';
+                checkboxes.forEach(cb => cb.checked = isSelect);
+                updateButtonState();
+            });
 
             checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
             updateButtonState();
