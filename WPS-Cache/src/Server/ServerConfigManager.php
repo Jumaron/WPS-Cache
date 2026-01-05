@@ -54,8 +54,12 @@ class ServerConfigManager
 
         header("X-Content-Type-Options: nosniff");
         header("X-Frame-Options: SAMEORIGIN");
+        // Sentinel Enhancement: Add CSP frame-ancestors to prevent Clickjacking (Defense in Depth)
+        header("Content-Security-Policy: frame-ancestors 'self'");
         header("Referrer-Policy: strict-origin-when-cross-origin");
-        header("Permissions-Policy: camera=(), microphone=(), payment=()");
+        header(
+            "Permissions-Policy: camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=()",
+        );
     }
 
     private function isApacheOrLiteSpeed(): bool
@@ -173,8 +177,9 @@ class ServerConfigManager
                 Header set Strict-Transport-Security "max-age=31536000"
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
+                Header set Content-Security-Policy "frame-ancestors 'self'"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
-                Header set Permissions-Policy "camera=(), microphone=(), payment=()"
+                Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=()"
             </FilesMatch>
         </IfModule>
         # END WPS Cache
