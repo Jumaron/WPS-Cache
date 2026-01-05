@@ -180,12 +180,35 @@ class DatabaseOptimizer
 
         if (in_array("expired_transients", $items)) {
             $time = time();
+
+            // SOTA: Delete both the timeout key AND the data key using multi-table DELETE.
+            // This prevents "un-expiring" the transient (where WP sees no timeout and assumes permanent validity)
+            // and actually frees up the database space.
+
+            // 1. Regular Transients
+            // Matches _transient_timeout_KEY and joins to _transient_KEY
+            // _transient_timeout_ is 19 chars long. SUBSTRING is 1-based, so start at 20.
             $wpdb->query(
-                "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_timeout_%' AND option_value < '$time'",
+                "DELETE a, b FROM $wpdb->options a
+                 LEFT JOIN $wpdb->options b ON (
+                    b.option_name = CONCAT('_transient_', SUBSTRING(a.option_name, 20))
+                 )
+                 WHERE a.option_name LIKE '\_transient\_timeout\_%'
+                 AND a.option_value < '$time'"
             );
-            // Cleanup orphaned data keys is harder in SQL alone safely, WP does lazy clean.
-            // But we can try to clean data keys that have no corresponding timeout or match expired logic.
-            // Safe approach: Just clean the timeouts, WP cleans data on access.
+
+            // 2. Site Transients
+            // Matches _site_transient_timeout_KEY and joins to _site_transient_KEY
+            // _site_transient_timeout_ is 24 chars long. Start at 25.
+            $wpdb->query(
+                "DELETE a, b FROM $wpdb->options a
+                 LEFT JOIN $wpdb->options b ON (
+                    b.option_name = CONCAT('_site_transient_', SUBSTRING(a.option_name, 25))
+                 )
+                 WHERE a.option_name LIKE '\_site\_transient\_timeout\_%'
+                 AND a.option_value < '$time'"
+            );
+
             $count++;
         }
 
