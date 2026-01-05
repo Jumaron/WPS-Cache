@@ -43,9 +43,10 @@ class JSOptimizer
         $scripts = $dom->getElementsByTagName("script");
         $modified = false;
 
-        for ($i = $scripts->length - 1; $i >= 0; $i--) {
+        // Optimization: iterate via foreach on a snapshot array to avoid O(N^2) complexity of item($i)
+        // and prevent skipping elements due to live DOM updates.
+        foreach (iterator_to_array($scripts) as $script) {
             /** @var DOMElement $script */
-            $script = $scripts->item($i);
             $this->processScriptNode($script);
             if (
                 $script->hasAttribute("type") &&

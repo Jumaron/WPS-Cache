@@ -16,7 +16,7 @@
 
 ## 2024-05-30 - [Regex over Iterative Search]
 **Learning:** Repeating `array_merge` and `stripos` loops for every tag (script/style) creates O(N*M) complexity in hot paths.
-**Action:** Pre-compile exclusion lists into a single Regex in the constructor. This reduces per-tag checks to a single O(1) (amortized) `preg_match` call, significantly reducing CPU overhead on pages with many assets.
+**Action:** Pre-compiled exclusion lists into a single Regex in the constructor. This reduces per-tag checks to a single O(1) (amortized) `preg_match` call, significantly reducing CPU overhead on pages with many assets.
 
 ## 2024-05-30 - [Regex over Iterative Search in HTMLCache]
 **Learning:** Checking excluded URLs using a loop with `str_contains` is O(N) and runs on every request.
@@ -33,3 +33,7 @@
 ## 2026-01-04 - [Optimize Orphan Cleanup]
 **Learning:** `DELETE FROM table WHERE id NOT IN (SELECT id FROM other_table)` is often inefficient (O(N*M) or O(N log M)) compared to `DELETE T1 FROM T1 LEFT JOIN T2 ON T1.id = T2.id WHERE T2.id IS NULL`, which leverages indexes for a faster merge (O(N)).
 **Action:** Replaced `NOT IN` subqueries with `LEFT JOIN` deletes for orphaned comment meta cleanup. Also batched multiple cleanup flags to run this expensive operation only once per request.
+
+## 2026-01-05 - [DOMNodeList Iteration]
+**Learning:** Accessing `DOMNodeList` items via `item($i)` in a `for` loop is O(N^2). Additionally, `DOMNodeList` is "live", meaning modifications during iteration can cause elements to be skipped.
+**Action:** Use `iterator_to_array($nodeList)` to create a static snapshot, then iterate via `foreach`. This ensures O(N) performance and safe traversal during DOM manipulation.
