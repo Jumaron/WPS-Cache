@@ -4,7 +4,7 @@ Tags: caching, performance, HTML, Redis, Varnish
 Requires at least: 6.3
 Tested up to: 6.7
 Requires PHP: 8.2
-Stable tag: 0.0.3
+Stable tag: 0.0.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,7 @@ WPS-Cache enhances your WordPress site's speed by implementing multiple layers o
 == External Services ==
 This plugin connects to external caching services to optimize performance:
 
-- **Varnish Cache:**  
+- **Varnish Cache:**
   The plugin sends HTTP requests (such as purge requests and connection checks) to a specified Varnish caching server. No personal or sensitive data is transmitted. For additional details, please review the [Varnish Cache documentation](https://varnish-cache.org/), its [Terms of Service](https://varnish-cache.org/TOS), and [Privacy Policy](https://varnish-cache.org/privacy).
 
 == Installation ==
@@ -39,11 +39,16 @@ This plugin is currently experimental. We recommend testing in a staging environ
 2. Front-end cache status indicator.
 
 == Changelog ==
+= 0.0.4 =
+* Full rework.
+
 = 0.0.3 =
 * Initial release with HTML, Redis, and Varnish caching support.
 * Added real-time cache performance metrics.
 * External services documentation added.
 
 == Upgrade Notice ==
+= 0.0.4 =
+Clear Cache on update!
 = 0.0.3 =
 This is the first release. Ensure you test thoroughly on a staging environment before deploying to production.

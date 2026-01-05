@@ -4,7 +4,7 @@
  * Plugin Name: WPS-Cache
  * Plugin URI: https://github.com/Jumaron/WPS-Cache
  * Description: Free and Open-Source High-performance caching solution with Redis, Varnish, and HTML cache support.
- * Version: 0.0.3
+ * Version: 0.0.4
  * Requires PHP: 8.3
  * Author: Jumaron
  * License: GPL v2 or later
@@ -36,7 +36,7 @@ if (version_compare(PHP_VERSION, "8.3", "<")) {
 }
 
 // 2. Constants Definition (Early binding)
-const VERSION = "0.0.3";
+const VERSION = "0.0.4";
 const FILE = __FILE__;
 const DIR = __DIR__;
 
