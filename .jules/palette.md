@@ -23,3 +23,6 @@
 ## 2024-05-27 - Bulk Actions in Lists
 **Learning:** Requiring users to manually select 5+ checkboxes individually causes friction. A single "Select All" toggle drastically improves usability for batch operations.
 **Action:** Always provide "Select All / Deselect All" controls for lists with multiple selectable items.
+## 2024-05-28 - Password Visibility
+**Learning:** For API keys and long passwords in admin interfaces, the inability to verify what you've typed is a major frustration. Standard `type="password"` inputs should always be paired with a visibility toggle.
+**Action:** Implement a "Show/Hide" toggle pattern for all password fields, ensuring accessible labels update dynamically.

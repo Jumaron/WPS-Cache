@@ -3,7 +3,34 @@ document.addEventListener("DOMContentLoaded", function () {
   initCopyTriggers();
   initFormSubmissions();
   initPurgeButton();
+  initPasswordToggles();
 });
+
+function initPasswordToggles() {
+  document.querySelectorAll(".wpsc-password-toggle").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const wrapper = this.closest(".wpsc-password-wrapper");
+      const input = wrapper.querySelector("input");
+      const icon = this.querySelector(".dashicons");
+
+      if (input.type === "password") {
+        input.type = "text";
+        icon.classList.replace("dashicons-visibility", "dashicons-hidden");
+        this.setAttribute(
+          "aria-label",
+          wpsc_admin.strings.hide_password || "Hide password",
+        );
+      } else {
+        input.type = "password";
+        icon.classList.replace("dashicons-hidden", "dashicons-visibility");
+        this.setAttribute(
+          "aria-label",
+          wpsc_admin.strings.show_password || "Show password",
+        );
+      }
+    });
+  });
+}
 
 function initPurgeButton() {
   const triggers = document.querySelectorAll(

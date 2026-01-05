@@ -109,6 +109,8 @@ final class AdminPanelManager
                 "saving" => __("Saving...", "wps-cache"),
                 "purge_confirm" => __("Are you sure you want to purge all caches?", "wps-cache"),
                 "purging" => __("Purging...", "wps-cache"),
+                "show_password" => __("Show password", "wps-cache"),
+                "hide_password" => __("Hide password", "wps-cache"),
             ],
         ]);
     }

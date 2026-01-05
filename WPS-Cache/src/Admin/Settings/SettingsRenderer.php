@@ -105,7 +105,11 @@ class SettingsRenderer
             $value = "";
         }
 
-        $class = $type === "number" ? "wpsc-input-number" : "wpsc-input-text";
+        $class = match ($type) {
+            "number" => "wpsc-input-number",
+            "password" => "wpsc-input-password",
+            default => "wpsc-input-text",
+        };
         $descId = $description ? "wpsc_" . esc_attr($key) . "_desc" : "";
         $statusId = "wpsc_" . esc_attr($key) . "_status";
 
@@ -138,6 +142,9 @@ class SettingsRenderer
                 <?php endif; ?>
             </div>
             <div class="wpsc-setting-control">
+                <?php if ($type === "password"): ?>
+                <div class="wpsc-password-wrapper">
+                <?php endif; ?>
                 <input type="<?php echo esc_attr(
                     $type,
                 ); ?>" class="<?php echo esc_attr($class); ?>"
@@ -149,6 +156,15 @@ class SettingsRenderer
 )
     ? 'aria-describedby="' . esc_attr($ariaDescribedByStr) . '"'
     : ""; ?>         <?php echo $attrStr; ?>>
+                <?php if ($type === "password"): ?>
+                    <button type="button" class="wpsc-password-toggle" aria-label="<?php esc_attr_e(
+                        "Show password",
+                        "wps-cache",
+                    ); ?>">
+                        <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
+                    </button>
+                </div>
+                <?php endif; ?>
                 <?php if ($isPasswordSet): ?>
                     <div id="<?php echo esc_attr($statusId); ?>"
                         style="margin-top: 5px; font-size: 12px; color: var(--wpsc-success); display: flex; align-items: center; gap: 4px;">
