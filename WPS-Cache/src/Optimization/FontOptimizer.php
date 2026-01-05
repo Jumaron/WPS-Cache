@@ -44,16 +44,30 @@ class FontOptimizer
 
         // 2. Force 'font-display: swap' (Universal)
         if (!empty($this->settings["font_display_swap"])) {
+            // Optimization: Only scan <style> blocks for @font-face rules
+            // This prevents scanning the entire HTML body (O(N) vs O(CSS)) and avoids modifying text content.
             $html = preg_replace_callback(
-                "/@font-face\s*{([^}]+)}/i",
-                function ($matches) {
-                    $body = $matches[1];
-                    if (stripos($body, "font-display") === false) {
-                        return "@font-face {" .
-                            $body .
-                            "; font-display: swap; }";
-                    }
-                    return $matches[0];
+                '/(<style[^>]*>)(.*?)(<\/style>)/is',
+                function ($styleMatches) {
+                    $open = $styleMatches[1];
+                    $content = $styleMatches[2];
+                    $close = $styleMatches[3];
+
+                    $content = preg_replace_callback(
+                        "/@font-face\s*{([^}]+)}/i",
+                        function ($matches) {
+                            $body = $matches[1];
+                            if (stripos($body, "font-display") === false) {
+                                return "@font-face {" .
+                                    $body .
+                                    "; font-display: swap; }";
+                            }
+                            return $matches[0];
+                        },
+                        $content,
+                    );
+
+                    return $open . $content . $close;
                 },
                 $html,
             );
