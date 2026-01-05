@@ -128,12 +128,17 @@ final class MinifyJS extends AbstractCacheDriver
     ];
 
     private string $cache_dir;
+    private string $exclusionRegex = "";
 
     public function __construct()
     {
         parent::__construct();
         $this->cache_dir = WPSC_CACHE_DIR . "js/";
         $this->ensureDirectory($this->cache_dir);
+
+        if (!empty($this->settings["excluded_js"])) {
+            $this->compileExclusionRegex($this->settings["excluded_js"]);
+        }
     }
 
     public function initialize(): void
@@ -776,7 +781,7 @@ final class MinifyJS extends AbstractCacheDriver
             strpos($src, "//") !== 0 &&
             strpos($src, site_url()) !== false &&
             !in_array($handle, $excluded_js) &&
-            !$this->isExcluded($src, $excluded_js);
+            !$this->isExcluded($src);
     }
 
     private function getSourcePath($script): ?string
@@ -830,13 +835,32 @@ final class MinifyJS extends AbstractCacheDriver
         return $this->cache_dir . $key . ".js";
     }
 
-    private function isExcluded(string $url, array $excluded_patterns): bool
+    private function isExcluded(string $url): bool
     {
-        foreach ($excluded_patterns as $pattern) {
-            if (fnmatch($pattern, $url)) {
-                return true;
-            }
+        if (empty($this->exclusionRegex)) {
+            return false;
         }
-        return false;
+        return preg_match($this->exclusionRegex, $url) === 1;
+    }
+
+    private function compileExclusionRegex(array $patterns): void
+    {
+        $regexParts = [];
+        foreach ($patterns as $pattern) {
+            if (empty(trim($pattern))) {
+                continue;
+            }
+            // Convert glob pattern to regex
+            $regex = preg_quote($pattern, "/");
+            // Restore wildcards
+            $regex = str_replace(["\*", "\?"], [".*", "."], $regex);
+            // Anchor matching to ensure it matches the full string like fnmatch
+            $regexParts[] = "^" . $regex . "$";
+        }
+
+        if (!empty($regexParts)) {
+            // Optimization: Combine all checks into a single regex O(1)
+            $this->exclusionRegex = "/" . implode("|", $regexParts) . "/i";
+        }
     }
 }
