@@ -7,3 +7,8 @@
 **Vulnerability:** The application was missing the `Permissions-Policy` header, which allows controlling access to sensitive browser features like camera, microphone, and payment API.
 **Learning:** Default WordPress installations or plugins often neglect this header, leaving users vulnerable to compromised plugins or XSS using these APIs silently.
 **Prevention:** Always include a strict `Permissions-Policy` header in the security headers configuration, defaulting to denying sensitive features unless explicitly required.
+
+## 2024-05-20 - Path Traversal in Simple Sanitization
+**Vulnerability:** Relying on `str_replace("..", "", $path)` to sanitize file paths is insecure because it is not recursive (e.g., `....//` becomes `../`).
+**Learning:** Simple string replacement is insufficient for security boundaries.
+**Prevention:** Always use canonicalization (resolving the path logic) or `realpath()` (if checking existence) to sanitize paths. In this case, splitting the path by separators and logically resolving `..` tokens ensures a safe, canonical path.

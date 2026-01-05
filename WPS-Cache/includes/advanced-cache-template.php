@@ -78,13 +78,15 @@ class WPSAdvancedCache
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
 
         $path = parse_url($uri, PHP_URL_PATH);
+        // $path = str_replace("..", "", $path); // Security
+        $path = $this->sanitizePath($path);
+
         if (
             substr($path, -1) !== "/" &&
             !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
         ) {
             $path .= "/";
         }
-        $path = str_replace("..", "", $path); // Security
 
         // Determine Mobile Suffix
         $suffix = $this->getMobileSuffix();
@@ -132,6 +134,24 @@ class WPSAdvancedCache
             return "-mobile";
         }
         return "";
+    }
+
+    private function sanitizePath(string $path): string
+    {
+        $path = str_replace(chr(0), "", $path);
+        $parts = explode("/", $path);
+        $safeParts = [];
+        foreach ($parts as $part) {
+            if ($part === "" || $part === ".") {
+                continue;
+            }
+            if ($part === "..") {
+                array_pop($safeParts);
+            } else {
+                $safeParts[] = $part;
+            }
+        }
+        return "/" . implode("/", $safeParts);
     }
 
     private function serve(string $file, int $mtime): void
