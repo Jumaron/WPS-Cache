@@ -70,11 +70,17 @@ class WPSAdvancedCache
 
     private function getCacheFilePath(): string
     {
-        $host = preg_replace(
-            "/[^a-zA-Z0-9\-\.]/",
-            "",
-            $_SERVER["HTTP_HOST"] ?? "unknown",
-        );
+        // Host Sanitization (Must match HTMLCache.php)
+        $host = $_SERVER["HTTP_HOST"] ?? "unknown";
+        $host = explode(":", $host)[0]; // Strip port
+        $host = preg_replace("/[^a-z0-9\-\.]/i", "", $host);
+        $host = preg_replace("/\.+/", ".", $host);
+        $host = trim($host, ".");
+
+        if (empty($host)) {
+            $host = "unknown";
+        }
+
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
 
         $path = parse_url($uri, PHP_URL_PATH);
@@ -108,11 +114,14 @@ class WPSAdvancedCache
             $filename = "index" . $suffix . ".html";
         }
 
-        return WP_CONTENT_DIR .
-            "/cache/wps-cache/html/" .
-            $host .
-            $path .
-            $filename;
+        // Ensure directory ends with slash before appending filename
+        // (Must match HTMLCache path construction)
+        $dir = WP_CONTENT_DIR . "/cache/wps-cache/html/" . $host . $path;
+        if (substr($dir, -1) !== "/") {
+            $dir .= "/";
+        }
+
+        return $dir . $filename;
     }
 
     /**
