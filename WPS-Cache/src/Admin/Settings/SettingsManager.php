@@ -127,7 +127,7 @@ class SettingsManager
             "Preloading",
             "Automatically generate cache.",
             function () use ($settings) {
-                $this->renderer->renderSelect(
+                $this->renderer->renderRadioGroup(
                     "preload_interval",
                     "Interval",
                     "How often to restart.",
@@ -365,7 +365,7 @@ class SettingsManager
                     "Use Speculation Rules API.",
                     $settings,
                 );
-                $this->renderer->renderSelect(
+                $this->renderer->renderRadioGroup(
                     "speculation_mode",
                     "Mode",
                     "Prerender fully renders (Fastest). Prefetch only downloads HTML.",
@@ -539,7 +539,7 @@ class SettingsManager
             "Heartbeat API Control",
             "Limit server resource usage.",
             function () use ($settings) {
-                $this->renderer->renderSelect(
+                $this->renderer->renderRadioGroup(
                     "heartbeat_frequency",
                     "Frequency",
                     "How often the browser calls the server.",
@@ -619,7 +619,7 @@ class SettingsManager
             "Automatic Cleanup",
             "Schedule automated maintenance.",
             function () use ($settings) {
-                $this->renderer->renderSelect(
+                $this->renderer->renderRadioGroup(
                     "db_schedule",
                     "Frequency",
                     "How often to run cleanup.",
