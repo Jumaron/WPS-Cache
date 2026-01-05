@@ -53,6 +53,12 @@ class FontOptimizer
                     $content = $styleMatches[2];
                     $close = $styleMatches[3];
 
+                    // Optimization: Fast fail if no @font-face is present
+                    // This avoids the expensive regex engine startup for the vast majority of style blocks
+                    if (stripos($content, "@font-face") === false) {
+                        return $styleMatches[0];
+                    }
+
                     $content = preg_replace_callback(
                         "/@font-face\s*{([^}]+)}/i",
                         function ($matches) {
