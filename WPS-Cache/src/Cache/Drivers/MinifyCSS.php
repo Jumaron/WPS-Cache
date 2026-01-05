@@ -37,6 +37,20 @@ final class MinifyCSS extends AbstractCacheDriver
     // Used for strcspn optimization in tokenizer
     private const TOKENIZER_MASK = " \t\n\r\v\f{}():;,'\">+~/";
 
+    // Optimization: O(1) lookup for single-character tokens
+    private const TOKEN_MAP = [
+        "{" => self::T_OPEN,
+        "}" => self::T_CLOSE,
+        ":" => self::T_COLON,
+        ";" => self::T_SEMICOLON,
+        "(" => self::T_PAREN_OPEN,
+        ")" => self::T_PAREN_CLOSE,
+        "," => self::T_OPERATOR,
+        ">" => self::T_OPERATOR,
+        "+" => self::T_OPERATOR,
+        "~" => self::T_OPERATOR,
+    ];
+
     private const SELECTOR_PSEUDOS = [
         "not" => true,
         "is" => true,
@@ -412,41 +426,9 @@ final class MinifyCSS extends AbstractCacheDriver
                 continue;
             }
 
-            // Granular Tokens
-            if ($char === "{") {
-                yield ["type" => self::T_OPEN, "value" => "{"];
-                $i++;
-                continue;
-            }
-            if ($char === "}") {
-                yield ["type" => self::T_CLOSE, "value" => "}"];
-                $i++;
-                continue;
-            }
-            if ($char === ":") {
-                yield ["type" => self::T_COLON, "value" => ":"];
-                $i++;
-                continue;
-            }
-            if ($char === ";") {
-                yield ["type" => self::T_SEMICOLON, "value" => ";"];
-                $i++;
-                continue;
-            }
-            if ($char === "(") {
-                yield ["type" => self::T_PAREN_OPEN, "value" => "("];
-                $i++;
-                continue;
-            }
-            if ($char === ")") {
-                yield ["type" => self::T_PAREN_CLOSE, "value" => ")"];
-                $i++;
-                continue;
-            }
-
-            // Operators
-            if (str_contains(",>+~", $char)) {
-                yield ["type" => self::T_OPERATOR, "value" => $char];
+            // Optimization: Use O(1) lookup instead of sequential IF checks and str_contains
+            if (isset(self::TOKEN_MAP[$char])) {
+                yield ["type" => self::TOKEN_MAP[$char], "value" => $char];
                 $i++;
                 continue;
             }

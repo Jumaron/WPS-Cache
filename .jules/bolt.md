@@ -37,3 +37,7 @@
 ## 2026-01-05 - [DOMNodeList Iteration]
 **Learning:** Accessing `DOMNodeList` items via `item($i)` in a `for` loop is O(N^2). Additionally, `DOMNodeList` is "live", meaning modifications during iteration can cause elements to be skipped.
 **Action:** Use `iterator_to_array($nodeList)` to create a static snapshot, then iterate via `foreach`. This ensures O(N) performance and safe traversal during DOM manipulation.
+
+## 2026-01-05 - [Tokenization Lookup Optimization]
+**Learning:** Sequential `if` checks or `switch` statements inside a tight tokenization loop (running millions of times) can be slower than a single `isset()` lookup on a hash map, especially when the number of tokens grows.
+**Action:** Replaced sequential `if` checks for single-character tokens in `MinifyCSS` with a `TOKEN_MAP` constant and `isset()` lookup. This reduces branch misprediction penalties and provides O(1) lookup performance, matching the optimization in `MinifyJS`.
