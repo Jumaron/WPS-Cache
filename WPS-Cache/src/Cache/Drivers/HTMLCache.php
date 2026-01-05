@@ -96,6 +96,20 @@ final class HTMLCache extends AbstractCacheDriver
             return false;
         }
 
+        // Sentinel Fix: Host Header Validation
+        // Prevent Cache Poisoning: Ensure the request Host matches the site's configured Host.
+        $configuredHost = parse_url(home_url(), PHP_URL_HOST);
+        $requestHost = $_SERVER["HTTP_HOST"] ?? "";
+
+        // Strip port number if present
+        if (($pos = strpos($requestHost, ":")) !== false) {
+            $requestHost = substr($requestHost, 0, $pos);
+        }
+
+        if ($configuredHost && strcasecmp($configuredHost, $requestHost) !== 0) {
+            return false;
+        }
+
         // 1. EXTENSION GUARD
         $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
