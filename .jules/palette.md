@@ -11,3 +11,7 @@
 ## 2024-05-24 - Reusable Loading States
 **Learning:** Hardcoded loading text like "Saving..." in global JS handlers prevents reuse for other actions (e.g., "Refreshing...").
 **Action:** Use `data-loading-text` attribute on buttons to allow context-specific loading messages while keeping the JS handler generic.
+
+## 2024-05-25 - Preventative UX
+**Learning:** Instead of allowing users to click a button and then showing an error message (like "Please select an item"), disable the button until the condition is met. This reduces cognitive load and frustration.
+**Action:** Use `disabled` state on buttons that require user input, and update state via event listeners.
