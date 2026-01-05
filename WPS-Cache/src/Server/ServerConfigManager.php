@@ -47,6 +47,11 @@ class ServerConfigManager
             return;
         }
 
+        // Sentinel Enhancement: Add HSTS header for HTTPS sites
+        if (is_ssl()) {
+            header("Strict-Transport-Security: max-age=31536000");
+        }
+
         header("X-Content-Type-Options: nosniff");
         header("X-Frame-Options: SAMEORIGIN");
         header("Referrer-Policy: strict-origin-when-cross-origin");
@@ -165,6 +170,7 @@ class ServerConfigManager
                 Header set Content-Type "text/html; charset=UTF-8"
                 Header set Cache-Control "max-age=3600, public"
                 Header set X-WPS-Cache "HIT"
+                Header set Strict-Transport-Security "max-age=31536000"
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
