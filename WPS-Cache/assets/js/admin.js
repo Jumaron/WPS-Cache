@@ -1,9 +1,43 @@
 document.addEventListener("DOMContentLoaded", function () {
   initPreloader();
   initCopyTriggers();
+  initPasswordToggles();
   initFormSubmissions();
   initPurgeButton();
 });
+
+function initPasswordToggles() {
+  const toggles = document.querySelectorAll(".wpsc-password-toggle");
+
+  toggles.forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const inputId = this.getAttribute("aria-controls");
+      if (!inputId) return;
+
+      const input = document.getElementById(inputId);
+      if (!input) return;
+
+      const icon = this.querySelector(".dashicons");
+      const isPassword = input.type === "password";
+
+      if (isPassword) {
+        input.type = "text";
+        this.setAttribute("aria-label", wpsc_admin.strings.hide_password);
+        if (icon) {
+          icon.classList.remove("dashicons-visibility");
+          icon.classList.add("dashicons-hidden");
+        }
+      } else {
+        input.type = "password";
+        this.setAttribute("aria-label", wpsc_admin.strings.show_password);
+        if (icon) {
+          icon.classList.remove("dashicons-hidden");
+          icon.classList.add("dashicons-visibility");
+        }
+      }
+    });
+  });
+}
 
 function initPurgeButton() {
   const triggers = document.querySelectorAll(

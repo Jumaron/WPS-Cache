@@ -271,6 +271,51 @@ input:checked + .wpsc-slider:before {
     outline: none;
 }
 
+/* Password Toggle */
+.wpsc-password-wrapper {
+    position: relative;
+    max-width: 400px;
+    width: 100%;
+}
+
+.wpsc-input-password {
+    padding-right: 40px !important;
+}
+
+.wpsc-password-toggle {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--wpsc-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: var(--wpsc-transition);
+}
+
+.wpsc-password-toggle:hover {
+    color: var(--wpsc-primary);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.wpsc-password-toggle:focus-visible {
+    outline: none;
+    color: var(--wpsc-primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.wpsc-password-toggle .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
 /* Buttons */
 .button-primary.wpsc-btn-primary {
     background: var(--wpsc-primary) !important;
