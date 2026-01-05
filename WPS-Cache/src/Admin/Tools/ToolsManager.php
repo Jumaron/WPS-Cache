@@ -55,12 +55,12 @@ class ToolsManager
                         <div class="wpsc-notice success" style="display:inline-flex; margin-bottom: 15px;">
                             <span class="dashicons dashicons-yes" aria-hidden="true" style="margin-right:8px;"></span> Installed & Active
                         </div>
-                        <form method="post" action="<?php echo esc_url(
+                        <form method="post" class="wpsc-form" action="<?php echo esc_url(
                             admin_url("admin-post.php"),
                         ); ?>">
                             <?php wp_nonce_field("wpsc_remove_object_cache"); ?>
                             <input type="hidden" name="action" value="wpsc_remove_object_cache">
-                            <button type="submit" class="button wpsc-btn-danger"
+                            <button type="submit" class="button wpsc-btn-danger" data-loading-text="Uninstalling..."
                                 onclick="return confirm('<?php echo esc_js(
                                     __(
                                         "Are you sure you want to uninstall the Object Cache Drop-in? This will disable object caching.",
@@ -74,14 +74,14 @@ class ToolsManager
                         <div class="wpsc-notice warning" style="display:inline-flex; margin-bottom: 15px;">
                             <span class="dashicons dashicons-warning" aria-hidden="true" style="margin-right:8px;"></span> Not Installed
                         </div>
-                        <form method="post" action="<?php echo esc_url(
+                        <form method="post" class="wpsc-form" action="<?php echo esc_url(
                             admin_url("admin-post.php"),
                         ); ?>">
                             <?php wp_nonce_field(
                                 "wpsc_install_object_cache",
                             ); ?>
                             <input type="hidden" name="action" value="wpsc_install_object_cache">
-                            <button type="submit" class="button button-primary wpsc-btn-primary">
+                            <button type="submit" class="button button-primary wpsc-btn-primary" data-loading-text="Installing...">
                                 Install Drop-in
                             </button>
                         </form>
