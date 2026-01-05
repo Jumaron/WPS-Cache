@@ -38,9 +38,10 @@ function initFormSubmissions() {
       // btn.style.width = btn.offsetWidth + "px";
 
       btn.classList.add("disabled");
+      const loadingText = btn.dataset.loadingText || wpsc_admin.strings.saving;
       btn.innerHTML =
         '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
-        wpsc_admin.strings.saving;
+        loadingText;
     });
   });
 }
