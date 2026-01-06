@@ -60,7 +60,8 @@ class CriticalCSSManager
         $styles = $dom->getElementsByTagName("style");
         $nodesToRemove = [];
 
-        foreach ($styles as $style) {
+        // Optimization: iterate via foreach on a snapshot array to avoid O(N^2) complexity of item($i)
+        foreach (iterator_to_array($styles) as $style) {
             $css = $style->nodeValue;
             if (empty($css)) {
                 continue;
@@ -110,7 +111,10 @@ class CriticalCSSManager
         ];
 
         $nodes = $dom->getElementsByTagName("*");
-        foreach ($nodes as $node) {
+
+        // Optimization: Convert DOMNodeList to array for O(N) iteration speed
+        // Direct iteration on DOMNodeList can be O(N^2) in some PHP versions
+        foreach (iterator_to_array($nodes) as $node) {
             // Tags (always lowercase in DOM for HTML)
             $this->domStats["tags"][strtolower($node->nodeName)] = true;
 
