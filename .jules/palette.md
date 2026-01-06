@@ -23,3 +23,7 @@
 ## 2024-05-27 - Bulk Actions in Lists
 **Learning:** Requiring users to manually select 5+ checkboxes individually causes friction. A single "Select All" toggle drastically improves usability for batch operations.
 **Action:** Always provide "Select All / Deselect All" controls for lists with multiple selectable items.
+
+## 2024-05-28 - Protecting Client-Side Processes
+**Learning:** Client-side processes (like preloading) stop immediately if the tab is closed. Users often close tabs habitually.
+**Action:** Use `beforeunload` to warn users during active client-side batch operations.

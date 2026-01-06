@@ -103,7 +103,15 @@ function initPreloader() {
   let processed = 0;
   let activeRequests = 0;
 
+  function confirmExit(e) {
+    e.preventDefault();
+    e.returnValue = "";
+    return "";
+  }
+
   preloadBtn.addEventListener("click", function () {
+    window.addEventListener("beforeunload", confirmExit);
+
     // UI Reset
     preloadBtn.disabled = true;
     // Store original text
@@ -204,6 +212,8 @@ function initPreloader() {
   }
 
   function finish(msg) {
+    window.removeEventListener("beforeunload", confirmExit);
+
     statusSpan.textContent = msg;
     progressBar.value = 100;
     percentSpan.textContent = "100%";
