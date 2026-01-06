@@ -237,8 +237,14 @@ class DatabaseOptimizer
             $like = $wpdb->esc_like($wpdb->prefix) . "%";
             $tables = $wpdb->get_col($wpdb->prepare("SHOW TABLES LIKE %s", $like));
 
-            foreach ($tables as $table) {
-                $wpdb->query("OPTIMIZE TABLE `$table`");
+            // Optimization: Batch OPTIMIZE TABLE commands to reduce DB round-trips
+            // Process in chunks of 20 to avoid query length limits
+            if (!empty($tables)) {
+                $chunks = array_chunk($tables, 20);
+                foreach ($chunks as $chunk) {
+                    $escaped = array_map(fn($t) => "`$t`", $chunk);
+                    $wpdb->query("OPTIMIZE TABLE " . implode(", ", $escaped));
+                }
             }
             $count++;
         }
