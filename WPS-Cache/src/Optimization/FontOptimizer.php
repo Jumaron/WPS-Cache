@@ -32,19 +32,24 @@ class FontOptimizer
     {
         // 1. Localize Legacy Google Fonts
         if (!empty($this->settings["font_localize_google"])) {
-            $html = preg_replace_callback(
-                '/<link[^>]*href=[\'"](https?:\/\/fonts\.googleapis\.com\/css[^"\']*)[\'"][^>]*>/i',
-                [$this, "localizeGoogleFont"],
-                $html,
-            );
+            // Optimization: Fast fail if Google Fonts domain is not present
+            if (stripos($html, "fonts.googleapis.com") !== false) {
+                $html = preg_replace_callback(
+                    '/<link[^>]*href=[\'"](https?:\/\/fonts\.googleapis\.com\/css[^"\']*)[\'"][^>]*>/i',
+                    [$this, "localizeGoogleFont"],
+                    $html,
+                );
+            }
         }
 
         // 2. Force 'font-display: swap' (Universal)
         if (!empty($this->settings["font_display_swap"])) {
-            // Optimization: Only scan <style> blocks for @font-face rules
-            // This prevents scanning the entire HTML body (O(N) vs O(CSS)) and avoids modifying text content.
-            $html = preg_replace_callback(
-                '/(<style[^>]*>)(.*?)(<\/style>)/is',
+            // Optimization: Fast fail if no @font-face is globally present
+            if (stripos($html, "@font-face") !== false) {
+                // Optimization: Only scan <style> blocks for @font-face rules
+                // This prevents scanning the entire HTML body (O(N) vs O(CSS)) and avoids modifying text content.
+                $html = preg_replace_callback(
+                    '/(<style[^>]*>)(.*?)(<\/style>)/is',
                 function ($styleMatches) {
                     $open = $styleMatches[1];
                     $content = $styleMatches[2];
@@ -74,6 +79,7 @@ class FontOptimizer
                 },
                 $html,
             );
+        }
         }
 
         return $html;
