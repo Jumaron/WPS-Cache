@@ -54,6 +54,8 @@ class ServerConfigManager
 
         header("X-Content-Type-Options: nosniff");
         header("X-Frame-Options: SAMEORIGIN");
+        header("X-XSS-Protection: 1; mode=block");
+        header("X-Download-Options: noopen");
         // Sentinel Enhancement: Add CSP frame-ancestors to prevent Clickjacking (Defense in Depth)
         header("Content-Security-Policy: frame-ancestors 'self'");
         // Sentinel Enhancement: Prevent Flash/PDF cross-domain data inclusion
@@ -179,6 +181,8 @@ class ServerConfigManager
                 Header set Strict-Transport-Security "max-age=31536000"
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
+                Header set X-XSS-Protection "1; mode=block"
+                Header set X-Download-Options "noopen"
                 Header set Content-Security-Policy "frame-ancestors 'self'"
                 Header set X-Permitted-Cross-Domain-Policies "none"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
