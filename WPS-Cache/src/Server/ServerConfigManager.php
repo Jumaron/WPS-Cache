@@ -56,6 +56,8 @@ class ServerConfigManager
         header("X-Frame-Options: SAMEORIGIN");
         // Sentinel Enhancement: Add CSP frame-ancestors to prevent Clickjacking (Defense in Depth)
         header("Content-Security-Policy: frame-ancestors 'self'");
+        // Sentinel Enhancement: Prevent Flash/PDF cross-domain data inclusion
+        header("X-Permitted-Cross-Domain-Policies: none");
         header("Referrer-Policy: strict-origin-when-cross-origin");
         header(
             "Permissions-Policy: camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()",
@@ -178,6 +180,7 @@ class ServerConfigManager
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
                 Header set Content-Security-Policy "frame-ancestors 'self'"
+                Header set X-Permitted-Cross-Domain-Policies "none"
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
                 Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()"
             </FilesMatch>
