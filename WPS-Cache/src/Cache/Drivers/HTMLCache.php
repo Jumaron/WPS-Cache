@@ -27,6 +27,10 @@ final class HTMLCache extends AbstractCacheDriver
         "s" => true,
     ];
 
+    // Sentinel: Limits to prevent Cache DoS (Disk Exhaustion)
+    private const MAX_QUERY_LEN = 512;
+    private const MAX_QUERY_PARAMS = 10;
+
     // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
     // Optimization: Use hash map for O(1) lookups
     private const IGNORED_EXTENSIONS = [
@@ -122,6 +126,16 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         if (!empty($_GET)) {
+            // Sentinel Fix: Prevent Cache DoS (Disk Exhaustion)
+            // Limit complexity of query strings to prevent infinite cache file generation
+            if (count($_GET) > self::MAX_QUERY_PARAMS) {
+                return false;
+            }
+            $qs = $_SERVER["QUERY_STRING"] ?? http_build_query($_GET);
+            if (strlen($qs) > self::MAX_QUERY_LEN) {
+                return false;
+            }
+
             $keys = array_keys($_GET);
             foreach ($keys as $key) {
                 if (isset(self::BYPASS_PARAMS[$key])) {
