@@ -67,7 +67,7 @@ class ToolsManager
                                         "wps-cache",
                                     ),
                                 ); ?>');">
-                                Uninstall Drop-in
+                                <span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Uninstall Drop-in
                             </button>
                         </form>
                     <?php else: ?>
@@ -82,7 +82,7 @@ class ToolsManager
                             ); ?>
                             <input type="hidden" name="action" value="wpsc_install_object_cache">
                             <button type="submit" class="button button-primary wpsc-btn-primary" data-loading-text="Installing...">
-                                Install Drop-in
+                                <span class="dashicons dashicons-download" aria-hidden="true" style="vertical-align: middle;"></span> Install Drop-in
                             </button>
                         </form>
                     <?php endif; ?>
@@ -113,7 +113,7 @@ class ToolsManager
 
                 <button type="button" id="wpsc-start-preload" class="button button-primary wpsc-btn-primary"
                     aria-controls="wpsc-preload-progress">
-                    Start Preloading
+                    <span class="dashicons dashicons-controls-play" aria-hidden="true" style="vertical-align: middle;"></span> Start Preloading
                 </button>
             </div>
         </div>
