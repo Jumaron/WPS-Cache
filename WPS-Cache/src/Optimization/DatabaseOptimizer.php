@@ -71,30 +71,37 @@ class DatabaseOptimizer
         $stats["trashed_comments"] = (int) ($comments_stats->trashed_comments ?? 0);
 
         // Transients (Expired, All)
-        // Optimization: Split into 2 queries (Regular + Site) to maximize index usage (range scan)
-        // and avoid OR conditions which can be slow. Also escape underscores to prevent wildcard matching.
+        // Optimization: Split queries further to ensure MySQL uses "Index Only Scan" for the totals count.
+        // The previous "Combined" query forced MySQL to read the 'option_value' (LONGTEXT) column for every transient
+        // to evaluate the CASE statement, even for non-expired items. By splitting, we count totals using ONLY the index.
         $time = time();
 
         // 1. Regular Transients
-        $transients_local = $wpdb->get_row(
-            "SELECT
-                SUM(CASE WHEN option_name LIKE '\_transient\_timeout\_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired,
-                SUM(CASE WHEN option_name LIKE '\_transient\_%' THEN 1 ELSE 0 END) as total
-             FROM $wpdb->options
+        $local_expired = $wpdb->get_var(
+            "SELECT COUNT(*) FROM $wpdb->options
+             WHERE option_name LIKE '\_transient\_timeout\_%'
+             AND option_value < '$time'"
+        );
+
+        $local_total = $wpdb->get_var(
+            "SELECT COUNT(*) FROM $wpdb->options
              WHERE option_name LIKE '\_transient\_%'"
         );
 
-        // 2. Site Transients (often missed)
-        $transients_site = $wpdb->get_row(
-            "SELECT
-                SUM(CASE WHEN option_name LIKE '\_site\_transient\_timeout\_%' AND option_value < '$time' THEN 1 ELSE 0 END) as expired,
-                SUM(CASE WHEN option_name LIKE '\_site\_transient\_%' THEN 1 ELSE 0 END) as total
-             FROM $wpdb->options
+        // 2. Site Transients
+        $site_expired = $wpdb->get_var(
+            "SELECT COUNT(*) FROM $wpdb->options
+             WHERE option_name LIKE '\_site\_transient\_timeout\_%'
+             AND option_value < '$time'"
+        );
+
+        $site_total = $wpdb->get_var(
+            "SELECT COUNT(*) FROM $wpdb->options
              WHERE option_name LIKE '\_site\_transient\_%'"
         );
 
-        $stats["expired_transients"] = (int) ($transients_local->expired ?? 0) + (int) ($transients_site->expired ?? 0);
-        $stats["all_transients"] = (int) ($transients_local->total ?? 0) + (int) ($transients_site->total ?? 0);
+        $stats["expired_transients"] = (int) $local_expired + (int) $site_expired;
+        $stats["all_transients"] = (int) $local_total + (int) $site_total;
 
         // Overhead
         $stats["optimize_tables"] = $this->getTableOverhead($wpdb);
