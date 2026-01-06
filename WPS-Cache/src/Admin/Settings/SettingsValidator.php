@@ -12,6 +12,9 @@ use WPSCache\Plugin;
  */
 class SettingsValidator
 {
+    // Sentinel: Keys that are masked in the UI and should not be overwritten by empty strings
+    private const PROTECTED_KEYS = ["redis_password", "cf_api_token"];
+
     /**
      * Sanitizes the settings array.
      * Merges input with existing DB values to support partial form submissions.
@@ -43,7 +46,7 @@ class SettingsValidator
 
             if (array_key_exists($key, $input)) {
                 // Sentinel Fix: Don't overwrite sensitive fields with empty strings (prevents accidental clearing when masked)
-                if ($key === "redis_password" && empty($input[$key])) {
+                if (in_array($key, self::PROTECTED_KEYS, true) && empty($input[$key])) {
                     $clean[$key] = $current[$key];
                 } else {
                     $clean[$key] = $this->sanitizeValue(
