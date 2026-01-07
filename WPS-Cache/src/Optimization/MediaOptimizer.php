@@ -18,15 +18,13 @@ class MediaOptimizer
     private int $imageCount = 0;
     private string $siteUrl;
     private array $dimensionCache = [];
+    private ?string $regexPattern = null;
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
         $this->siteUrl = site_url();
-    }
 
-    public function process(string $html): string
-    {
         $tags = [];
         $processImages = !empty($this->settings["media_lazy_load"]) || !empty($this->settings["media_add_dimensions"]);
         $processIframes = !empty($this->settings["media_lazy_load_iframes"]) || !empty($this->settings["media_youtube_facade"]);
@@ -38,7 +36,15 @@ class MediaOptimizer
             $tags[] = "iframe";
         }
 
-        if (empty($tags)) {
+        if (!empty($tags)) {
+            // Optimization: Combine Regex passes into one O(N) scan
+            $this->regexPattern = "/<(" . implode("|", $tags) . ")\s+([^>]+)>/i";
+        }
+    }
+
+    public function process(string $html): string
+    {
+        if ($this->regexPattern === null) {
             // Even if no tags to process, we might need to inject facade assets if they were added previously?
             // Original logic only injected assets if "wpsc-youtube-wrapper" existed.
             // That wrapper is added by processIframe.
@@ -47,11 +53,8 @@ class MediaOptimizer
             return $html;
         }
 
-        // Optimization: Combine Regex passes into one O(N) scan
-        $pattern = "/<(" . implode("|", $tags) . ")\s+([^>]+)>/i";
-
         $html = preg_replace_callback(
-            $pattern,
+            $this->regexPattern,
             function ($matches) {
                 // $matches[0] = full tag
                 // $matches[1] = tag name (img|iframe)
