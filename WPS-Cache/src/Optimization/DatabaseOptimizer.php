@@ -132,47 +132,56 @@ class DatabaseOptimizer
         global $wpdb;
         $count = 0;
 
+        // Batch 1: Posts (Revisions, Auto Drafts, Trash)
+        // Optimization: Combine multiple DELETE queries into one to reduce DB round-trips and lock contention.
+        $post_conditions = [];
+
         if (in_array("revisions", $items)) {
-            // SOTA: Delete revisions and their meta in one go using multi-table DELETE if supported, or sequential
-            $wpdb->query("DELETE a,b,c FROM $wpdb->posts a
-                          LEFT JOIN $wpdb->term_relationships b ON (a.ID = b.object_id)
-                          LEFT JOIN $wpdb->postmeta c ON (a.ID = c.post_id)
-                          WHERE a.post_type = 'revision'");
+            $post_conditions[] = "a.post_type = 'revision'";
             $count++;
         }
 
         if (in_array("auto_drafts", $items)) {
-            $wpdb->query("DELETE a,b,c FROM $wpdb->posts a
-                          LEFT JOIN $wpdb->term_relationships b ON (a.ID = b.object_id)
-                          LEFT JOIN $wpdb->postmeta c ON (a.ID = c.post_id)
-                          WHERE a.post_type = 'auto-draft'");
+            $post_conditions[] = "a.post_type = 'auto-draft'";
             $count++;
         }
 
         if (in_array("trashed_posts", $items)) {
+            $post_conditions[] = "a.post_status = 'trash'";
+            $count++;
+        }
+
+        if (!empty($post_conditions)) {
+            $where = implode(" OR ", $post_conditions);
             $wpdb->query("DELETE a,b,c FROM $wpdb->posts a
                           LEFT JOIN $wpdb->term_relationships b ON (a.ID = b.object_id)
                           LEFT JOIN $wpdb->postmeta c ON (a.ID = c.post_id)
-                          WHERE a.post_status = 'trash'");
-            $count++;
+                          WHERE $where");
         }
 
         $clean_orphaned_commentmeta = false;
 
+        // Batch 2: Comments (Spam, Trash)
+        // Optimization: Use IN clause to delete multiple comment types in a single query.
+        $comment_types = [];
+
         if (in_array("spam_comments", $items)) {
-            $wpdb->query(
-                "DELETE FROM $wpdb->comments WHERE comment_approved = 'spam'",
-            );
+            $comment_types[] = "'spam'";
             $clean_orphaned_commentmeta = true;
             $count++;
         }
 
         if (in_array("trashed_comments", $items)) {
-            $wpdb->query(
-                "DELETE FROM $wpdb->comments WHERE comment_approved = 'trash'",
-            );
+            $comment_types[] = "'trash'";
             $clean_orphaned_commentmeta = true;
             $count++;
+        }
+
+        if (!empty($comment_types)) {
+            $in_clause = implode(", ", $comment_types);
+            $wpdb->query(
+                "DELETE FROM $wpdb->comments WHERE comment_approved IN ($in_clause)",
+            );
         }
 
         if ($clean_orphaned_commentmeta) {
