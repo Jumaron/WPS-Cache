@@ -27,3 +27,7 @@
 ## 2024-05-28 - Protecting Client-Side Processes
 **Learning:** Client-side processes (like preloading) stop immediately if the tab is closed. Users often close tabs habitually.
 **Action:** Use `beforeunload` to warn users during active client-side batch operations.
+
+## 2024-05-29 - Input Constraints & Keyboards
+**Learning:** Generic text/number inputs allow invalid data and don't trigger specialized mobile keyboards. Using `type="url"` and `min`/`max` attributes provides immediate feedback and better mobile UX.
+**Action:** Always apply `min`, `max`, and specific `type` attributes to input fields where applicable.

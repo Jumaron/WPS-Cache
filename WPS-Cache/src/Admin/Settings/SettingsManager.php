@@ -198,7 +198,7 @@ class SettingsManager
                     "Default: 6379",
                     $settings,
                     "number",
-                    ["placeholder" => "6379"],
+                    ["placeholder" => "6379", "min" => "1", "max" => "65535"],
                 );
                 $this->renderer->renderInput(
                     "redis_password",
@@ -213,7 +213,7 @@ class SettingsManager
                     "Default: 0",
                     $settings,
                     "number",
-                    ["placeholder" => "0"],
+                    ["placeholder" => "0", "min" => "0"],
                 );
                 $this->renderer->renderInput(
                     "redis_prefix",
@@ -234,7 +234,7 @@ class SettingsManager
                 "Default: 3600",
                 $settings,
                 "number",
-                ["placeholder" => "3600"],
+                ["placeholder" => "3600", "min" => "0"],
             );
             $this->renderer->renderTextarea(
                 "excluded_urls",
@@ -271,7 +271,7 @@ class SettingsManager
                     "Number of images to skip from top (prevents LCP delay). Recommended: 3",
                     $settings,
                     "number",
-                    ["placeholder" => "3"],
+                    ["placeholder" => "3", "min" => "0"],
                 );
             },
         );
@@ -315,7 +315,7 @@ class SettingsManager
                     "CDN CNAME / URL",
                     "e.g. https://cdn.example.com",
                     $settings,
-                    "text",
+                    "url",
                     ["placeholder" => "https://cdn.example.com"],
                 );
             },
@@ -602,7 +602,7 @@ class SettingsManager
                     "6081",
                     $settings,
                     "number",
-                    ["placeholder" => "6081"],
+                    ["placeholder" => "6081", "min" => "1", "max" => "65535"],
                 );
             },
         );
