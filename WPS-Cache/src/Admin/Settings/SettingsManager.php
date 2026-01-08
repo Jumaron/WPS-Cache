@@ -190,7 +190,12 @@ class SettingsManager
                     "e.g., 127.0.0.1",
                     $settings,
                     "text",
-                    ["placeholder" => "127.0.0.1"],
+                    [
+                        "placeholder" => "127.0.0.1",
+                        "spellcheck" => "false",
+                        "autocorrect" => "off",
+                        "autocapitalize" => "none",
+                    ],
                 );
                 $this->renderer->renderInput(
                     "redis_port",
@@ -221,7 +226,12 @@ class SettingsManager
                     "Key prefix.",
                     $settings,
                     "text",
-                    ["placeholder" => "wpsc_"],
+                    [
+                        "placeholder" => "wpsc_",
+                        "spellcheck" => "false",
+                        "autocorrect" => "off",
+                        "autocapitalize" => "none",
+                    ],
                 );
             },
         );
@@ -344,7 +354,12 @@ class SettingsManager
                     "Found in Cloudflare Dashboard Overview.",
                     $settings,
                     "text",
-                    ["placeholder" => "e.g. 023e105f4ecef8ad9ca31a8372d0c353"],
+                    [
+                        "placeholder" => "e.g. 023e105f4ecef8ad9ca31a8372d0c353",
+                        "spellcheck" => "false",
+                        "autocorrect" => "off",
+                        "autocapitalize" => "none",
+                    ],
                 );
             },
         );
@@ -594,7 +609,12 @@ class SettingsManager
                     "127.0.0.1",
                     $settings,
                     "text",
-                    ["placeholder" => "127.0.0.1"],
+                    [
+                        "placeholder" => "127.0.0.1",
+                        "spellcheck" => "false",
+                        "autocorrect" => "off",
+                        "autocapitalize" => "none",
+                    ],
                 );
                 $this->renderer->renderInput(
                     "varnish_port",
