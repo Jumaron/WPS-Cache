@@ -247,7 +247,8 @@ final class MinifyCSS extends AbstractCacheDriver
      */
     private function minifyCSS(string $css): string
     {
-        $output = fopen("php://memory", "r+");
+        // Optimization: Use array buffer instead of php://memory stream for performance
+        $buffer = [];
 
         $prevToken = null;
         $prevPrevToken = null;
@@ -265,10 +266,10 @@ final class MinifyCSS extends AbstractCacheDriver
                 if (str_starts_with($token["value"], "/*!")) {
                     // Flush pending semicolon before comment
                     if ($pendingSemicolon) {
-                        fwrite($output, ";");
+                        $buffer[] = ";";
                         $pendingSemicolon = false;
                     }
-                    fwrite($output, $token["value"]);
+                    $buffer[] = $token["value"];
                     $prevToken = ["type" => self::T_WHITESPACE, "value" => " "]; // Treat as break
                 }
                 continue;
@@ -284,7 +285,7 @@ final class MinifyCSS extends AbstractCacheDriver
             // If the current token is '}', we DROP the semicolon.
             if ($pendingSemicolon) {
                 if ($token["type"] !== self::T_CLOSE) {
-                    fwrite($output, ";");
+                    $buffer[] = ";";
                 }
                 $pendingSemicolon = false;
             }
@@ -341,10 +342,10 @@ final class MinifyCSS extends AbstractCacheDriver
                     $whitespaceSkipped,
                 )
             ) {
-                fwrite($output, " ");
+                $buffer[] = " ";
             }
 
-            fwrite($output, $token["value"]);
+            $buffer[] = $token["value"];
             $prevPrevToken = $prevToken;
             $prevToken = $token;
             $whitespaceSkipped = false;
@@ -352,12 +353,10 @@ final class MinifyCSS extends AbstractCacheDriver
 
         // Write trailing semicolon if exists
         if ($pendingSemicolon) {
-            fwrite($output, ";");
+            $buffer[] = ";";
         }
 
-        rewind($output);
-        $result = stream_get_contents($output);
-        fclose($output);
+        $result = implode("", $buffer);
 
         return $result ?: $css;
     }
