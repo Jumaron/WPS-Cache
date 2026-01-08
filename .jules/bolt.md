@@ -41,3 +41,7 @@
 ## 2026-01-05 - [Tokenization Lookup Optimization]
 **Learning:** Sequential `if` checks or `switch` statements inside a tight tokenization loop (running millions of times) can be slower than a single `isset()` lookup on a hash map, especially when the number of tokens grows.
 **Action:** Replaced sequential `if` checks for single-character tokens in `MinifyCSS` with a `TOKEN_MAP` constant and `isset()` lookup. This reduces branch misprediction penalties and provides O(1) lookup performance, matching the optimization in `MinifyJS`.
+
+## 2026-01-06 - [Regex Pre-compilation in MediaOptimizer]
+**Learning:** Constructing and compiling regex patterns in the hot path of processing (even once per request) adds unnecessary CPU overhead, especially when the pattern only depends on static settings.
+**Action:** Moved the regex pattern construction for `img` and `iframe` tag detection from `process()` to `__construct()` in `MediaOptimizer.php`. This matches the optimization pattern used in `JSOptimizer` and `HTMLCache`, ensuring the regex is compiled only once during object instantiation.
