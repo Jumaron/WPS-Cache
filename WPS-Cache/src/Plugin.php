@@ -294,6 +294,15 @@ final class Plugin
             wp_send_json_error();
         }
         $items = $_POST["items"] ?? [];
+
+        // Sentinel Fix: Strict Input Validation to prevent TypeErrors
+        if (!is_array($items)) {
+            wp_send_json_error("Invalid input format");
+        }
+
+        // Sentinel Fix: Sanitize Input (Defense in Depth)
+        $items = array_map("sanitize_key", array_filter($items, "is_string"));
+
         if (empty($items)) {
             wp_send_json_error("No items selected");
         }
