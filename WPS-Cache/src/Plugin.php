@@ -102,7 +102,9 @@ final class Plugin
         "includes" => "includes",
     ];
 
-    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all";
+    // Sentinel Fix: Explicitly allow safe static assets but strictly block PHP
+    // This replaces the broken "Deny from all" which blocked fonts/css/js from being served.
+    private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all\n<FilesMatch \"\.(css|js|html|xml|txt|map|woff|woff2|ttf|otf|eot|svg|webp|png|jpg|jpeg|gif|avif)$\">\n    Allow from all\n</FilesMatch>";
     private const CACHE_CLEANUP_HOOK = "wpsc_cache_cleanup";
     private const DB_CLEANUP_HOOK = "wpsc_db_cleanup";
 
@@ -326,7 +328,20 @@ final class Plugin
     private function secureCacheDirectory(): void
     {
         $htaccess = WPSC_CACHE_DIR . ".htaccess";
+
+        // Sentinel Fix: Update .htaccess if it is missing OR if it contains the old restrictive/broken rule.
+        // We check for "Deny from all" without the whitelist to detect the old version.
+        $shouldUpdate = false;
         if (!file_exists($htaccess)) {
+            $shouldUpdate = true;
+        } else {
+            $content = @file_get_contents($htaccess);
+            if ($content && str_contains($content, "Deny from all") && !str_contains($content, "<FilesMatch")) {
+                $shouldUpdate = true;
+            }
+        }
+
+        if ($shouldUpdate) {
             @file_put_contents($htaccess, self::HTACCESS_CONTENT);
         }
     }

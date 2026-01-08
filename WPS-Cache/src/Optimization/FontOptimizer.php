@@ -188,9 +188,15 @@ class FontOptimizer
         // SOTA: Use MD5 of the URL for the filename.
         // This ensures uniqueness even if Google serves different files with same basename,
         // and handles query strings in font URLs safely.
-        $ext =
-            pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?:
-            "woff2";
+        $path = parse_url($url, PHP_URL_PATH);
+        $ext = $path ? strtolower(pathinfo($path, PATHINFO_EXTENSION)) : "";
+
+        // Sentinel Fix: Strictly whitelist font extensions to prevent dangerous file writes (e.g., .php)
+        // Also fixes potential RCE if upstream source is compromised or spoofed.
+        if (!in_array($ext, ["woff", "woff2", "ttf", "otf", "eot"], true)) {
+            $ext = "woff2";
+        }
+
         $filename = md5($url) . "." . $ext;
 
         $localPath = $this->fontCacheDir . $filename;
