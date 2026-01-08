@@ -31,3 +31,7 @@
 ## 2024-05-29 - Input Constraints & Keyboards
 **Learning:** Generic text/number inputs allow invalid data and don't trigger specialized mobile keyboards. Using `type="url"` and `min`/`max` attributes provides immediate feedback and better mobile UX.
 **Action:** Always apply `min`, `max`, and specific `type` attributes to input fields where applicable.
+
+## 2024-05-30 - Technical Inputs & Spellchecking
+**Learning:** Technical inputs like API keys, hostnames, and IDs often trigger browser spellchecking (red squiggles) and mobile autocorrect, causing frustration and potential data entry errors.
+**Action:** Always add `spellcheck="false"`, `autocorrect="off"`, and `autocapitalize="none"` to technical input fields.
