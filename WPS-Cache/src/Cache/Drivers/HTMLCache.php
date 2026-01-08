@@ -16,6 +16,7 @@ final class HTMLCache extends AbstractCacheDriver
 {
     private string $cacheDir;
     private ?string $exclusionRegex = null;
+    private ?string $mobileSuffix = null;
 
     private ?CommerceManager $commerceManager;
 
@@ -287,9 +288,13 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function getMobileSuffix(): string
     {
+        if ($this->mobileSuffix !== null) {
+            return $this->mobileSuffix;
+        }
+
         $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
         if (empty($ua)) {
-            return "";
+            return $this->mobileSuffix = "";
         }
         if (
             preg_match(
@@ -297,9 +302,9 @@ final class HTMLCache extends AbstractCacheDriver
                 $ua,
             )
         ) {
-            return "-mobile";
+            return $this->mobileSuffix = "-mobile";
         }
-        return "";
+        return $this->mobileSuffix = "";
     }
 
     private function sanitizePath(string $path): string
