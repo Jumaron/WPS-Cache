@@ -516,3 +516,28 @@ input:checked + .wpsc-slider:before {
 .wpsc-spin {
     animation: wpsc-spin 2s infinite linear;
 }
+
+/* Radio Group Items */
+.wpsc-radio-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: var(--wpsc-transition);
+}
+
+.wpsc-radio-item:hover {
+    background: #f3f4f6;
+}
+
+.wpsc-radio-item:focus-within {
+    background: #eff6ff;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.wpsc-radio-item input[type="radio"] {
+    margin-top: 0;
+    margin-right: 8px;
+}

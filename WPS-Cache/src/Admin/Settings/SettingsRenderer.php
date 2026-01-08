@@ -310,13 +310,12 @@ class SettingsRenderer
             </div>
             <div class="wpsc-setting-control" role="radiogroup" aria-labelledby="<?php echo $labelId; ?>">
                 <?php foreach ($options as $optValue => $optLabel): ?>
-                    <label style="display: flex; align-items: center; margin-bottom: 6px; cursor: pointer;">
+                    <label class="wpsc-radio-item">
                         <input type="radio"
                                name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                                value="<?php echo esc_attr($optValue); ?>"
-                               <?php checked($current, $optValue); ?>
-                               style="margin-top: 0;">
-                        <span style="margin-left: 8px;"><?php echo esc_html($optLabel); ?></span>
+                               <?php checked($current, $optValue); ?>>
+                        <span><?php echo esc_html($optLabel); ?></span>
                     </label>
                 <?php endforeach; ?>
             </div>
