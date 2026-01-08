@@ -19,6 +19,7 @@ class MediaOptimizer
     private string $siteUrl;
     private array $dimensionCache = [];
     private ?string $regexPattern = null;
+    private array $checkedTransients = [];
 
     public function __construct(array $settings)
     {
@@ -52,6 +53,9 @@ class MediaOptimizer
             // So we can safely return early.
             return $html;
         }
+
+        // Optimization: Prime cache for image dimensions to prevent N+1 DB queries
+        $this->primeDimensionCache($html);
 
         $html = preg_replace_callback(
             $this->regexPattern,
@@ -184,14 +188,8 @@ class MediaOptimizer
             return $tag;
         }
 
-        // Convert URL to Path
-        $path = str_replace(
-            [$this->siteUrl, "wp-content"],
-            [ABSPATH, "wp-content"],
-            $url,
-        );
-        // Remove query strings
-        $path = strtok($path, "?");
+        // Convert URL to Path (using shared helper)
+        $path = $this->urlToPath($url);
 
         // Cache Key from raw path (Avoids realpath I/O on hit)
         $cacheKey = "wpsc_dim_" . md5($path);
@@ -202,7 +200,13 @@ class MediaOptimizer
             $dims = $this->dimensionCache[$path];
         } else {
             // 2. Check Transient Cache
-            $dims = get_transient($cacheKey);
+            // Optimization: Check if we already looked this up in primeDimensionCache
+            if (array_key_exists($cacheKey, $this->checkedTransients)) {
+                $dims = $this->checkedTransients[$cacheKey];
+            } else {
+                // Fallback for edge cases (e.g. regex miss)
+                $dims = get_transient($cacheKey);
+            }
 
             if ($dims === false) {
                 // 3. Cache Miss: Fallback to File System (Heavy I/O)
@@ -235,6 +239,95 @@ class MediaOptimizer
         }
 
         return $tag;
+    }
+
+    private function urlToPath(string $url): string
+    {
+        $path = str_replace(
+            [$this->siteUrl, "wp-content"],
+            [ABSPATH, "wp-content"],
+            $url,
+        );
+        return strtok($path, "?");
+    }
+
+    private function primeDimensionCache(string $html): void
+    {
+        if (empty($this->settings["media_add_dimensions"])) {
+            return;
+        }
+
+        // Quick scan for local image sources
+        if (!preg_match_all('/<img\s+[^>]*src=["\']([^"\']+)["\']/i', $html, $matches)) {
+            return;
+        }
+
+        $urls = array_unique($matches[1]);
+        $keysToFetch = [];
+        $map = []; // Map cacheKey -> path (unused for logic but good for debugging context if needed)
+
+        foreach ($urls as $url) {
+            // Filter local images only
+            if (strpos($url, $this->siteUrl) !== 0 && strpos($url, "/") !== 0) {
+                continue;
+            }
+
+            $path = $this->urlToPath($url);
+
+            // Optimization: Skip if already in memory cache
+            if (isset($this->dimensionCache[$path])) {
+                continue;
+            }
+
+            $key = "wpsc_dim_" . md5($path);
+
+            // Optimization: Skip if already checked (e.g. repeated call)
+            if (array_key_exists($key, $this->checkedTransients)) {
+                continue;
+            }
+
+            $keysToFetch[] = $key;
+            // Initialize as false (missing)
+            $this->checkedTransients[$key] = false;
+        }
+
+        if (empty($keysToFetch)) {
+            return;
+        }
+
+        // Batch Fetch Logic
+        if (function_exists('wp_using_ext_object_cache') && wp_using_ext_object_cache() && function_exists('wp_cache_get_multiple')) {
+            // Object Cache: Fast multi-get
+            $results = wp_cache_get_multiple($keysToFetch, 'transient');
+            foreach ($results as $key => $value) {
+                if ($value !== false) {
+                    $this->checkedTransients[$key] = $value;
+                }
+            }
+        } else {
+            // Database: Reduce N queries to 1
+            global $wpdb;
+
+            $escaped_keys = [];
+            foreach ($keysToFetch as $key) {
+                $escaped_keys[] = "'" . esc_sql('_transient_' . $key) . "'";
+            }
+
+            $in_clause = implode(',', $escaped_keys);
+
+            // Fetch values directly.
+            // Note: We ignore timeout check here for dimensions as they are effectively static for a given path MD5.
+            // If the file changes, the path MD5 stays same, so technically we might serve stale dimensions if we don't check timeout.
+            // However, typical behavior for image dimensions is they don't change.
+            // Also, strictly checking timeout requires joining on timeout keys which complicates the query.
+            // Given the performance benefit (1 query vs 50), this trade-off is acceptable for dimensions.
+            $rows = $wpdb->get_results("SELECT option_name, option_value FROM $wpdb->options WHERE option_name IN ($in_clause)");
+
+            foreach ($rows as $row) {
+                $key = str_replace('_transient_', '', $row->option_name);
+                $this->checkedTransients[$key] = maybe_unserialize($row->option_value);
+            }
+        }
     }
 
     private function createYouTubeFacade(
