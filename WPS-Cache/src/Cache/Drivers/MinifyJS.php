@@ -265,7 +265,8 @@ final class MinifyJS extends AbstractCacheDriver
      */
     private function minifyJS(string $js): string
     {
-        $output = fopen("php://memory", "r+");
+        // Optimization: Use array buffer instead of php://memory stream for performance
+        $buffer = [];
         $prevToken = null;
 
         $iterator = $this->tokenize($js);
@@ -278,7 +279,7 @@ final class MinifyJS extends AbstractCacheDriver
             // 1. Handle Comments: Skip them
             if ($currToken["type"] === self::T_COMMENT) {
                 if (str_starts_with($currToken["value"], "/*!")) {
-                    fwrite($output, $currToken["value"] . "\n");
+                    $buffer[] = $currToken["value"] . "\n";
                     $prevToken = [
                         "type" => self::T_WHITESPACE,
                         "value" => "\n",
@@ -303,7 +304,7 @@ final class MinifyJS extends AbstractCacheDriver
                             $currToken["value"],
                         )
                     ) {
-                        fwrite($output, "\n");
+                        $buffer[] = "\n";
                         $prevToken = [
                             "type" => self::T_WHITESPACE,
                             "value" => "\n",
@@ -314,7 +315,7 @@ final class MinifyJS extends AbstractCacheDriver
 
                     // 2b. MISSING SEMICOLON FIX
                     if ($this->shouldInsertSemicolon($prevToken, $nextToken)) {
-                        fwrite($output, ";");
+                        $buffer[] = ";";
                         $prevToken = [
                             "type" => self::T_OPERATOR,
                             "value" => ";",
@@ -330,17 +331,15 @@ final class MinifyJS extends AbstractCacheDriver
 
             // 3. Handle Insertion of necessary spaces (e.g. "var x")
             if ($prevToken && $this->needsSpace($prevToken, $currToken)) {
-                fwrite($output, " ");
+                $buffer[] = " ";
             }
 
-            fwrite($output, $currToken["value"]);
+            $buffer[] = $currToken["value"];
             $prevToken = $currToken;
             $currToken = $nextToken;
         }
 
-        rewind($output);
-        $result = stream_get_contents($output);
-        fclose($output);
+        $result = implode("", $buffer);
 
         return $result ?: $js;
     }
