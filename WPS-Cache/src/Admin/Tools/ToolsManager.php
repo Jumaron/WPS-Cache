@@ -125,6 +125,7 @@ class ToolsManager
             </div>
             <div class="wpsc-card-body">
                 <textarea id="wpsc-system-report" readonly aria-label="System Status Report" class="wpsc-textarea" rows="8"
+                    spellcheck="false" autocorrect="off" autocapitalize="none"
                     style="font-family: monospace; font-size: 11px; width:100%; margin-bottom: 10px;"><?php echo esc_textarea(
                         $this->getSystemReport(),
                     ); ?></textarea>

@@ -35,3 +35,7 @@
 ## 2024-05-30 - Technical Inputs & Spellchecking
 **Learning:** Technical inputs like API keys, hostnames, and IDs often trigger browser spellchecking (red squiggles) and mobile autocorrect, causing frustration and potential data entry errors.
 **Action:** Always add `spellcheck="false"`, `autocorrect="off"`, and `autocapitalize="none"` to technical input fields.
+
+## 2024-05-31 - Readonly Technical Inputs
+**Learning:** Readonly textareas containing technical data (logs, reports) can still trigger spellcheck in some browsers or contexts, distracting from the data.
+**Action:** Apply `spellcheck="false"`, `autocorrect="off"`, and `autocapitalize="none"` even to readonly technical textareas.
