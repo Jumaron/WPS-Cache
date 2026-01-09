@@ -424,3 +424,135 @@ input:checked + .wpsc-slider:before {
         margin-right: 10px;
     }
 }
+
+/* --- Analytics & Tools Specific Styling --- */
+
+/* 1. Analytics Grid */
+.wpsc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.wpsc-stat-card {
+    background: var(--wpsc-bg-surface);
+    border: 1px solid var(--wpsc-border);
+    border-radius: var(--wpsc-radius);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s;
+}
+.wpsc-stat-card:hover {
+    border-color: var(--wpsc-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.wpsc-stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--wpsc-text-muted);
+    letter-spacing: 0.05em;
+}
+
+.wpsc-stat-big-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--wpsc-text-main);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.wpsc-stat-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--wpsc-text-body);
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+/* 2. Tools - Status Pills */
+.wpsc-tool-status-box {
+    background: #f8fafc;
+    border: 1px solid var(--wpsc-border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.wpsc-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 99px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.wpsc-status-pill.success {
+    background: #dcfce7;
+    color: #166534;
+}
+.wpsc-status-pill.warning {
+    background: #fef9c3;
+    color: #854d0e;
+}
+.wpsc-status-pill.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* 3. Progress Bar */
+.wpsc-progress-container {
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin: 1rem 0;
+}
+.wpsc-progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--wpsc-text-main);
+}
+progress.wpsc-progress-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 99px;
+    appearance: none;
+    border: none;
+}
+progress.wpsc-progress-bar::-webkit-progress-bar {
+    background-color: #cbd5e1;
+    border-radius: 99px;
+}
+progress.wpsc-progress-bar::-webkit-progress-value {
+    background-color: var(--wpsc-primary);
+    border-radius: 99px;
+    transition: width 0.3s ease;
+}
+
+/* 4. System Status Textarea Override */
+.wpsc-code-block {
+    font-family: "Menlo", "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    background: #1e293b; /* Dark Mode for Code */
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 1rem;
+    width: 100%;
+    line-height: 1.6;
+}
