@@ -99,8 +99,13 @@ class JSOptimizer
             return;
         }
 
-        $checkStr = $src . ($script->nodeValue ?? "");
-        if ($this->isExcluded($checkStr)) {
+        // Optimization: Check src and content separately to avoid memory allocation for large concatenated strings
+        if ($src && $this->isExcluded($src)) {
+            return;
+        }
+
+        $content = $script->nodeValue ?? "";
+        if (!empty($content) && $this->isExcluded($content)) {
             return;
         }
 
