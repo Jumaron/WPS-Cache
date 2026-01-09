@@ -72,7 +72,9 @@ class SettingsRenderer
                 <label class="wpsc-switch">
                     <input type="checkbox" role="switch" id="wpsc_<?php echo esc_attr(
                         $key,
-                    ); ?>"
+                    ); ?>" aria-checked="<?php echo $checked
+    ? "true"
+    : "false"; ?>"
                         name="wpsc_settings[<?php echo esc_attr(
                             $key,
                         ); ?>]" value="1" <?php echo $descId

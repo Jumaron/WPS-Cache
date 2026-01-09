@@ -6,7 +6,7 @@
 
 ## 2024-05-23 - Visual Feedback
 **Learning:** Users need immediate feedback for actions like "Purge Cache". Using generic "Loading..." is okay, but specific feedback like "Purging..." or "Saved!" is better.
-**Action:** Implement specific state messages for async actions.
+**Action:** Implement state specific messages for async actions.
 
 ## 2024-05-24 - Reusable Loading States
 **Learning:** Hardcoded loading text like "Saving..." in global JS handlers prevents reuse for other actions (e.g., "Refreshing...").
@@ -47,3 +47,11 @@
 ## 2024-05-23 - Server-Side Flash Message Accessibility
 **Learning:** Flash messages rendered via PHP (like `WPSCache\Admin\UI\NoticeManager`) often appear silently to screen reader users after a page reload. Adding explicit `role="alert"` (for errors) and `role="status"` (for success/warnings) ensures these critical updates are announced immediately upon page load, matching the experience of sighted users.
 **Action:** Always verify that server-rendered notifications include appropriate ARIA roles, not just client-side injected ones.
+
+## 2024-05-22 - [Notice Dismissal UX]
+**Learning:** Removing elements from the DOM on dismissal can cause focus to be lost, disorienting screen reader users.
+**Action:** Always animate the removal (fade out) to give visual feedback, and use a live region announcement (e.g., "Notice dismissed") to confirm the action to non-visual users.
+
+## 2024-05-22 - [Switch Toggle Accessibility]
+**Learning:** `role="switch"` inputs are robust, but explicit `aria-checked` attributes are recommended by MDN for strict compliance, even if browsers often map the native checked state automatically.
+**Action:** Add `aria-checked` to switch inputs and update it dynamically via JS when the state changes.
