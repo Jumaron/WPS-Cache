@@ -161,7 +161,10 @@ class SettingsRenderer
     : ""; ?>         <?php echo $attrStr; ?>>
 
                 <?php if ($type === 'password'): ?>
-                    <button type="button" class="wpsc-password-toggle" aria-label="<?php esc_attr_e(
+                    <button type="button" class="wpsc-password-toggle" title="<?php esc_attr_e(
+                        "Show password",
+                        "wps-cache",
+                    ); ?>" aria-label="<?php esc_attr_e(
                         "Show password",
                         "wps-cache",
                     ); ?>" aria-controls="wpsc_<?php echo esc_attr($key); ?>">

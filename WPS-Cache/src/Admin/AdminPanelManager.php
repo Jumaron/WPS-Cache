@@ -149,7 +149,9 @@ final class AdminPanelManager
                             ); ?></span>
                     </h1>
                 </div>
-                <div class="wpsc-actions"><a href="#" class="wpsc-btn-secondary">Documentation</a></div>
+                <div class="wpsc-actions"><a href="<?php echo esc_url(
+                    admin_url("admin.php?page=wps-cache&tab=tools"),
+                ); ?>" class="wpsc-btn-secondary">System Status</a></div>
             </div>
             <div class="wpsc-layout">
                 <div class="wpsc-sidebar">
