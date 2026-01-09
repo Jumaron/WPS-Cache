@@ -13,3 +13,7 @@
 ## 2026-01-14 - [Function Call Overhead in Tight Loops]
 **Learning:** In PHP, function calls have measurable overhead when executed inside tight loops (like minification tokenizers running thousands of times). Even if the function starts with a "fast return" guard clause, the call frame creation still costs CPU cycles.
 **Action:** Inlined the guard clause checks (`$val[0] === '#'`) directly into the loop in `MinifyCSS`, avoiding the function call entirely for the 99% of tokens that don't need processing.
+
+## 2026-01-20 - [Optimizing Text Parsers with Native C Functions]
+**Learning:** In PHP, iterating over strings character-by-character in a loop is significantly slower than using native functions like `strcspn` or `strpos`, which are implemented in C. This is critical for tokenizers processing large files.
+**Action:** Replaced manual `while` loops for comment scanning in `MinifyJS::tokenize` with `strcspn` (for single-line) and `strpos` (for multi-line), reducing the complexity from O(N) script operations to a single internal call.

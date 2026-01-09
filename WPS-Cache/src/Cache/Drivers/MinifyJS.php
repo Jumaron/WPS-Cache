@@ -321,20 +321,13 @@ final class MinifyJS extends AbstractCacheDriver
                     $start = $i;
                     $i += 2;
                     if ($next === "/") {
-                        while (
-                            $i < $len &&
-                            $js[$i] !== "\n" &&
-                            $js[$i] !== "\r"
-                        ) {
-                            $i++;
-                        }
+                        $i += strcspn($js, "\n\r", $i);
                     } else {
-                        while ($i < $len - 1) {
-                            if ($js[$i] === "*" && $js[$i + 1] === "/") {
-                                $i += 2;
-                                break;
-                            }
-                            $i++;
+                        $pos = strpos($js, "*/", $i);
+                        if ($pos === false) {
+                            $i = $len;
+                        } else {
+                            $i = $pos + 2;
                         }
                     }
                     yield [
