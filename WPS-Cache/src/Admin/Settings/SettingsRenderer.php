@@ -310,7 +310,9 @@ class SettingsRenderer
                     </p>
                 <?php endif; ?>
             </div>
-            <div class="wpsc-setting-control" role="radiogroup" aria-labelledby="<?php echo $labelId; ?>">
+            <div class="wpsc-setting-control" role="radiogroup" aria-labelledby="<?php echo $labelId; ?>" <?php echo $descId
+    ? 'aria-describedby="' . $descId . '"'
+    : ""; ?>>
                 <?php foreach ($options as $optValue => $optLabel): ?>
                     <label class="wpsc-radio-item">
                         <input type="radio"

@@ -55,3 +55,7 @@
 ## 2024-05-22 - [Switch Toggle Accessibility]
 **Learning:** `role="switch"` inputs are robust, but explicit `aria-checked` attributes are recommended by MDN for strict compliance, even if browsers often map the native checked state automatically.
 **Action:** Add `aria-checked` to switch inputs and update it dynamically via JS when the state changes.
+
+## 2024-06-01 - Radio Group Descriptions
+**Learning:** When using radio groups to replace select dropdowns, the associated description text can be missed by screen readers if not explicitly linked.
+**Action:** Always add `aria-describedby` to the `role="radiogroup"` container pointing to the description element.
