@@ -324,7 +324,11 @@ final class Plugin
 
     public function refreshServerConfig(array $settings): void
     {
-        if ($settings["html_cache"] ?? false) {
+        // Sentinel Fix: Ensure .htaccess is updated if ANY server-level feature is enabled
+        // (HTML Cache OR XML-RPC blocking)
+        $needs_config = !empty($settings["html_cache"]) || !empty($settings["bloat_disable_xmlrpc"]);
+
+        if ($needs_config) {
             $this->serverManager->applyConfiguration();
         } else {
             $this->serverManager->removeConfiguration();

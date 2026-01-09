@@ -131,61 +131,78 @@ class ServerConfigManager
      */
     private function getRules(): string
     {
+        $settings = get_option("wpsc_settings", []);
+
         // Sanitize cache path for Regex
         $base = parse_url(get_home_url(), PHP_URL_PATH) ?? "/";
         $cache_path = "/" . trim($this->cachePathRel, "/"); // ensure leading slash
         $mobile_agents = self::MOBILE_AGENT_REGEX;
 
-        return <<<EOT
-        # BEGIN WPS Cache
-        <IfModule mod_rewrite.c>
-        RewriteEngine On
-        RewriteBase {$base}
+        $rules = "# BEGIN WPS Cache\n";
 
-        # 1. Bypass if method is POST
-        RewriteCond %{REQUEST_METHOD} POST
-        RewriteRule .* - [S=3]
+        // Sentinel Enhancement: Block XML-RPC at server level if disabled
+        // This prevents the request from reaching PHP, saving resources and reducing attack surface.
+        if (!empty($settings["bloat_disable_xmlrpc"])) {
+            $rules .= "<Files xmlrpc.php>\n";
+            $rules .= "Order Deny,Allow\n";
+            $rules .= "Deny from all\n";
+            $rules .= "</Files>\n";
+        }
 
-        # 2. Bypass if Query String exists
-        RewriteCond %{QUERY_STRING} !^$
-        RewriteRule .* - [S=2]
+        // Only add cache rules if HTML Cache is enabled
+        if (!empty($settings["html_cache"])) {
+            $rules .= <<<EOT
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase {$base}
 
-        # 3. Bypass if logged in or special WP cookies
-        RewriteCond %{HTTP_COOKIE} (wp-postpass|wordpress_logged_in|comment_author)_ [NC]
-        RewriteRule .* - [S=1]
+# 1. Bypass if method is POST
+RewriteCond %{REQUEST_METHOD} POST
+RewriteRule .* - [S=3]
 
-        # 4. MOBILE CACHE RULE
-        # Only if User-Agent matches Mobile AND index-mobile.html exists
-        RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
-        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html -f
-        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html [L]
+# 2. Bypass if Query String exists
+RewriteCond %{QUERY_STRING} !^$
+RewriteRule .* - [S=2]
 
-        # 5. DESKTOP CACHE RULE
-        # Critical: Explicitly EXCLUDE Mobile Agents here.
-        # If we don't exclude them, a mobile user visiting an uncached page
-        # (where index-mobile.html doesn't exist yet) would be served the Desktop index.html.
-        RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
-        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html -f
-        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
+# 3. Bypass if logged in or special WP cookies
+RewriteCond %{HTTP_COOKIE} (wp-postpass|wordpress_logged_in|comment_author)_ [NC]
+RewriteRule .* - [S=1]
 
-        </IfModule>
+# 4. MOBILE CACHE RULE
+# Only if User-Agent matches Mobile AND index-mobile.html exists
+RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
+RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html -f
+RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html [L]
 
-        <IfModule mod_headers.c>
-            # Serve correct headers for cached HTML
-            <FilesMatch "index(-mobile)?\.html$">
-                Header set Content-Type "text/html; charset=UTF-8"
-                Header set Cache-Control "max-age=3600, public"
-                Header set X-WPS-Cache "HIT"
-                Header set Strict-Transport-Security "max-age=31536000"
-                Header set X-Content-Type-Options "nosniff"
-                Header set X-Frame-Options "SAMEORIGIN"
-                Header set Content-Security-Policy "frame-ancestors 'self'"
-                Header set X-Permitted-Cross-Domain-Policies "none"
-                Header set Referrer-Policy "strict-origin-when-cross-origin"
-                Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()"
-            </FilesMatch>
-        </IfModule>
-        # END WPS Cache
-        EOT;
+# 5. DESKTOP CACHE RULE
+# Critical: Explicitly EXCLUDE Mobile Agents here.
+# If we don't exclude them, a mobile user visiting an uncached page
+# (where index-mobile.html doesn't exist yet) would be served the Desktop index.html.
+RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
+RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html -f
+RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
+
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Serve correct headers for cached HTML
+    <FilesMatch "index(-mobile)?\.html$">
+        Header set Content-Type "text/html; charset=UTF-8"
+        Header set Cache-Control "max-age=3600, public"
+        Header set X-WPS-Cache "HIT"
+        Header set Strict-Transport-Security "max-age=31536000"
+        Header set X-Content-Type-Options "nosniff"
+        Header set X-Frame-Options "SAMEORIGIN"
+        Header set Content-Security-Policy "frame-ancestors 'self'"
+        Header set X-Permitted-Cross-Domain-Policies "none"
+        Header set Referrer-Policy "strict-origin-when-cross-origin"
+        Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()"
+    </FilesMatch>
+</IfModule>
+EOT;
+        }
+
+        $rules .= "\n# END WPS Cache";
+        return $rules;
     }
 }
