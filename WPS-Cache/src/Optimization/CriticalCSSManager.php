@@ -41,7 +41,7 @@ class CriticalCSSManager
 
         // Merge hardcoded safelist with user safelist
         $userList = $this->settings["css_safelist"] ?? [];
-        $merged = array_merge(self::SAFELIST, $userList);
+        $merged = array_unique(array_merge(self::SAFELIST, $userList));
 
         $quoted = array_map(fn($s) => preg_quote($s, "/"), $merged);
         $this->safelistRegex = "/" . implode("|", $quoted) . "/";

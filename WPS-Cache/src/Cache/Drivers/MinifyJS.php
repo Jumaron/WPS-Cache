@@ -648,6 +648,7 @@ final class MinifyJS extends AbstractCacheDriver
     }
     private function compileExclusionRegex(array $p): void
     {
+        $p = array_unique($p);
         $r = [];
         foreach ($p as $s) {
             if (trim($s)) {
