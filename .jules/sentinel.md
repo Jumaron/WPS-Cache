@@ -22,3 +22,8 @@
 **Vulnerability:** The `X-XSS-Protection` header, once recommended, is now deprecated and can introduce Cross-Site Leak (XS-Leak) vulnerabilities in older browsers by allowing attackers to detect if a specific script was executed or blocked. Modern browsers like Chrome and Edge have removed their XSS Auditor entirely.
 **Learning:** Security best practices evolve. Headers that were once protective can become liabilities. Always consult modern resources (MDN, OWASP) rather than copying legacy configs.
 **Prevention:** Removed `X-XSS-Protection` and `X-Download-Options` (IE8 specific) headers. Reliance should be placed on Content Security Policy (CSP) for robust XSS protection.
+
+## 2024-06-16 - Broken JS Array Serialization Affecting Availability
+**Vulnerability:** The JavaScript `URLSearchParams` constructor incorrectly stringified the array of database cleanup items (e.g., `items[]=a,b`), causing the backend PHP logic to receive malformed data and fail silently. This prevented critical maintenance tasks (expired transient cleanup) from running.
+**Learning:** PHP's array handling for query parameters (e.g., `key[]=value&key[]=value2`) is not automatically supported by JS `URLSearchParams` when passing an array directly. It converts the array to a single comma-separated string, which PHP treats as a single value.
+**Prevention:** Always iterate over arrays and use `params.append('key[]', value)` explicitly when constructing POST bodies for PHP backends.
