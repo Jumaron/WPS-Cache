@@ -227,7 +227,7 @@ class SettingsRenderer
                         $key,
                     ); ?>]" rows="5" <?php echo $descId
     ? 'aria-describedby="' . $descId . '"'
-    : ""; ?> spellcheck="false" <?php echo $attrStr; ?>><?php echo esc_textarea(
+    : ""; ?> spellcheck="false" autocorrect="off" autocapitalize="none" style="max-width: 100%;" <?php echo $attrStr; ?>><?php echo esc_textarea(
     $value,
 ); ?></textarea>
             </div>
