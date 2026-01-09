@@ -4,7 +4,37 @@ document.addEventListener("DOMContentLoaded", function () {
   initPasswordToggles();
   initFormSubmissions();
   initPurgeButton();
+  initDismissButtons();
+  initSwitches();
 });
+
+function initDismissButtons() {
+  document.querySelectorAll(".wpsc-dismiss-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const notice = this.closest(".wpsc-notice");
+      if (!notice) return;
+
+      notice.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+      notice.style.opacity = "0";
+      notice.style.transform = "translateY(-10px)";
+
+      setTimeout(() => {
+        notice.remove();
+        if (wpsc_admin.strings.notice_dismissed) {
+          announce(wpsc_admin.strings.notice_dismissed);
+        }
+      }, 300);
+    });
+  });
+}
+
+function initSwitches() {
+  document.querySelectorAll('input[role="switch"]').forEach((input) => {
+    input.addEventListener("change", function () {
+      this.setAttribute("aria-checked", this.checked ? "true" : "false");
+    });
+  });
+}
 
 function initPasswordToggles() {
   const toggles = document.querySelectorAll(".wpsc-password-toggle");

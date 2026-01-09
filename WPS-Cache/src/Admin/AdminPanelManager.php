@@ -111,6 +111,7 @@ final class AdminPanelManager
                 "purging" => __("Purging...", "wps-cache"),
                 "show_password" => __("Show password", "wps-cache"),
                 "hide_password" => __("Hide password", "wps-cache"),
+                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
             ],
         ]);
     }
