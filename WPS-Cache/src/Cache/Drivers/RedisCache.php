@@ -76,6 +76,9 @@ final class RedisCache extends AbstractCacheDriver
             $secret .= defined("DB_PASSWORD") ? DB_PASSWORD : "";
             $secret .= isset($_SERVER["DOCUMENT_ROOT"]) ? $_SERVER["DOCUMENT_ROOT"] : "";
             $secret .= __FILE__;
+            // Sentinel Enhancement: Add filesystem entropy to prevent salt guessing in standard Docker containers
+            $secret .= (string) @filemtime(__FILE__);
+            $secret .= (string) @fileinode(__FILE__);
 
             $this->salt = hash("sha256", $secret);
         }
