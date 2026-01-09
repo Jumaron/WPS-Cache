@@ -73,7 +73,15 @@ final class AdminPanelManager
             "href" => $purge_url,
             "meta" => [
                 "class" => "wpsc-purge-trigger",
-                "onclick" => "return confirm('" . esc_js(__("Are you sure you want to purge all caches?", "wps-cache")) . "');",
+                "onclick" =>
+                    "return confirm('" .
+                    esc_js(
+                        __(
+                            "Are you sure you want to purge all caches?",
+                            "wps-cache",
+                        ),
+                    ) .
+                    "');",
             ],
         ]);
     }
@@ -105,9 +113,15 @@ final class AdminPanelManager
                 "preload_done" => "Done!",
                 "preload_complete" => "Preloading Complete!",
                 "copied" => __("Copied!", "wps-cache"),
-                "copied_announcement" => __("Copied to clipboard!", "wps-cache"),
+                "copied_announcement" => __(
+                    "Copied to clipboard!",
+                    "wps-cache",
+                ),
                 "saving" => __("Saving...", "wps-cache"),
-                "purge_confirm" => __("Are you sure you want to purge all caches?", "wps-cache"),
+                "purge_confirm" => __(
+                    "Are you sure you want to purge all caches?",
+                    "wps-cache",
+                ),
                 "purging" => __("Purging...", "wps-cache"),
                 "show_password" => __("Show password", "wps-cache"),
                 "hide_password" => __("Hide password", "wps-cache"),
@@ -140,28 +154,43 @@ final class AdminPanelManager
         $current_tab = $this->tabManager->getCurrentTab();
         ?>
         <div class="wpsc-wrap">
-            <div class="wpsc-header">
+            <!-- Floating Header -->
+            <header class="wpsc-header">
                 <div class="wpsc-logo">
-                    <h1><span class="dashicons dashicons-performance" aria-hidden="true"
-                            style="font-size: 28px; width: 28px; height: 28px;"></span> WPS Cache <span
-                            class="wpsc-version">v<?php echo esc_html(
-                                WPSC_VERSION,
-                            ); ?></span>
+                    <h1>
+                        <span class="dashicons dashicons-performance" aria-hidden="true"></span>
+                        WPS Cache
+                        <span class="wpsc-version">v<?php echo esc_html(
+                            WPSC_VERSION,
+                        ); ?></span>
                     </h1>
                 </div>
-                <div class="wpsc-actions"><a href="<?php echo esc_url(
-                    admin_url("admin.php?page=wps-cache&tab=tools"),
-                ); ?>" class="wpsc-btn-secondary">System Status</a></div>
-            </div>
-            <div class="wpsc-layout">
-                <div class="wpsc-sidebar">
-                    <?php $this->tabManager->renderSidebar($current_tab); ?>
+                <div class="wpsc-actions">
+                    <a href="<?php echo esc_url(
+                        wp_nonce_url(
+                            admin_url("admin-post.php?action=wpsc_clear_cache"),
+                            "wpsc_clear_cache",
+                        ),
+                    ); ?>"
+                       id="wpsc-purge-all"
+                       class="wpsc-btn-secondary wpsc-confirm-trigger"
+                       style="color: var(--wpsc-danger); border-color: var(--wpsc-danger-bg);">
+                        <span class="dashicons dashicons-trash" style="margin-right:6px"></span> Purge All
+                    </a>
                 </div>
-                <div class="wpsc-content">
+            </header>
+
+            <div class="wpsc-layout">
+                <aside class="wpsc-sidebar">
+                    <?php $this->tabManager->renderSidebar($current_tab); ?>
+                </aside>
+
+                <main class="wpsc-content">
                     <div class="wpsc-notices-area">
                         <?php settings_errors("wpsc_settings"); ?>
                         <?php $this->noticeManager->renderNotices(); ?>
                     </div>
+
                     <div class="wpsc-tab-content">
                         <?php switch ($current_tab) {
                             case "cache":
@@ -196,10 +225,9 @@ final class AdminPanelManager
                                 break;
                         } ?>
                     </div>
-                </div>
+                </main>
             </div>
         </div>
         <?php
     }
 }
-?>
