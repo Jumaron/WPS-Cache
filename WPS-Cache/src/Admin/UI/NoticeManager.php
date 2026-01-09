@@ -40,13 +40,21 @@ class NoticeManager
                 default => "success",
             };
 
+            // Palette UX: Ensure screen readers announce notices immediately (Alert for errors, Status for success/warning)
+            $role = match ($notice["type"]) {
+                "error" => "alert",
+                default => "status",
+            };
+
             $icon = match ($notice["type"]) {
                 "error" => "dashicons-warning",
                 "warning" => "dashicons-flag",
                 default => "dashicons-yes-alt",
             };
             ?>
-            <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>">
+            <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>" role="<?php echo esc_attr(
+    $role,
+); ?>">
                 <div class="wpsc-notice-content">
 
                     <span class="dashicons <?php echo esc_attr(
