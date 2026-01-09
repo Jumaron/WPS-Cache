@@ -6,7 +6,16 @@ document.addEventListener("DOMContentLoaded", function () {
   initConfirmButtons();
   initDismissButtons();
   initSwitches();
+  initTabsResponsive();
 });
+
+function initTabsResponsive() {
+  const nav = document.querySelector(".wpsc-nav");
+  const active = document.querySelector(".wpsc-nav-item.active");
+  if (nav && active && window.innerWidth < 960) {
+    nav.scrollLeft = active.offsetLeft - 20;
+  }
+}
 
 function initDismissButtons() {
   document.querySelectorAll(".wpsc-dismiss-btn").forEach((btn) => {
@@ -14,9 +23,12 @@ function initDismissButtons() {
       const notice = this.closest(".wpsc-notice");
       if (!notice) return;
 
-      notice.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+      notice.style.transition = "all 0.3s ease";
       notice.style.opacity = "0";
       notice.style.transform = "translateY(-10px)";
+      notice.style.marginBottom = "0";
+      notice.style.padding = "0";
+      notice.style.border = "none";
 
       setTimeout(() => {
         notice.remove();
@@ -32,6 +44,11 @@ function initSwitches() {
   document.querySelectorAll('input[role="switch"]').forEach((input) => {
     input.addEventListener("change", function () {
       this.setAttribute("aria-checked", this.checked ? "true" : "false");
+      const row = this.closest(".wpsc-setting-row");
+      if (row) {
+        row.style.backgroundColor = "var(--wpsc-primary-soft)";
+        setTimeout(() => (row.style.backgroundColor = ""), 400);
+      }
     });
   });
 }
@@ -77,28 +94,25 @@ function initConfirmButtons() {
   );
 
   triggers.forEach((trigger) => {
-    // Remove inline onclick to prevent double confirmation dialogs (Progressive Enhancement)
     if (trigger.hasAttribute("onclick")) {
       trigger.removeAttribute("onclick");
     }
 
     trigger.addEventListener("click", function (e) {
+      if (trigger.classList.contains("disabled")) return;
+
       const message =
         trigger.dataset.confirm || wpsc_admin.strings.purge_confirm;
 
       if (!confirm(message)) {
         e.preventDefault();
       } else {
-        // User confirmed, link will be followed.
-        // Show loading state immediately.
         trigger.classList.add("disabled");
-
         const loadingText =
           trigger.dataset.loadingText || wpsc_admin.strings.purging;
-
-        trigger.innerHTML =
-          '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
-          loadingText;
+        // Keep width to prevent layout jump
+        trigger.style.width = trigger.offsetWidth + "px";
+        trigger.innerHTML = `<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true"></span>`;
       }
     });
   });
@@ -110,18 +124,14 @@ function initFormSubmissions() {
       const btn = form.querySelector('button[type="submit"]');
       if (!btn) return;
 
-      // Prevent double submission visually
       if (btn.classList.contains("disabled")) {
         return;
       }
 
-      // Lock width to prevent jumping if possible, or just let it reflow
-      // btn.style.width = btn.offsetWidth + "px";
-
       btn.classList.add("disabled");
       const loadingText = btn.dataset.loadingText || wpsc_admin.strings.saving;
       btn.innerHTML =
-        '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+        '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="margin-right:6px"></span> ' +
         loadingText;
     });
   });
@@ -151,13 +161,10 @@ function initPreloader() {
   preloadBtn.addEventListener("click", function () {
     window.addEventListener("beforeunload", confirmExit);
 
-    // UI Reset
     preloadBtn.disabled = true;
-    // Store original text
     if (!preloadBtn.dataset.originalText) {
       preloadBtn.dataset.originalText = preloadBtn.innerHTML;
     }
-    // Set loading state
     preloadBtn.innerHTML =
       '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true"></span> ' +
       wpsc_admin.strings.preload_loading;
@@ -169,7 +176,6 @@ function initPreloader() {
     processed = 0;
     activeRequests = 0;
 
-    // Step 1: Get List
     fetch(wpsc_admin.ajax_url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -182,7 +188,6 @@ function initPreloader() {
       .then((res) => {
         if (res.success) {
           queue = res.data;
-
           total = queue.length;
           if (total === 0) {
             finish("No URLs found.");
@@ -201,20 +206,14 @@ function initPreloader() {
   });
 
   function processQueue() {
-    // If finished
     if (queue.length === 0 && activeRequests === 0) {
       finish(wpsc_admin.strings.preload_complete);
       return;
     }
-
-    // Fill the active slots
     while (activeRequests < CONCURRENCY_LIMIT && queue.length > 0) {
       const url = queue.shift();
       activeRequests++;
-
       updateStatus();
-
-      // Step 2: Warmup Request
       fetch(wpsc_admin.ajax_url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -223,19 +222,12 @@ function initPreloader() {
           url: url,
           _ajax_nonce: wpsc_admin.nonce,
         }),
-      })
-        .then(() => {
-          // Success
-        })
-        .catch(() => {
-          // Error - ignore
-        })
-        .finally(() => {
-          activeRequests--;
-          processed++;
-          updateProgress();
-          processQueue();
-        });
+      }).finally(() => {
+        activeRequests--;
+        processed++;
+        updateProgress();
+        processQueue();
+      });
     }
   }
 
@@ -252,19 +244,15 @@ function initPreloader() {
 
   function finish(msg) {
     window.removeEventListener("beforeunload", confirmExit);
-
     statusSpan.textContent = msg;
     progressBar.value = 100;
     percentSpan.textContent = "100%";
-
-    // Show success state
     preloadBtn.innerHTML =
       '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' +
       wpsc_admin.strings.preload_done;
 
     setTimeout(() => {
       preloadBtn.disabled = false;
-      // Restore original text
       if (preloadBtn.dataset.originalText) {
         preloadBtn.innerHTML = preloadBtn.dataset.originalText;
       }
@@ -296,7 +284,6 @@ function initCopyTriggers() {
     btn.addEventListener("click", function () {
       const targetId = this.dataset.copyTarget;
       const targetEl = document.getElementById(targetId);
-
       if (!targetEl) return;
 
       targetEl.select();
@@ -325,16 +312,13 @@ function initCopyTriggers() {
   function showSuccess(btn) {
     const originalHtml = btn.innerHTML;
     const originalWidth = btn.offsetWidth;
-
     btn.style.width = originalWidth + "px";
     btn.innerHTML =
-      '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> ' +
+      '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' +
       wpsc_admin.strings.copied;
     btn.classList.remove("wpsc-btn-secondary");
     btn.classList.add("button-primary", "wpsc-btn-primary");
-
     announce(wpsc_admin.strings.copied_announcement);
-
     setTimeout(() => {
       btn.innerHTML = originalHtml;
       btn.classList.remove("button-primary", "wpsc-btn-primary");

@@ -53,11 +53,12 @@ class SettingsManager
 
     private function formEnd(): void
     {
-        echo '<div style="margin-top: 20px;">';
-        echo '<button type="submit" name="submit" id="submit" class="button button-primary wpsc-btn-primary">';
-        echo '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> ';
+        // Sticky Footer Logic
+        echo '<div class="wpsc-sticky-footer">';
+        echo '<button type="submit" name="submit" id="submit" class="wpsc-btn-primary">';
+        echo '<span class="dashicons dashicons-saved" aria-hidden="true"></span> ';
         echo esc_html__("Save Changes", "wps-cache");
-        echo '</button>';
+        echo "</button>";
         echo "</div>";
         echo "</form>";
     }
@@ -97,14 +98,6 @@ class SettingsManager
 
     private function renderDashboardTabContent(array $settings): void
     {
-        echo '<div style="margin-bottom: 20px; text-align:right;">';
-        echo '<a href="' .
-            wp_nonce_url(
-                admin_url("admin-post.php?action=wpsc_clear_cache"),
-                "wpsc_clear_cache",
-            ) .
-            '" id="wpsc-purge-all" role="button" class="button wpsc-btn-danger"><span class="dashicons dashicons-trash" aria-hidden="true" style="vertical-align: middle;"></span> Purge All Caches</a>';
-        echo "</div>";
         $this->formStart();
         $this->renderer->renderCard(
             "Global Configuration",
@@ -356,7 +349,8 @@ class SettingsManager
                     $settings,
                     "text",
                     [
-                        "placeholder" => "e.g. 023e105f4ecef8ad9ca31a8372d0c353",
+                        "placeholder" =>
+                            "e.g. 023e105f4ecef8ad9ca31a8372d0c353",
                         "spellcheck" => "false",
                         "autocorrect" => "off",
                         "autocapitalize" => "none",
@@ -662,7 +656,7 @@ class SettingsManager
                 echo '<div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">';
                 echo '<button type="button" id="wpsc-db-toggle-all" class="wpsc-btn-secondary" style="font-size: 13px; padding: 6px 12px; display: inline-flex; align-items: center;">';
                 echo '<span class="dashicons dashicons-yes" aria-hidden="true" style="font-size: 16px; width: 16px; height: 16px; margin-right: 6px;"></span>Select All';
-                echo '</button>';
+                echo "</button>";
                 echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary"><span class="dashicons dashicons-database" aria-hidden="true" style="vertical-align: middle;"></span> Optimize Selected Now</button>';
                 echo "</div>";
                 echo '<div id="wpsc-db-status" role="status" aria-live="polite" style="margin-bottom:20px; text-align:right; font-weight:600;"></div>';
@@ -682,8 +676,8 @@ class SettingsManager
                             $key,
                         ); ?>"><?php echo esc_html($label); ?></label>
                         <p class="wpsc-setting-desc" id="<?php echo $descId; ?>" style="color: var(--wpsc-primary);"><?php echo esc_html(
-                            $display,
-                        ); ?></p>
+    $display,
+); ?></p>
                     </div>
                     <div class="wpsc-setting-control">
                         <input type="hidden" name="wpsc_settings[db_clean_<?php echo esc_attr(
@@ -691,8 +685,8 @@ class SettingsManager
                         ); ?>]" value="0">
                         <label class="wpsc-switch">
                             <input type="checkbox" role="switch" class="wpsc-db-checkbox" aria-describedby="<?php echo $descId; ?>" data-key="<?php echo esc_attr(
-                                $key,
-                            ); ?>" id="wpsc_db_clean_<?php echo esc_attr(
+    $key,
+); ?>" id="wpsc_db_clean_<?php echo esc_attr(
     $key,
 ); ?>" name="wpsc_settings[db_clean_<?php echo esc_attr(
     $key,

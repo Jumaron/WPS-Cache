@@ -73,7 +73,15 @@ final class AdminPanelManager
             "href" => $purge_url,
             "meta" => [
                 "class" => "wpsc-purge-trigger",
-                "onclick" => "return confirm('" . esc_js(__("Are you sure you want to purge all caches?", "wps-cache")) . "');",
+                "onclick" =>
+                    "return confirm('" .
+                    esc_js(
+                        __(
+                            "Are you sure you want to purge all caches?",
+                            "wps-cache",
+                        ),
+                    ) .
+                    "');",
             ],
         ]);
     }
@@ -83,6 +91,7 @@ final class AdminPanelManager
         if ($hook !== "toplevel_page_wps-cache") {
             return;
         }
+
         wp_enqueue_style(
             "wpsc-admin-css",
             WPSC_PLUGIN_URL . "assets/css/admin.css",
@@ -96,22 +105,31 @@ final class AdminPanelManager
             WPSC_VERSION,
             true,
         );
+
         wp_localize_script("wpsc-admin-js", "wpsc_admin", [
             "ajax_url" => admin_url("admin-ajax.php"),
             "nonce" => wp_create_nonce("wpsc_ajax_nonce"),
             "strings" => [
-                "preload_start" => "Gathering URLs...",
-                "preload_loading" => "Preloading...",
-                "preload_done" => "Done!",
-                "preload_complete" => "Preloading Complete!",
-                "copied" => __("Copied!", "wps-cache"),
-                "copied_announcement" => __("Copied to clipboard!", "wps-cache"),
+                // General
                 "saving" => __("Saving...", "wps-cache"),
-                "purge_confirm" => __("Are you sure you want to purge all caches?", "wps-cache"),
+                "purge_confirm" => __("Are you sure?", "wps-cache"),
                 "purging" => __("Purging...", "wps-cache"),
+                "copied" => __("Copied!", "wps-cache"),
+                "copied_announcement" => __(
+                    "Copied to clipboard!",
+                    "wps-cache",
+                ),
+                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
+
+                // Preloader
+                "preload_start" => __("Gathering URLs...", "wps-cache"),
+                "preload_loading" => __("Preloading...", "wps-cache"),
+                "preload_done" => __("Done!", "wps-cache"),
+                "preload_complete" => __("Preloading Complete!", "wps-cache"),
+
+                // Password Toggles
                 "show_password" => __("Show password", "wps-cache"),
                 "hide_password" => __("Hide password", "wps-cache"),
-                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
             ],
         ]);
     }
@@ -123,10 +141,7 @@ final class AdminPanelManager
         }
         check_admin_referer("wpsc_clear_cache");
         $this->cacheManager->clearAllCaches();
-        $this->noticeManager->add(
-            "All caches have been purged successfully.",
-            "success",
-        );
+        $this->noticeManager->add("Cache cleared.", "success");
         wp_safe_redirect(remove_query_arg("wpsc_cleared", wp_get_referer()));
         exit();
     }
@@ -138,31 +153,69 @@ final class AdminPanelManager
         }
         remove_all_actions("admin_notices");
         $current_tab = $this->tabManager->getCurrentTab();
+
+        $titles = [
+            "dashboard" => "Dashboard",
+            "cache" => "Cache Rules",
+            "media" => "Media Optimization",
+            "cdn" => "CDN & Cloudflare",
+            "css_js" => "File Optimization",
+            "tweaks" => "Tweaks & Cleanup",
+            "database" => "Database",
+            "analytics" => "Analytics",
+            "tools" => "Tools",
+            "advanced" => "Advanced",
+        ];
+        $pageTitle = $titles[$current_tab] ?? "Settings";
         ?>
+
         <div class="wpsc-wrap">
-            <div class="wpsc-header">
-                <div class="wpsc-logo">
-                    <h1><span class="dashicons dashicons-performance" aria-hidden="true"
-                            style="font-size: 28px; width: 28px; height: 28px;"></span> WPS Cache <span
-                            class="wpsc-version">v<?php echo esc_html(
-                                WPSC_VERSION,
-                            ); ?></span>
-                    </h1>
-                </div>
-                <div class="wpsc-actions"><a href="<?php echo esc_url(
-                    admin_url("admin.php?page=wps-cache&tab=tools"),
-                ); ?>" class="wpsc-btn-secondary">System Status</a></div>
-            </div>
-            <div class="wpsc-layout">
-                <div class="wpsc-sidebar">
-                    <?php $this->tabManager->renderSidebar($current_tab); ?>
-                </div>
-                <div class="wpsc-content">
-                    <div class="wpsc-notices-area">
-                        <?php settings_errors("wpsc_settings"); ?>
-                        <?php $this->noticeManager->renderNotices(); ?>
+            <div class="wpsc-app-container">
+                <!-- 1. Left Sidebar -->
+                <aside class="wpsc-sidebar">
+                    <div class="wpsc-brand">
+                        <span class="dashicons dashicons-performance"></span>
+                        <h1>WPS Cache</h1>
                     </div>
-                    <div class="wpsc-tab-content">
+
+                    <nav class="wpsc-nav">
+                        <?php $this->tabManager->renderSidebar($current_tab); ?>
+                    </nav>
+
+                    <div class="wpsc-sidebar-footer">
+                        <small style="color:var(--wpsc-text-muted);">Version <?php echo esc_html(
+                            WPSC_VERSION,
+                        ); ?></small>
+                    </div>
+                </aside>
+
+                <!-- 2. Main Content -->
+                <main class="wpsc-content-area">
+                    <header class="wpsc-header-bar">
+                        <h2 class="wpsc-page-title"><?php echo esc_html(
+                            $pageTitle,
+                        ); ?></h2>
+                        <div class="wpsc-actions">
+                            <a href="<?php echo esc_url(
+                                wp_nonce_url(
+                                    admin_url(
+                                        "admin-post.php?action=wpsc_clear_cache",
+                                    ),
+                                    "wpsc_clear_cache",
+                                ),
+                            ); ?>"
+                               class="wpsc-btn-ghost-danger wpsc-confirm-trigger">
+                               <span class="dashicons dashicons-trash" style="font-size:16px; width:16px; height:16px; vertical-align:middle;"></span> Purge All
+                            </a>
+                        </div>
+                    </header>
+
+                    <!-- Notices Area -->
+                    <?php settings_errors("wpsc_settings"); ?>
+                    <?php $this->noticeManager->renderNotices(); ?>
+
+                    <!-- Scrollable Settings Canvas -->
+                    <div class="wpsc-scroll-canvas">
                         <?php switch ($current_tab) {
                             case "cache":
                                 $this->settingsManager->renderCacheTab();
@@ -196,10 +249,9 @@ final class AdminPanelManager
                                 break;
                         } ?>
                     </div>
-                </div>
+                </main>
             </div>
         </div>
         <?php
     }
 }
-?>
