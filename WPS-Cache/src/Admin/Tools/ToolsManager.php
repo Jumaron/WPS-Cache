@@ -218,23 +218,91 @@ class ToolsManager
         wp_send_json_success(array_values(array_unique($urls)));
     }
 
+    /**
+     * AJAX Step 2: Process a single URL.
+     * Updated to hit both Desktop and Mobile versions.
+     */
     public function handleProcessUrl(): void
     {
-        /* ... copy from previous ... */
         check_ajax_referer("wpsc_ajax_nonce");
         if (!current_user_can("manage_options")) {
             wp_send_json_error();
         }
-        $url = esc_url_raw($_POST["url"] ?? "");
+
+        $url = isset($_POST["url"]) ? esc_url_raw($_POST["url"]) : "";
         if (empty($url)) {
-            wp_send_json_error();
+            wp_send_json_error("No URL provided");
         }
-        wp_remote_get($url, [
-            "timeout" => 5,
+
+        if (!str_starts_with($url, home_url("/"))) {
+            wp_send_json_error("External URLs are not allowed");
+        }
+
+        // --- 1. Desktop Request ---
+        $desktopArgs = [
+            "timeout" => 10,
             "blocking" => true,
-            "sslverify" => false,
-        ]);
-        wp_send_json_success();
+            "cookies" => [],
+            "headers" => [
+                "User-Agent" => "WPS-Cache-Preloader/1.0; " . home_url(),
+            ],
+            // Optional: Disable SSL verify for local envs if needed, usually better to keep on
+            "sslverify" => apply_filters("https_local_ssl_verify", true),
+        ];
+
+        $resDesktop = wp_safe_remote_get($url, $desktopArgs);
+        $codeDesktop = is_wp_error($resDesktop)
+            ? 0
+            : wp_remote_retrieve_response_code($resDesktop);
+
+        // --- 2. Mobile Request ---
+        // Using a generic iPhone UA to match the 'Mobile' regex in HTMLCache.php
+        $mobileUA =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1";
+
+        $mobileArgs = [
+            "timeout" => 10,
+            "blocking" => true,
+            "cookies" => [],
+            "headers" => [
+                "User-Agent" => $mobileUA,
+            ],
+            "sslverify" => apply_filters("https_local_ssl_verify", true),
+        ];
+
+        $resMobile = wp_safe_remote_get($url, $mobileArgs);
+        $codeMobile = is_wp_error($resMobile)
+            ? 0
+            : wp_remote_retrieve_response_code($resMobile);
+
+        // --- Response Handling ---
+
+        $errors = [];
+        if (is_wp_error($resDesktop)) {
+            $errors[] = "Desk: " . $resDesktop->get_error_message();
+        }
+        if (is_wp_error($resMobile)) {
+            $errors[] = "Mob: " . $resMobile->get_error_message();
+        }
+
+        if (!empty($errors) && $codeDesktop === 0 && $codeMobile === 0) {
+            // Both failed completely
+            wp_send_json_error(implode(", ", $errors));
+        }
+
+        // Success if at least one worked or returned a valid HTTP code
+        $statusMsg = "Cached (D:$codeDesktop, M:$codeMobile)";
+
+        // If 200 OK
+        if (
+            ($codeDesktop >= 200 && $codeDesktop < 300) ||
+            ($codeMobile >= 200 && $codeMobile < 300)
+        ) {
+            wp_send_json_success($statusMsg);
+        } else {
+            // e.g. 404s or 500s
+            wp_send_json_error("HTTP Error " . $statusMsg);
+        }
     }
 
     private function getSystemReport(): string
