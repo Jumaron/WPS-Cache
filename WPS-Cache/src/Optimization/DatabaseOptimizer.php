@@ -132,21 +132,24 @@ class DatabaseOptimizer
         global $wpdb;
         $count = 0;
 
+        // Optimization: Convert to hash map for O(1) lookups
+        $lookup = array_flip($items);
+
         // Batch 1: Posts (Revisions, Auto Drafts, Trash)
         // Optimization: Combine multiple DELETE queries into one to reduce DB round-trips and lock contention.
         $post_conditions = [];
 
-        if (in_array("revisions", $items)) {
+        if (isset($lookup["revisions"])) {
             $post_conditions[] = "a.post_type = 'revision'";
             $count++;
         }
 
-        if (in_array("auto_drafts", $items)) {
+        if (isset($lookup["auto_drafts"])) {
             $post_conditions[] = "a.post_type = 'auto-draft'";
             $count++;
         }
 
-        if (in_array("trashed_posts", $items)) {
+        if (isset($lookup["trashed_posts"])) {
             $post_conditions[] = "a.post_status = 'trash'";
             $count++;
         }
@@ -165,13 +168,13 @@ class DatabaseOptimizer
         // Optimization: Use IN clause to delete multiple comment types in a single query.
         $comment_types = [];
 
-        if (in_array("spam_comments", $items)) {
+        if (isset($lookup["spam_comments"])) {
             $comment_types[] = "'spam'";
             $clean_orphaned_commentmeta = true;
             $count++;
         }
 
-        if (in_array("trashed_comments", $items)) {
+        if (isset($lookup["trashed_comments"])) {
             $comment_types[] = "'trash'";
             $clean_orphaned_commentmeta = true;
             $count++;
@@ -194,7 +197,7 @@ class DatabaseOptimizer
             );
         }
 
-        if (in_array("expired_transients", $items)) {
+        if (isset($lookup["expired_transients"])) {
             $time = time();
 
             // SOTA: Delete both the timeout key AND the data key using multi-table DELETE.
@@ -228,7 +231,7 @@ class DatabaseOptimizer
             $count++;
         }
 
-        if (in_array("all_transients", $items)) {
+        if (isset($lookup["all_transients"])) {
             // Optimization: Split into 2 queries to ensure MySQL uses the index range scan
             // instead of a full table scan or inefficient index merge caused by OR.
             $wpdb->query(
@@ -240,7 +243,7 @@ class DatabaseOptimizer
             $count++;
         }
 
-        if (in_array("optimize_tables", $items)) {
+        if (isset($lookup["optimize_tables"])) {
             // Sentinel Fix: Limit optimization to this site's tables and escape table names
             // Prevents touching shared DB tables and mitigates potential injection risks
             $like = $wpdb->esc_like($wpdb->prefix) . "%";
