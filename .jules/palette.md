@@ -43,3 +43,7 @@
 ## 2024-05-21 - Consistent Button Icons
 **Learning:** When most primary actions in an interface have icons, a text-only primary button feels unpolished and less noticeable. Consistent iconography helps users quickly scan for actions.
 **Action:** Ensure all primary action buttons have an accompanying icon that represents the action.
+
+## 2024-05-23 - Server-Side Flash Message Accessibility
+**Learning:** Flash messages rendered via PHP (like `WPSCache\Admin\UI\NoticeManager`) often appear silently to screen reader users after a page reload. Adding explicit `role="alert"` (for errors) and `role="status"` (for success/warnings) ensures these critical updates are announced immediately upon page load, matching the experience of sighted users.
+**Action:** Always verify that server-rendered notifications include appropriate ARIA roles, not just client-side injected ones.
