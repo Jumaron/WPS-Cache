@@ -351,6 +351,13 @@ final class Plugin
             ) {
                 error_log("WPS Cache: Failed: $path");
             }
+
+            // Sentinel: Create index.php to prevent directory listing (Information Disclosure)
+            // Critical for Nginx/IIS where .htaccess is ignored.
+            $silence = rtrim($path, "/") . "/index.php";
+            if (!file_exists($silence)) {
+                @file_put_contents($silence, "<?php // Silence is golden");
+            }
         }
     }
 
