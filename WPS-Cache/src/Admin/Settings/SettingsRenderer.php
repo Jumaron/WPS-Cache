@@ -92,9 +92,9 @@ class SettingsRenderer
         $current = $settings[$key] ?? ""; ?>
         <div class="wpsc-setting-row" style="flex-direction: column; align-items: flex-start;">
             <div class="wpsc-setting-info" style="margin-bottom: 10px;">
-                <span class="wpsc-setting-label"><?php echo esc_html(
-                    $label,
-                ); ?></span>
+                <span class="wpsc-setting-label" id="wpsc_label_<?php echo esc_attr(
+                    $key,
+                ); ?>"><?php echo esc_html($label); ?></span>
                 <?php if ($description): ?>
                     <div class="wpsc-setting-sub"><?php echo esc_html(
                         $description,
@@ -102,7 +102,9 @@ class SettingsRenderer
                 <?php endif; ?>
             </div>
 
-            <div class="wpsc-radio-grid">
+            <div class="wpsc-radio-grid" role="radiogroup" aria-labelledby="wpsc_label_<?php echo esc_attr(
+                $key,
+            ); ?>">
                 <?php foreach ($options as $optValue => $optLabel): ?>
                     <label class="wpsc-radio-card">
                         <input type="radio"
