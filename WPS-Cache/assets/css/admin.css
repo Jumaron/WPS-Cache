@@ -626,3 +626,32 @@ progress.wpsc-progress-bar::-webkit-progress-value {
     background: rgba(0, 0, 0, 0.05);
     color: var(--wpsc-text-main);
 }
+
+/* --- Accessibility Focus Rings --- */
+
+/* Switches */
+.wpsc-switch input:focus + .wpsc-slider {
+    box-shadow: 0 0 0 4px var(--wpsc-primary-soft);
+}
+
+/* Radio Cards */
+.wpsc-radio-card input:focus + .wpsc-radio-card-content {
+    box-shadow: 0 0 0 4px var(--wpsc-primary-soft);
+    border-color: var(--wpsc-primary);
+}
+
+/* Buttons & Interactive Elements */
+.wpsc-btn-primary:focus-visible,
+.wpsc-btn-secondary:focus-visible,
+.wpsc-btn-ghost-danger:focus-visible,
+.wpsc-dismiss-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px var(--wpsc-primary-soft);
+    position: relative;
+    z-index: 10;
+}
+
+.wpsc-btn-secondary:focus-visible,
+.wpsc-btn-ghost-danger:focus-visible {
+    border-color: var(--wpsc-primary);
+}
