@@ -99,6 +99,7 @@ class ToolsManager
                 <p class="wpsc-setting-desc">
                     Generates cache files for your content.
                     <br><strong>Method:</strong> Client-side Queue (Prevents server timeouts).
+                    <br><strong>Scope:</strong> Preloads both Desktop and Mobile versions.
                 </p>
 
                 <div id="wpsc-preload-progress"
@@ -196,14 +197,14 @@ class ToolsManager
 
     private function redirectWithNotice(string $message, string $type): void
     {
-        // Simple notice implementation relying on transient or query arg
-        // Ideally use NoticeManager, but keeping dependencies light here.
         set_transient(
             "wpsc_admin_notices",
             [["message" => $message, "type" => $type]],
             60,
         );
-        wp_safe_redirect(remove_query_arg(["action", "_wpnonce"], wp_get_referer()));
+        wp_safe_redirect(
+            remove_query_arg(["action", "_wpnonce"], wp_get_referer()),
+        );
         exit();
     }
 
@@ -247,6 +248,7 @@ class ToolsManager
 
     /**
      * AJAX Step 2: Process a single URL.
+     * Updated to hit both Desktop and Mobile versions.
      */
     public function handleProcessUrl(): void
     {
@@ -264,24 +266,70 @@ class ToolsManager
             wp_send_json_error("External URLs are not allowed");
         }
 
-        $response = wp_safe_remote_get($url, [
+        // --- 1. Desktop Request ---
+        $desktopArgs = [
             "timeout" => 10,
             "blocking" => true,
             "cookies" => [],
             "headers" => [
                 "User-Agent" => "WPS-Cache-Preloader/1.0; " . home_url(),
             ],
-        ]);
+            // Optional: Disable SSL verify for local envs if needed, usually better to keep on
+            "sslverify" => apply_filters("https_local_ssl_verify", true),
+        ];
 
-        if (is_wp_error($response)) {
-            wp_send_json_error($response->get_error_message());
+        $resDesktop = wp_safe_remote_get($url, $desktopArgs);
+        $codeDesktop = is_wp_error($resDesktop)
+            ? 0
+            : wp_remote_retrieve_response_code($resDesktop);
+
+        // --- 2. Mobile Request ---
+        // Using a generic iPhone UA to match the 'Mobile' regex in HTMLCache.php
+        $mobileUA =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1";
+
+        $mobileArgs = [
+            "timeout" => 10,
+            "blocking" => true,
+            "cookies" => [],
+            "headers" => [
+                "User-Agent" => $mobileUA,
+            ],
+            "sslverify" => apply_filters("https_local_ssl_verify", true),
+        ];
+
+        $resMobile = wp_safe_remote_get($url, $mobileArgs);
+        $codeMobile = is_wp_error($resMobile)
+            ? 0
+            : wp_remote_retrieve_response_code($resMobile);
+
+        // --- Response Handling ---
+
+        $errors = [];
+        if (is_wp_error($resDesktop)) {
+            $errors[] = "Desk: " . $resDesktop->get_error_message();
+        }
+        if (is_wp_error($resMobile)) {
+            $errors[] = "Mob: " . $resMobile->get_error_message();
         }
 
-        $code = wp_remote_retrieve_response_code($response);
-        if ($code >= 200 && $code < 300) {
-            wp_send_json_success("Cached ($code)");
+        if (!empty($errors) && $codeDesktop === 0 && $codeMobile === 0) {
+            // Both failed completely
+            wp_send_json_error(implode(", ", $errors));
+        }
+
+        // Success if at least one worked or returned a valid HTTP code
+        $statusMsg = "Cached (D:$codeDesktop, M:$codeMobile)";
+
+        // If 200 OK
+        if (
+            ($codeDesktop >= 200 && $codeDesktop < 300) ||
+            ($codeMobile >= 200 && $codeMobile < 300)
+        ) {
+            wp_send_json_success($statusMsg);
         } else {
-            wp_send_json_error("HTTP $code");
+            // e.g. 404s or 500s
+            wp_send_json_error("HTTP Error " . $statusMsg);
         }
     }
 

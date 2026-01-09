@@ -37,6 +37,7 @@ class CronManager
 
     /**
      * The actual worker function that runs in the background.
+     * Updated to preload both Desktop and Mobile versions.
      */
     public function runPreload(): void
     {
@@ -44,24 +45,42 @@ class CronManager
         // We limit to 50 to prevent server overload during background processing
         $urls = $this->getPriorityUrls(50);
 
+        // Define User Agents
+        $desktopUA = "WPS-Cache-Cron-Preloader/1.0";
+        // Matches regex in HTMLCache: /(Mobile|Android|...)/i
+        $mobileUA =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1";
+
         // 2. Crawl them (Warm up cache)
         foreach ($urls as $url) {
             // Sentinel: Restrict preloader to local site only to prevent SSRF
-            // Use home_url('/') to ensure trailing slash and prevent partial match bypass (e.g. site.com.evil.com)
             if (!str_starts_with($url, home_url("/"))) {
                 continue;
             }
 
-            // Sentinel: Use wp_safe_remote_get to prevent SSRF and enforce SSL verification
+            // --- Desktop Request ---
             wp_safe_remote_get($url, [
                 "timeout" => 5,
-                "blocking" => true, // Wait for it to generate
+                "blocking" => true,
                 "cookies" => [],
-                "headers" => ["User-Agent" => "WPS-Cache-Cron-Preloader"],
+                "headers" => ["User-Agent" => $desktopUA],
+                "sslverify" => apply_filters("https_local_ssl_verify", true),
             ]);
 
             // Be nice to the CPU
-            usleep(200000); // 0.2s pause between requests
+            usleep(100000); // 0.1s pause
+
+            // --- Mobile Request ---
+            wp_safe_remote_get($url, [
+                "timeout" => 5,
+                "blocking" => true,
+                "cookies" => [],
+                "headers" => ["User-Agent" => $mobileUA],
+                "sslverify" => apply_filters("https_local_ssl_verify", true),
+            ]);
+
+            // Be nice to the CPU
+            usleep(100000); // 0.1s pause
         }
 
         // 3. Log last run time for the Admin UI
