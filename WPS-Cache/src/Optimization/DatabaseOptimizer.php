@@ -76,32 +76,25 @@ class DatabaseOptimizer
         // to evaluate the CASE statement, even for non-expired items. By splitting, we count totals using ONLY the index.
         $time = time();
 
-        // 1. Regular Transients
-        $local_expired = $wpdb->get_var(
+        // 1. Expired Transients (Local + Site)
+        // Optimization: Combined "Local" and "Site" checks into one query.
+        // This requires reading 'option_value' but does it in 1 round-trip instead of 2.
+        $expired_count = $wpdb->get_var(
             "SELECT COUNT(*) FROM $wpdb->options
-             WHERE option_name LIKE '\_transient\_timeout\_%'
+             WHERE (option_name LIKE '\_transient\_timeout\_%' OR option_name LIKE '\_site\_transient\_timeout\_%')
              AND option_value < '$time'"
         );
 
-        $local_total = $wpdb->get_var(
+        // 2. All Transients (Local + Site)
+        // Optimization: Combined "Local" and "Site" checks into one query.
+        // CRITICAL: We DO NOT select 'option_value' here to ensure MySQL uses an "Index Only Scan" on 'option_name'.
+        $total_count = $wpdb->get_var(
             "SELECT COUNT(*) FROM $wpdb->options
-             WHERE option_name LIKE '\_transient\_%'"
+             WHERE option_name LIKE '\_transient\_%' OR option_name LIKE '\_site\_transient\_%'"
         );
 
-        // 2. Site Transients
-        $site_expired = $wpdb->get_var(
-            "SELECT COUNT(*) FROM $wpdb->options
-             WHERE option_name LIKE '\_site\_transient\_timeout\_%'
-             AND option_value < '$time'"
-        );
-
-        $site_total = $wpdb->get_var(
-            "SELECT COUNT(*) FROM $wpdb->options
-             WHERE option_name LIKE '\_site\_transient\_%'"
-        );
-
-        $stats["expired_transients"] = (int) $local_expired + (int) $site_expired;
-        $stats["all_transients"] = (int) $local_total + (int) $site_total;
+        $stats["expired_transients"] = (int) $expired_count;
+        $stats["all_transients"] = (int) $total_count;
 
         // Overhead
         $stats["optimize_tables"] = $this->getTableOverhead($wpdb);
