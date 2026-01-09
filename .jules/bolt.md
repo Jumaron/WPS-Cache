@@ -21,3 +21,7 @@
 ## 2026-01-24 - [DOM Traversal Optimization]
 **Learning:** Iterating over all DOM nodes (O(N)) and calling `getAttribute` on each to check for IDs/classes incurs significant function call overhead (PHP to C context switch).
 **Action:** Replaced linear DOM iteration with `DOMXPath` queries (`//@id`, `//@class`) in `CriticalCSSManager`. This offloads the filtering to the optimized C implementation of libxml, effectively replacing N PHP function calls with 2 optimized C lookups, especially beneficial when attributes are sparse.
+
+## 2026-01-28 - [Optimizing CSS String Tokenization]
+**Learning:** Parsing strings character-by-character in PHP is inefficient due to interpreter overhead.
+**Action:** Replaced the manual `while` loop for CSS string tokenization in `MinifyCSS` with `strcspn`, using a mask of `\\\n` plus the quote character to quickly skip non-special characters. This mirrors the earlier optimization in `MinifyJS`.
