@@ -780,8 +780,10 @@ class SettingsManager
             if(toggleBtn) {
                 toggleBtn.addEventListener('click', function() {
                     const isSelect = toggleBtn.dataset.state !== 'deselect';
-                    checkboxes.forEach(cb => cb.checked = isSelect);
-                    updateButtonState();
+                    checkboxes.forEach(cb => {
+                        cb.checked = isSelect;
+                        cb.dispatchEvent(new Event('change'));
+                    });
                 });
             }
 
