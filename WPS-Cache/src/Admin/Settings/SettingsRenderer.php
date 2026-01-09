@@ -147,6 +147,9 @@ class SettingsRenderer
     ): void {
         $value = $settings[$key] ?? "";
         if ($type === "password") {
+            if ($value !== "") {
+                $attrs["placeholder"] = "••••••••";
+            }
             $value = "";
         } // Mask
 

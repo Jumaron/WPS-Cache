@@ -7,3 +7,7 @@
 ## 2024-05-21 - Custom Control Focus Management
 **Learning:** Custom form controls (like Radio Cards and Switches) that hide the native input must provide explicit, high-contrast focus indicators for keyboard users.
 **Action:** Use `:focus-visible` on the container or adjacent sibling selector (e.g., `input:focus + .slider`) to replicate the native focus ring using `--wpsc-primary-soft`.
+
+## 2024-05-22 - Password Input State
+**Learning:** Empty password fields for saved credentials cause user anxiety ("Did it save?").
+**Action:** Use `placeholder="••••••••"` to indicate a saved value while keeping the actual value hidden (empty) in the input.
