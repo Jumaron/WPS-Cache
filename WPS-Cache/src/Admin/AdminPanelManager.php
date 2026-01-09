@@ -56,6 +56,7 @@ final class AdminPanelManager
         if ($hook !== "toplevel_page_wps-cache") {
             return;
         }
+
         wp_enqueue_style(
             "wpsc-admin-css",
             WPSC_PLUGIN_URL . "assets/css/admin.css",
@@ -69,6 +70,7 @@ final class AdminPanelManager
             WPSC_VERSION,
             true,
         );
+
         wp_localize_script("wpsc-admin-js", "wpsc_admin", [
             "ajax_url" => admin_url("admin-ajax.php"),
             "nonce" => wp_create_nonce("wpsc_ajax_nonce"),
@@ -76,6 +78,20 @@ final class AdminPanelManager
                 "saving" => __("Saving...", "wps-cache"),
                 "purge_confirm" => __("Are you sure?", "wps-cache"),
                 "copied" => __("Copied!", "wps-cache"),
+
+                // Preloader Strings
+                "preload_start" => __("Gathering URLs...", "wps-cache"),
+                "preload_loading" => __("Preloading...", "wps-cache"),
+                "preload_done" => __("Done!", "wps-cache"),
+                "preload_complete" => __("Preloading Complete!", "wps-cache"),
+
+                // Password Toggles
+                "show_password" => __("Show password", "wps-cache"),
+                "hide_password" => __("Hide password", "wps-cache"),
+
+                // Misc
+                "purging" => __("Purging...", "wps-cache"),
+                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
             ],
         ]);
     }
@@ -156,7 +172,7 @@ final class AdminPanelManager
                         </div>
                     </header>
 
-                    <!-- Notices Area (Now handled inside NoticeManager so no gap if empty) -->
+                    <!-- Notices Area -->
                     <?php settings_errors("wpsc_settings"); ?>
                     <?php $this->noticeManager->renderNotices(); ?>
 
