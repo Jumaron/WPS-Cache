@@ -80,6 +80,26 @@ class BloatOptimizer
             });
         }
 
+        // 3.5. Disable User Enumeration (Security)
+        if (!empty($this->settings["bloat_disable_user_enumeration"])) {
+            // Block Author Archives (/?author=N)
+            add_action("template_redirect", function () {
+                if (is_author() && isset($_GET["author"])) {
+                    wp_redirect(home_url(), 301);
+                    exit();
+                }
+            });
+
+            // Block REST API Users Endpoint
+            add_filter("rest_endpoints", function ($endpoints) {
+                if (!is_user_logged_in() && isset($endpoints["/wp/v2/users"])) {
+                    unset($endpoints["/wp/v2/users"]);
+                    unset($endpoints["/wp/v2/users/(?P<id>[\d]+)"]);
+                }
+                return $endpoints;
+            });
+        }
+
         // 4. Hide WP Version (Security)
         if (!empty($this->settings["bloat_hide_wp_version"])) {
             remove_action("wp_head", "wp_generator");

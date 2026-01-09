@@ -635,6 +635,12 @@ class SettingsManager
                 $settings,
             );
             $this->renderer->renderToggle(
+                "bloat_disable_user_enumeration",
+                "Disable User Enumeration",
+                "Block author scans and user REST endpoints.",
+                $settings,
+            );
+            $this->renderer->renderToggle(
                 "bloat_hide_wp_version",
                 "Hide WP Version",
                 "",
