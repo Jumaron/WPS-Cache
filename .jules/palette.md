@@ -39,3 +39,7 @@
 ## 2024-05-31 - Readonly Technical Inputs
 **Learning:** Readonly textareas containing technical data (logs, reports) can still trigger spellcheck in some browsers or contexts, distracting from the data.
 **Action:** Apply `spellcheck="false"`, `autocorrect="off"`, and `autocapitalize="none"` even to readonly technical textareas.
+
+## 2024-05-21 - Consistent Button Icons
+**Learning:** When most primary actions in an interface have icons, a text-only primary button feels unpolished and less noticeable. Consistent iconography helps users quickly scan for actions.
+**Action:** Ensure all primary action buttons have an accompanying icon that represents the action.
