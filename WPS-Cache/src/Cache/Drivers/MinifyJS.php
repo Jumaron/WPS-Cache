@@ -15,33 +15,54 @@ final class MinifyJS extends AbstractCacheDriver
     private const T_WORD = 5;
     private const T_TEMPLATE = 6;
     private const TOKENIZER_MASK = " \t\n\r\v\f/\"'`{}()[],:;?^~.!<>=+-*%&|";
-    private const SINGLE_CHAR_OPERATORS = [
-        "{" => true,
-        "}" => true,
-        "(" => true,
-        ")" => true,
-        "[" => true,
-        "]" => true,
-        "," => true,
-        ":" => true,
-        ";" => true,
-        "?" => true,
-        "^" => true,
-        "~" => true,
+
+    // Dispatch constants for O(1) lookup
+    private const D_WHITESPACE = 0;
+    private const D_SLASH = 1;
+    private const D_QUOTE = 2;
+    private const D_TEMPLATE = 3;
+    private const D_SINGLE_OP = 4;
+    private const D_COMPLEX_OP = 5;
+
+    // Map special characters to their handler types
+    private const DISPATCH_MAP = [
+        " " => self::D_WHITESPACE,
+        "\t" => self::D_WHITESPACE,
+        "\n" => self::D_WHITESPACE,
+        "\r" => self::D_WHITESPACE,
+        "\v" => self::D_WHITESPACE,
+        "\f" => self::D_WHITESPACE,
+        "/" => self::D_SLASH,
+        '"' => self::D_QUOTE,
+        "'" => self::D_QUOTE,
+        "`" => self::D_TEMPLATE,
+        // Single Char Operators
+        "{" => self::D_SINGLE_OP,
+        "}" => self::D_SINGLE_OP,
+        "(" => self::D_SINGLE_OP,
+        ")" => self::D_SINGLE_OP,
+        "[" => self::D_SINGLE_OP,
+        "]" => self::D_SINGLE_OP,
+        "," => self::D_SINGLE_OP,
+        ":" => self::D_SINGLE_OP,
+        ";" => self::D_SINGLE_OP,
+        "?" => self::D_SINGLE_OP,
+        "^" => self::D_SINGLE_OP,
+        "~" => self::D_SINGLE_OP,
+        // Complex Operators Start
+        "." => self::D_COMPLEX_OP,
+        "!" => self::D_COMPLEX_OP,
+        "<" => self::D_COMPLEX_OP,
+        ">" => self::D_COMPLEX_OP,
+        "=" => self::D_COMPLEX_OP,
+        "+" => self::D_COMPLEX_OP,
+        "-" => self::D_COMPLEX_OP,
+        "*" => self::D_COMPLEX_OP,
+        "%" => self::D_COMPLEX_OP,
+        "&" => self::D_COMPLEX_OP,
+        "|" => self::D_COMPLEX_OP,
     ];
-    private const COMPLEX_OPERATORS_START = [
-        "." => true,
-        "!" => true,
-        "<" => true,
-        ">" => true,
-        "=" => true,
-        "+" => true,
-        "-" => true,
-        "*" => true,
-        "%" => true,
-        "&" => true,
-        "|" => true,
-    ];
+
     private const REGEX_START_KEYWORDS = [
         "case" => true,
         "else" => true,
@@ -296,159 +317,165 @@ final class MinifyJS extends AbstractCacheDriver
 
         while ($i < $len) {
             $char = $js[$i];
-            if (ctype_space($char)) {
-                $start = $i;
-                $i += strspn($js, " \t\n\r\v\f", $i);
-                $hasNewline = false;
-                $p = strpos($js, "\n", $start);
-                if ($p !== false && $p < $i) {
-                    $hasNewline = true;
-                } else {
-                    $p = strpos($js, "\r", $start);
+            $dispatch = self::DISPATCH_MAP[$char] ?? null;
+
+            if ($dispatch !== null) {
+                if ($dispatch === self::D_WHITESPACE) {
+                    $start = $i;
+                    $i += strspn($js, " \t\n\r\v\f", $i);
+                    $hasNewline = false;
+                    $p = strpos($js, "\n", $start);
                     if ($p !== false && $p < $i) {
                         $hasNewline = true;
-                    }
-                }
-                yield [
-                    "type" => self::T_WHITESPACE,
-                    "value" => $hasNewline ? "\n" : " ",
-                ];
-                continue;
-            }
-            if ($char === "/") {
-                $next = $js[$i + 1] ?? "";
-                if ($next === "/" || $next === "*") {
-                    $start = $i;
-                    $i += 2;
-                    if ($next === "/") {
-                        $i += strcspn($js, "\n\r", $i);
                     } else {
-                        $pos = strpos($js, "*/", $i);
-                        if ($pos === false) {
-                            $i = $len;
-                        } else {
-                            $i = $pos + 2;
+                        $p = strpos($js, "\r", $start);
+                        if ($p !== false && $p < $i) {
+                            $hasNewline = true;
                         }
                     }
                     yield [
-                        "type" => self::T_COMMENT,
-                        "value" => substr($js, $start, $i - $start),
+                        "type" => self::T_WHITESPACE,
+                        "value" => $hasNewline ? "\n" : " ",
                     ];
                     continue;
                 }
-                if ($this->isRegexStart($lastMeaningfulToken)) {
-                    $start = $i;
+                if ($dispatch === self::D_SLASH) {
+                    $next = $js[$i + 1] ?? "";
+                    if ($next === "/" || $next === "*") {
+                        $start = $i;
+                        $i += 2;
+                        if ($next === "/") {
+                            $i += strcspn($js, "\n\r", $i);
+                        } else {
+                            $pos = strpos($js, "*/", $i);
+                            if ($pos === false) {
+                                $i = $len;
+                            } else {
+                                $i = $pos + 2;
+                            }
+                        }
+                        yield [
+                            "type" => self::T_COMMENT,
+                            "value" => substr($js, $start, $i - $start),
+                        ];
+                        continue;
+                    }
+                    if ($this->isRegexStart($lastMeaningfulToken)) {
+                        $start = $i;
+                        $i++;
+                        $inClass = false;
+                        while ($i < $len) {
+                            $len_chunk = strcspn(
+                                $js,
+                                $inClass ? "\\\n\r]" : "\\\n\r/[",
+                                $i,
+                            );
+                            $i += $len_chunk;
+                            if ($i >= $len) {
+                                break;
+                            }
+                            $c = $js[$i];
+                            if ($c === "\\") {
+                                $i += 2;
+                                continue;
+                            }
+                            if ($c === "[") {
+                                $inClass = true;
+                                $i++;
+                                continue;
+                            }
+                            if ($c === "]") {
+                                $inClass = false;
+                                $i++;
+                                continue;
+                            }
+                            if ($c === "/") {
+                                $i++;
+                                while ($i < $len && ctype_alpha($js[$i])) {
+                                    $i++;
+                                }
+                                break;
+                            }
+                            break;
+                        }
+                        yield ($lastMeaningfulToken = [
+                            "type" => self::T_REGEX,
+                            "value" => substr($js, $start, $i - $start),
+                        ]);
+                        continue;
+                    }
+                    yield ($lastMeaningfulToken = [
+                        "type" => self::T_OPERATOR,
+                        "value" => "/",
+                    ]);
                     $i++;
-                    $inClass = false;
+                    continue;
+                }
+                if ($dispatch === self::D_QUOTE) {
+                    $start = $i++;
+                    $mask = "\\\n\r" . $char;
                     while ($i < $len) {
-                        $len_chunk = strcspn(
-                            $js,
-                            $inClass ? "\\\n\r]" : "\\\n\r/[",
-                            $i,
-                        );
-                        $i += $len_chunk;
+                        $i += strcspn($js, $mask, $i);
                         if ($i >= $len) {
                             break;
                         }
                         $c = $js[$i];
+                        if ($c === $char) {
+                            $i++;
+                            break;
+                        }
                         if ($c === "\\") {
                             $i += 2;
                             continue;
                         }
-                        if ($c === "[") {
-                            $inClass = true;
-                            $i++;
-                            continue;
-                        }
-                        if ($c === "]") {
-                            $inClass = false;
-                            $i++;
-                            continue;
-                        }
-                        if ($c === "/") {
-                            $i++;
-                            while ($i < $len && ctype_alpha($js[$i])) {
-                                $i++;
-                            }
-                            break;
-                        }
                         break;
                     }
                     yield ($lastMeaningfulToken = [
-                        "type" => self::T_REGEX,
+                        "type" => self::T_STRING,
                         "value" => substr($js, $start, $i - $start),
                     ]);
                     continue;
                 }
-                yield ($lastMeaningfulToken = [
-                    "type" => self::T_OPERATOR,
-                    "value" => "/",
-                ]);
-                $i++;
-                continue;
-            }
-            if ($char === '"' || $char === "'") {
-                $start = $i++;
-                $mask = "\\\n\r" . $char;
-                while ($i < $len) {
-                    $i += strcspn($js, $mask, $i);
-                    if ($i >= $len) {
-                        break;
-                    }
-                    $c = $js[$i];
-                    if ($c === $char) {
-                        $i++;
-                        break;
-                    }
-                    if ($c === "\\") {
+                if ($dispatch === self::D_TEMPLATE) {
+                    $start = $i++;
+                    $mask = "\\`";
+                    while ($i < $len) {
+                        $i += strcspn($js, $mask, $i);
+                        if ($i >= $len) {
+                            break;
+                        }
+                        if ($js[$i] === "`") {
+                            $i++;
+                            break;
+                        }
                         $i += 2;
-                        continue;
                     }
-                    break;
+                    yield ($lastMeaningfulToken = [
+                        "type" => self::T_TEMPLATE,
+                        "value" => substr($js, $start, $i - $start),
+                    ]);
+                    continue;
                 }
-                yield ($lastMeaningfulToken = [
-                    "type" => self::T_STRING,
-                    "value" => substr($js, $start, $i - $start),
-                ]);
-                continue;
-            }
-            if ($char === "`") {
-                $start = $i++;
-                $mask = "\\`";
-                while ($i < $len) {
-                    $i += strcspn($js, $mask, $i);
-                    if ($i >= $len) {
-                        break;
-                    }
-                    if ($js[$i] === "`") {
-                        $i++;
-                        break;
-                    }
-                    $i += 2;
+                if ($dispatch === self::D_SINGLE_OP) {
+                    yield ($lastMeaningfulToken = [
+                        "type" => self::T_OPERATOR,
+                        "value" => $char,
+                    ]);
+                    $i++;
+                    continue;
                 }
-                yield ($lastMeaningfulToken = [
-                    "type" => self::T_TEMPLATE,
-                    "value" => substr($js, $start, $i - $start),
-                ]);
-                continue;
+                if ($dispatch === self::D_COMPLEX_OP) {
+                    $start = $i;
+                    $i += strspn($js, ".!<>=+-*%&|", $i);
+                    yield ($lastMeaningfulToken = [
+                        "type" => self::T_OPERATOR,
+                        "value" => substr($js, $start, $i - $start),
+                    ]);
+                    continue;
+                }
             }
-            if (isset(self::SINGLE_CHAR_OPERATORS[$char])) {
-                yield ($lastMeaningfulToken = [
-                    "type" => self::T_OPERATOR,
-                    "value" => $char,
-                ]);
-                $i++;
-                continue;
-            }
-            if (isset(self::COMPLEX_OPERATORS_START[$char])) {
-                $start = $i;
-                $i += strspn($js, ".!<>=+-*%&|", $i);
-                yield ($lastMeaningfulToken = [
-                    "type" => self::T_OPERATOR,
-                    "value" => substr($js, $start, $i - $start),
-                ]);
-                continue;
-            }
+
+            // T_WORD (Fallback)
             $start = $i;
             while ($i < $len) {
                 $i += strcspn($js, self::TOKENIZER_MASK, $i);
