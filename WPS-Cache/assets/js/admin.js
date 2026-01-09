@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initCopyTriggers();
   initPasswordToggles();
   initFormSubmissions();
-  initPurgeButton();
+  initConfirmButtons();
   initDismissButtons();
   initSwitches();
 });
@@ -53,6 +53,7 @@ function initPasswordToggles() {
       if (isPassword) {
         input.type = "text";
         this.setAttribute("aria-label", wpsc_admin.strings.hide_password);
+        this.setAttribute("title", wpsc_admin.strings.hide_password);
         if (icon) {
           icon.classList.remove("dashicons-visibility");
           icon.classList.add("dashicons-hidden");
@@ -60,6 +61,7 @@ function initPasswordToggles() {
       } else {
         input.type = "password";
         this.setAttribute("aria-label", wpsc_admin.strings.show_password);
+        this.setAttribute("title", wpsc_admin.strings.show_password);
         if (icon) {
           icon.classList.remove("dashicons-hidden");
           icon.classList.add("dashicons-visibility");
@@ -69,9 +71,9 @@ function initPasswordToggles() {
   });
 }
 
-function initPurgeButton() {
+function initConfirmButtons() {
   const triggers = document.querySelectorAll(
-    "#wpsc-purge-all, .wpsc-purge-trigger a",
+    "#wpsc-purge-all, .wpsc-purge-trigger a, .wpsc-confirm-trigger",
   );
 
   triggers.forEach((trigger) => {
@@ -81,15 +83,22 @@ function initPurgeButton() {
     }
 
     trigger.addEventListener("click", function (e) {
-      if (!confirm(wpsc_admin.strings.purge_confirm)) {
+      const message =
+        trigger.dataset.confirm || wpsc_admin.strings.purge_confirm;
+
+      if (!confirm(message)) {
         e.preventDefault();
       } else {
         // User confirmed, link will be followed.
         // Show loading state immediately.
         trigger.classList.add("disabled");
+
+        const loadingText =
+          trigger.dataset.loadingText || wpsc_admin.strings.purging;
+
         trigger.innerHTML =
           '<span class="dashicons dashicons-update wpsc-spin" aria-hidden="true" style="vertical-align: middle;"></span> ' +
-          wpsc_admin.strings.purging;
+          loadingText;
       }
     });
   });
