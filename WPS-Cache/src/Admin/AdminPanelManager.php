@@ -34,6 +34,7 @@ final class AdminPanelManager
     private function initializeHooks(): void
     {
         add_action("admin_menu", [$this, "registerAdminMenu"]);
+        add_action("admin_bar_menu", [$this, "registerAdminBarNode"], 99);
         add_action("admin_enqueue_scripts", [$this, "enqueueAssets"]);
         add_action("admin_post_wpsc_clear_cache", [$this, "handleManualClear"]);
     }
@@ -49,6 +50,40 @@ final class AdminPanelManager
             "dashicons-performance",
             100,
         );
+    }
+
+    public function registerAdminBarNode(\WP_Admin_Bar $wp_admin_bar): void
+    {
+        if (!current_user_can("manage_options")) {
+            return;
+        }
+        $wp_admin_bar->add_node([
+            "id" => "wpsc-toolbar",
+            "title" => "WPS Cache",
+            "href" => admin_url("admin.php?page=wps-cache"),
+        ]);
+        $purge_url = wp_nonce_url(
+            admin_url("admin-post.php?action=wpsc_clear_cache"),
+            "wpsc_clear_cache",
+        );
+        $wp_admin_bar->add_node([
+            "parent" => "wpsc-toolbar",
+            "id" => "wpsc-purge",
+            "title" => "Purge All Caches",
+            "href" => $purge_url,
+            "meta" => [
+                "class" => "wpsc-purge-trigger",
+                "onclick" =>
+                    "return confirm('" .
+                    esc_js(
+                        __(
+                            "Are you sure you want to purge all caches?",
+                            "wps-cache",
+                        ),
+                    ) .
+                    "');",
+            ],
+        ]);
     }
 
     public function enqueueAssets(string $hook): void
