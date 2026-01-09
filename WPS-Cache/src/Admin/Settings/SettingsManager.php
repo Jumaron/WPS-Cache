@@ -804,10 +804,16 @@ class SettingsManager
                     btn.disabled = true;
                     btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin"></span> Optimizing...';
 
+                    // Sentinel Fix: Correctly serialize array parameters for PHP handling.
+                    // Previous 'URLSearchParams' usage sent 'items[]=a,b' (string) which caused silent failures.
+                    // By appending individually, we send 'items[]=a&items[]=b' which PHP parses correctly as an array.
+                    const params = new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce });
+                    items.forEach(item => params.append('items[]', item));
+
                     fetch(wpsc_admin.ajax_url, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce, 'items[]': items })
+                        body: params
                     }).then(res => res.json()).then(res => {
                         if(res.success) {
                             btn.innerHTML = '<span class="dashicons dashicons-yes"></span> Cleaned!';
