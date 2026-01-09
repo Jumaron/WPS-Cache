@@ -46,8 +46,7 @@ function initSwitches() {
       this.setAttribute("aria-checked", this.checked ? "true" : "false");
       const row = this.closest(".wpsc-setting-row");
       if (row) {
-        // Subtle highlight effect on change
-        row.style.backgroundColor = "rgba(79, 70, 229, 0.05)";
+        row.style.backgroundColor = "var(--wpsc-primary-soft)";
         setTimeout(() => (row.style.backgroundColor = ""), 400);
       }
     });

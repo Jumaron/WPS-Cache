@@ -75,11 +75,18 @@ final class AdminPanelManager
             "ajax_url" => admin_url("admin-ajax.php"),
             "nonce" => wp_create_nonce("wpsc_ajax_nonce"),
             "strings" => [
+                // General
                 "saving" => __("Saving...", "wps-cache"),
                 "purge_confirm" => __("Are you sure?", "wps-cache"),
+                "purging" => __("Purging...", "wps-cache"),
                 "copied" => __("Copied!", "wps-cache"),
+                "copied_announcement" => __(
+                    "Copied to clipboard!",
+                    "wps-cache",
+                ),
+                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
 
-                // Preloader Strings
+                // Preloader
                 "preload_start" => __("Gathering URLs...", "wps-cache"),
                 "preload_loading" => __("Preloading...", "wps-cache"),
                 "preload_done" => __("Done!", "wps-cache"),
@@ -88,10 +95,6 @@ final class AdminPanelManager
                 // Password Toggles
                 "show_password" => __("Show password", "wps-cache"),
                 "hide_password" => __("Hide password", "wps-cache"),
-
-                // Misc
-                "purging" => __("Purging...", "wps-cache"),
-                "notice_dismissed" => __("Notice dismissed", "wps-cache"),
             ],
         ]);
     }

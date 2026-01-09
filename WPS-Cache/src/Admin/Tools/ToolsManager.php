@@ -139,14 +139,8 @@ class ToolsManager
         <?php
     }
 
-    // ... (Keep existing handleInstallObjectCache, handleRemoveObjectCache, redirectWithNotice, handleGetUrls, handleProcessUrl) ...
-    // Note: I'm omitting the exact copies of the helper functions for brevity,
-    // but you should COPY them from your previous file as they don't need design changes.
-    // If you need them pasted here let me know, but the "render()" method is the only thing changing.
-
     public function handleInstallObjectCache(): void
     {
-        /* ... copy from previous ... */
         check_admin_referer("wpsc_install_object_cache");
         if (!current_user_can("manage_options")) {
             wp_die("Unauthorized");
@@ -199,18 +193,23 @@ class ToolsManager
 
     public function handleGetUrls(): void
     {
-        /* ... copy from previous ... */
-        // ... (standard logic)
         check_ajax_referer("wpsc_ajax_nonce");
         if (!current_user_can("manage_options")) {
             wp_send_json_error();
         }
+
+        $post_types = ["page", "post"];
+        if (class_exists("WooCommerce")) {
+            $post_types[] = "product";
+        }
+
         $query = new \WP_Query([
-            "post_type" => ["page", "post"],
+            "post_type" => $post_types,
             "post_status" => "publish",
             "posts_per_page" => 200,
             "fields" => "ids",
         ]);
+
         $urls = [home_url("/")];
         foreach ($query->posts as $id) {
             $urls[] = get_permalink($id);
