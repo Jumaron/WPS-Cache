@@ -17,3 +17,7 @@
 ## 2026-01-20 - [Optimizing Text Parsers with Native C Functions]
 **Learning:** In PHP, iterating over strings character-by-character in a loop is significantly slower than using native functions like `strcspn` or `strpos`, which are implemented in C. This is critical for tokenizers processing large files.
 **Action:** Replaced manual `while` loops for comment scanning in `MinifyJS::tokenize` with `strcspn` (for single-line) and `strpos` (for multi-line), reducing the complexity from O(N) script operations to a single internal call.
+
+## 2026-01-24 - [DOM Traversal Optimization]
+**Learning:** Iterating over all DOM nodes (O(N)) and calling `getAttribute` on each to check for IDs/classes incurs significant function call overhead (PHP to C context switch).
+**Action:** Replaced linear DOM iteration with `DOMXPath` queries (`//@id`, `//@class`) in `CriticalCSSManager`. This offloads the filtering to the optimized C implementation of libxml, effectively replacing N PHP function calls with 2 optimized C lookups, especially beneficial when attributes are sparse.
