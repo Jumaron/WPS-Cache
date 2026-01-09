@@ -127,7 +127,7 @@ final class AdminPanelManager
             "All caches have been purged successfully.",
             "success",
         );
-        wp_redirect(remove_query_arg("wpsc_cleared", wp_get_referer()));
+        wp_safe_redirect(remove_query_arg("wpsc_cleared", wp_get_referer()));
         exit();
     }
 

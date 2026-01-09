@@ -203,7 +203,7 @@ class ToolsManager
             [["message" => $message, "type" => $type]],
             60,
         );
-        wp_redirect(remove_query_arg(["action", "_wpnonce"], wp_get_referer()));
+        wp_safe_redirect(remove_query_arg(["action", "_wpnonce"], wp_get_referer()));
         exit();
     }
 
