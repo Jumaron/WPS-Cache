@@ -71,6 +71,7 @@ final class Plugin
         "bloat_disable_emojis" => true,
         "bloat_disable_embeds" => true,
         "bloat_disable_xmlrpc" => true,
+        "bloat_disable_user_enumeration" => true,
         "bloat_hide_wp_version" => true,
         "bloat_remove_wlw_rsd" => true,
         "bloat_remove_shortlink" => true,
