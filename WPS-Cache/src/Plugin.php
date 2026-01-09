@@ -289,25 +289,32 @@ final class Plugin
     }
     public function handleManualDbCleanup(): void
     {
-        check_ajax_referer("wpsc_ajax_nonce");
-        if (!current_user_can("manage_options")) {
-            wp_send_json_error();
-        }
-        $items = $_POST["items"] ?? [];
+        try {
+            check_ajax_referer("wpsc_ajax_nonce");
+            if (!current_user_can("manage_options")) {
+                wp_send_json_error();
+            }
+            $items = $_POST["items"] ?? [];
 
-        // Sentinel Fix: Strict Input Validation to prevent TypeErrors
-        if (!is_array($items)) {
-            wp_send_json_error("Invalid input format");
-        }
+            // Sentinel Fix: Strict Input Validation to prevent TypeErrors
+            if (!is_array($items)) {
+                wp_send_json_error("Invalid input format");
+            }
 
-        // Sentinel Fix: Sanitize Input (Defense in Depth)
-        $items = array_map("sanitize_key", array_filter($items, "is_string"));
+            // Sentinel Fix: Sanitize Input (Defense in Depth)
+            $items = array_map("sanitize_key", array_filter($items, "is_string"));
 
-        if (empty($items)) {
-            wp_send_json_error("No items selected");
+            if (empty($items)) {
+                wp_send_json_error("No items selected");
+            }
+            $count = $this->databaseOptimizer->processCleanup($items);
+            wp_send_json_success("Cleaned $count categories of items.");
+        } catch (\Throwable $e) {
+            // Sentinel Fix: Prevent Info Leak
+            // Catch unexpected errors to prevent stack trace exposure in JSON response
+            error_log("WPS-Cache DB Cleanup Error: " . $e->getMessage());
+            wp_send_json_error("An unexpected error occurred during cleanup.");
         }
-        $count = $this->databaseOptimizer->processCleanup($items);
-        wp_send_json_success("Cleaned $count categories of items.");
     }
     public function refreshServerConfig(array $settings): void
     {
