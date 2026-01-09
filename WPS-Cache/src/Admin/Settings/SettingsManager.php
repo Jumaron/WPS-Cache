@@ -254,6 +254,7 @@ class SettingsManager
                     "Excluded URLs",
                     "Pages to never cache (one per line).",
                     $settings,
+                    ["placeholder" => "/my-account/\n/contact/"],
                 );
             },
         );
@@ -370,6 +371,7 @@ class SettingsManager
                     "Exclude from Minification",
                     "Filenames to skip.",
                     $settings,
+                    ["placeholder" => "style.css\ncustom.css"],
                 );
 
                 echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--wpsc-border);">';
@@ -385,6 +387,7 @@ class SettingsManager
                     "CSS Safelist",
                     "Selectors to always keep (e.g. .active).",
                     $settings,
+                    ["placeholder" => ".active\n#mobile-menu"],
                 );
             },
         );
@@ -404,6 +407,7 @@ class SettingsManager
                     "Exclude from Minification",
                     "Filenames to skip.",
                     $settings,
+                    ["placeholder" => "jquery.js\nmain.js"],
                 );
 
                 echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--wpsc-border);">';
@@ -425,6 +429,7 @@ class SettingsManager
                     "Exclude from Defer/Delay",
                     "Scripts that must run immediately.",
                     $settings,
+                    ["placeholder" => "jquery.js\nanalytics.js"],
                 );
             },
         );
