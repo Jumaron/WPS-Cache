@@ -25,31 +25,49 @@ final class Plugin
 {
     public const DEFAULT_SETTINGS = [
         "html_cache" => true,
+        "cache_lifetime" => 3600,
+        "preload_interval" => "daily",
+        "excluded_urls" => [],
+
         "redis_cache" => false,
+        "redis_host" => "127.0.0.1",
+        "redis_port" => 6379,
+        "redis_db" => 0,
+        "redis_password" => "",
+        "redis_prefix" => "wpsc:",
+
         "varnish_cache" => false,
+        "varnish_host" => "127.0.0.1",
+        "varnish_port" => 6081,
+
         "css_minify" => false,
+        "excluded_css_minify" => [],
         "remove_unused_css" => false,
+        "css_safelist" => [],
+
         "js_minify" => false,
+        "excluded_js_minify" => [],
         "js_defer" => false,
         "js_delay" => false,
+        "excluded_js_execution" => ["jquery.js", "jquery.min.js"],
+
         "speculative_loading" => false,
-        "speculation_mode" => "prerender",
+
         "media_lazy_load" => true,
         "media_lazy_load_iframes" => true,
         "media_lazy_load_exclude_count" => 3,
         "media_add_dimensions" => false,
         "media_youtube_facade" => false,
+
         "font_localize_google" => true,
         "font_display_swap" => true,
 
-        // CDN & Cloudflare
         "cdn_enable" => false,
         "cdn_url" => "",
         "cf_enable" => false,
         "cf_api_token" => "",
         "cf_zone_id" => "",
 
-        // Bloat
         "bloat_disable_emojis" => true,
         "bloat_disable_embeds" => true,
         "bloat_disable_xmlrpc" => true,
@@ -69,19 +87,7 @@ final class Plugin
 
         "enable_metrics" => true,
         "metrics_retention" => 14,
-        "preload_interval" => "daily",
-        "preload_urls" => [],
-        "cache_lifetime" => 3600,
-        "excluded_urls" => [],
-        "excluded_css" => [],
-        "excluded_js" => [],
-        "redis_host" => "127.0.0.1",
-        "redis_port" => 6379,
-        "redis_db" => 0,
-        "redis_password" => "",
-        "redis_prefix" => "wpsc:",
-        "varnish_host" => "127.0.0.1",
-        "varnish_port" => 6081,
+
         "db_schedule" => "disabled",
         "db_clean_revisions" => true,
         "db_clean_auto_drafts" => true,
@@ -92,7 +98,6 @@ final class Plugin
         "db_clean_all_transients" => false,
         "db_clean_optimize_tables" => true,
 
-        // Compatibility
         "woo_support" => true,
     ];
 
@@ -102,8 +107,6 @@ final class Plugin
         "includes" => "includes",
     ];
 
-    // Sentinel Fix: Explicitly allow safe static assets but strictly block PHP
-    // This replaces the broken "Deny from all" which blocked fonts/css/js from being served.
     private const HTACCESS_CONTENT = "Order Deny,Allow\nDeny from all\n<FilesMatch \"\.(css|js|html|xml|txt|map|woff|woff2|ttf|otf|eot|svg|webp|png|jpg|jpeg|gif|avif)$\">\n    Allow from all\n</FilesMatch>";
     private const CACHE_CLEANUP_HOOK = "wpsc_cache_cleanup";
     private const DB_CLEANUP_HOOK = "wpsc_db_cleanup";
@@ -172,7 +175,6 @@ final class Plugin
             5,
         );
         add_action("wpscac_settings_updated", [$this, "refreshServerConfig"]);
-
         add_action("wpscac_settings_updated", [$this, "updateDbSchedule"]);
         add_action(self::DB_CLEANUP_HOOK, [
             $this->databaseOptimizer,
@@ -239,10 +241,13 @@ final class Plugin
             $this->cacheManager->addDriver(new MinifyJS());
         }
     }
+
     private function setupHooks(): void
     {
-        add_action("send_headers", [$this->serverManager, "sendSecurityHeaders"]);
-
+        add_action("send_headers", [
+            $this->serverManager,
+            "sendSecurityHeaders",
+        ]);
         $clear_hooks = [
             "wpsc_clear_cache",
             "switch_theme",
@@ -257,6 +262,7 @@ final class Plugin
         register_activation_hook(WPSC_PLUGIN_FILE, [$this, "activate"]);
         register_deactivation_hook(WPSC_PLUGIN_FILE, [$this, "deactivate"]);
     }
+
     public function activate(): void
     {
         $this->createRequiredDirectories();
@@ -268,6 +274,7 @@ final class Plugin
         $this->serverManager->applyConfiguration();
         flush_rewrite_rules();
     }
+
     public function deactivate(): void
     {
         $this->disableWPCacheConstant();
@@ -278,6 +285,7 @@ final class Plugin
         wp_clear_scheduled_hook(self::DB_CLEANUP_HOOK);
         $this->serverManager->removeConfiguration();
     }
+
     public function updateDbSchedule(array $settings): void
     {
         $interval = $settings["db_schedule"] ?? "disabled";
@@ -287,6 +295,7 @@ final class Plugin
             wp_schedule_event($time, $interval, self::DB_CLEANUP_HOOK);
         }
     }
+
     public function handleManualDbCleanup(): void
     {
         try {
@@ -295,27 +304,24 @@ final class Plugin
                 wp_send_json_error();
             }
             $items = $_POST["items"] ?? [];
-
-            // Sentinel Fix: Strict Input Validation to prevent TypeErrors
             if (!is_array($items)) {
-                wp_send_json_error("Invalid input format");
+                wp_send_json_error("Invalid input");
             }
-
-            // Sentinel Fix: Sanitize Input (Defense in Depth)
-            $items = array_map("sanitize_key", array_filter($items, "is_string"));
-
+            $items = array_map(
+                "sanitize_key",
+                array_filter($items, "is_string"),
+            );
             if (empty($items)) {
                 wp_send_json_error("No items selected");
             }
             $count = $this->databaseOptimizer->processCleanup($items);
             wp_send_json_success("Cleaned $count categories of items.");
         } catch (\Throwable $e) {
-            // Sentinel Fix: Prevent Info Leak
-            // Catch unexpected errors to prevent stack trace exposure in JSON response
             error_log("WPS-Cache DB Cleanup Error: " . $e->getMessage());
-            wp_send_json_error("An unexpected error occurred during cleanup.");
+            wp_send_json_error("Error occurred.");
         }
     }
+
     public function refreshServerConfig(array $settings): void
     {
         if ($settings["html_cache"] ?? false) {
@@ -324,10 +330,16 @@ final class Plugin
             $this->serverManager->removeConfiguration();
         }
     }
+
     public function getDatabaseOptimizer(): DatabaseOptimizer
     {
         return $this->databaseOptimizer;
     }
+    public function getCacheManager(): CacheManager
+    {
+        return $this->cacheManager;
+    }
+
     private function createRequiredDirectories(): void
     {
         foreach (self::REQUIRED_DIRECTORIES as $dir) {
@@ -341,26 +353,28 @@ final class Plugin
             }
         }
     }
+
     private function secureCacheDirectory(): void
     {
         $htaccess = WPSC_CACHE_DIR . ".htaccess";
-
-        // Sentinel Fix: Update .htaccess if it is missing OR if it contains the old restrictive/broken rule.
-        // We check for "Deny from all" without the whitelist to detect the old version.
         $shouldUpdate = false;
         if (!file_exists($htaccess)) {
             $shouldUpdate = true;
         } else {
             $content = @file_get_contents($htaccess);
-            if ($content && str_contains($content, "Deny from all") && !str_contains($content, "<FilesMatch")) {
+            if (
+                $content &&
+                str_contains($content, "Deny from all") &&
+                !str_contains($content, "<FilesMatch")
+            ) {
                 $shouldUpdate = true;
             }
         }
-
         if ($shouldUpdate) {
             @file_put_contents($htaccess, self::HTACCESS_CONTENT);
         }
     }
+
     private function enableWPCacheConstant(): void
     {
         $this->toggleWPCache(true);
@@ -369,6 +383,7 @@ final class Plugin
     {
         $this->toggleWPCache(false);
     }
+
     private function toggleWPCache(bool $enable): bool
     {
         $config_file = ABSPATH . "wp-config.php";
@@ -414,6 +429,7 @@ final class Plugin
         fclose($fp);
         return true;
     }
+
     private function installAdvancedCache(): void
     {
         $src = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
@@ -422,6 +438,7 @@ final class Plugin
             @copy($src, $dest);
         }
     }
+
     private function removeDropIns(): void
     {
         $files = [
@@ -438,20 +455,18 @@ final class Plugin
             }
         }
     }
+
     private function setupDefaultSettings(): void
     {
         if (get_option("wpsc_settings") === false) {
             update_option("wpsc_settings", self::DEFAULT_SETTINGS);
         }
     }
+
     private function scheduleMaintenance(): void
     {
         if (!wp_next_scheduled(self::CACHE_CLEANUP_HOOK)) {
             wp_schedule_event(time(), "daily", self::CACHE_CLEANUP_HOOK);
         }
-    }
-    public function getCacheManager(): CacheManager
-    {
-        return $this->cacheManager;
     }
 }

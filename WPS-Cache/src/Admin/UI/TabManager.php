@@ -26,46 +26,30 @@ class TabManager
                 "icon" => "dashicons-database",
                 "order" => 20,
             ],
-            "media" => [
-                "label" => __("Media", "wps-cache"),
-                "icon" => "dashicons-images-alt",
-                "order" => 25,
-            ],
-            "cdn" => [
-                // NEW
-                "label" => __("CDN", "wps-cache"),
-                "icon" => "dashicons-cloud",
-                "order" => 28,
-            ],
             "css_js" => [
                 "label" => __("File Optimization", "wps-cache"),
                 "icon" => "dashicons-editor-code",
                 "order" => 30,
             ],
-            "tweaks" => [
-                "label" => __("Tweaks", "wps-cache"),
-                "icon" => "dashicons-controls-volumeon",
-                "order" => 32,
+            "media" => [
+                "label" => __("Media", "wps-cache"),
+                "icon" => "dashicons-images-alt",
+                "order" => 40,
+            ],
+            "cdn" => [
+                "label" => __("CDN", "wps-cache"),
+                "icon" => "dashicons-cloud",
+                "order" => 50,
             ],
             "database" => [
                 "label" => __("Database", "wps-cache"),
                 "icon" => "dashicons-archive",
-                "order" => 35,
-            ],
-            "analytics" => [
-                "label" => __("Analytics", "wps-cache"),
-                "icon" => "dashicons-chart-bar",
-                "order" => 40,
-            ],
-            "tools" => [
-                "label" => __("Tools", "wps-cache"),
-                "icon" => "dashicons-admin-tools",
-                "order" => 50,
-            ],
-            "advanced" => [
-                "label" => __("Advanced", "wps-cache"),
-                "icon" => "dashicons-admin-settings",
                 "order" => 60,
+            ],
+            "tweaks" => [
+                "label" => __("Tweaks", "wps-cache"),
+                "icon" => "dashicons-controls-volumeon",
+                "order" => 70,
             ],
         ];
 
