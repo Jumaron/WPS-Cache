@@ -282,19 +282,24 @@ final class MinifyCSS extends AbstractCacheDriver
             }
             if ($char === '"' || $char === "'") {
                 $start = $i++;
+                $mask = "\\\n" . $char;
                 while ($i < $len) {
-                    if ($css[$i] === "\\") {
-                        $i += 2;
-                        continue;
+                    $i += strcspn($css, $mask, $i);
+                    if ($i >= $len) {
+                        break;
                     }
-                    if ($css[$i] === $char) {
+                    $c = $css[$i];
+                    if ($c === $char) {
                         $i++;
                         break;
                     }
-                    if ($css[$i] === "\n") {
+                    if ($c === "\\") {
+                        $i += 2;
+                        continue;
+                    }
+                    if ($c === "\n") {
                         break;
                     }
-                    $i++;
                 }
                 yield [
                     "type" => self::T_STRING,
