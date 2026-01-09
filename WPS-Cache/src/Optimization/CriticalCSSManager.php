@@ -96,34 +96,45 @@ class CriticalCSSManager
     private function prepareDomStats(DOMDocument $dom): void
     {
         $this->domStats = ["ids" => [], "classes" => [], "tags" => []];
+        // Optimization: Use DOMXPath for attribute collection to avoid O(N) getAttribute calls
+        $xpath = new \DOMXPath($dom);
+
+        // 1. Collect Tags (Still need O(N) traversal, but property access is fast)
         $nodes = $dom->getElementsByTagName("*");
         foreach ($nodes as $node) {
             $this->domStats["tags"][strtolower($node->nodeName)] = true;
-            if ($id = $node->getAttribute("id")) {
-                $this->domStats["ids"][$id] = true;
+        }
+
+        // 2. Collect IDs (O(1) lookup via C-based libxml)
+        foreach ($xpath->query("//@id") as $attr) {
+            $value = $attr->nodeValue;
+            if ($value !== "") {
+                $this->domStats["ids"][$value] = true;
             }
-            if ($class = $node->getAttribute("class")) {
-                $trimmed = trim($class);
-                if ($trimmed === "") {
-                    continue;
-                }
-                if (strpbrk($trimmed, "\t\n\r\f\v") === false) {
-                    $classes = explode(" ", $trimmed);
-                    foreach ($classes as $c) {
-                        if ($c !== "") {
-                            $this->domStats["classes"][$c] = true;
-                        }
-                    }
-                } else {
-                    $classes = preg_split(
-                        "/\s+/",
-                        $trimmed,
-                        -1,
-                        PREG_SPLIT_NO_EMPTY,
-                    );
-                    foreach ($classes as $c) {
+        }
+
+        // 3. Collect Classes
+        foreach ($xpath->query("//@class") as $attr) {
+            $trimmed = trim($attr->nodeValue);
+            if ($trimmed === "") {
+                continue;
+            }
+            if (strpbrk($trimmed, "\t\n\r\f\v") === false) {
+                $classes = explode(" ", $trimmed);
+                foreach ($classes as $c) {
+                    if ($c !== "") {
                         $this->domStats["classes"][$c] = true;
                     }
+                }
+            } else {
+                $classes = preg_split(
+                    "/\s+/",
+                    $trimmed,
+                    -1,
+                    PREG_SPLIT_NO_EMPTY,
+                );
+                foreach ($classes as $c) {
+                    $this->domStats["classes"][$c] = true;
                 }
             }
         }
