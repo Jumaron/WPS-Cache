@@ -166,6 +166,7 @@ class SettingsManager
                 </div>
                 <?php
             },
+            "dashicons-update",
         );
 
         $object_cache_installed = file_exists(
@@ -211,6 +212,7 @@ class SettingsManager
                 </div>
                 <?php
             },
+            "dashicons-database-view",
         );
         $this->formEnd();
     }
@@ -257,6 +259,7 @@ class SettingsManager
                     ["placeholder" => "/my-account/\n/contact/"],
                 );
             },
+            "dashicons-html",
         );
 
         $this->renderer->renderCard(
@@ -305,6 +308,7 @@ class SettingsManager
                 );
                 echo "</div>";
             },
+            "dashicons-database",
         );
 
         $this->renderer->renderCard(
@@ -333,6 +337,7 @@ class SettingsManager
                 );
                 echo "</div>";
             },
+            "dashicons-cloud",
         );
 
         $this->renderer->renderCard(
@@ -346,6 +351,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-controls-forward",
         );
 
         $this->formEnd();
@@ -390,6 +396,7 @@ class SettingsManager
                     ["placeholder" => ".active\n#mobile-menu"],
                 );
             },
+            "dashicons-art",
         );
 
         $this->renderer->renderCard(
@@ -432,6 +439,7 @@ class SettingsManager
                     ["placeholder" => "jquery.js\nanalytics.js"],
                 );
             },
+            "dashicons-editor-code",
         );
 
         $this->renderer->renderCard(
@@ -451,6 +459,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-editor-textcolor",
         );
 
         $this->formEnd();
@@ -500,6 +509,7 @@ class SettingsManager
                     "number",
                 );
             },
+            "dashicons-images-alt2",
         );
         $this->renderer->renderCard(
             "Optimization",
@@ -518,6 +528,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-video-alt3",
         );
         $this->formEnd();
     }
@@ -543,6 +554,7 @@ class SettingsManager
                     "url",
                 );
             },
+            "dashicons-earth",
         );
         $this->renderer->renderCard(
             "Cloudflare",
@@ -568,6 +580,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-cloud-saved",
         );
         $this->formEnd();
     }
@@ -610,6 +623,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-trash",
         );
         $this->renderer->renderCard("Security", "Hardening.", function () use (
             $settings,
@@ -644,7 +658,7 @@ class SettingsManager
                 "",
                 $settings,
             );
-        });
+        }, "dashicons-shield");
         $this->renderer->renderCard(
             "Heartbeat",
             "Server load.",
@@ -687,6 +701,7 @@ class SettingsManager
                     $settings,
                 );
             },
+            "dashicons-heart",
         );
         $this->formEnd();
     }
@@ -715,6 +730,7 @@ class SettingsManager
                     ],
                 );
             },
+            "dashicons-calendar",
         );
 
         $this->renderer->renderCard(
@@ -764,6 +780,7 @@ class SettingsManager
                 <?php
                 }
             },
+            "dashicons-list-view",
         );
         $this->formEnd();?>
         <script>

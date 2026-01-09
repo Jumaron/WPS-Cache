@@ -18,12 +18,17 @@ class SettingsRenderer
         string $title,
         string $description,
         callable $contentCallback,
+        ?string $icon = null,
     ): void {
         ?>
         <section class="wpsc-section">
             <div class="wpsc-section-header">
                 <h3 class="wpsc-section-title">
-                    <!-- Decorative icon based on title could go here -->
+                    <?php if ($icon): ?>
+                        <span class="dashicons <?php echo esc_attr(
+                            $icon,
+                        ); ?>" aria-hidden="true" style="color:var(--wpsc-primary);"></span>
+                    <?php endif; ?>
                     <?php echo esc_html($title); ?>
                 </h3>
                 <?php if ($description): ?>
