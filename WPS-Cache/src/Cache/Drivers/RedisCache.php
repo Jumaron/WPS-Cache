@@ -22,6 +22,7 @@ final class RedisCache extends AbstractCacheDriver
     private string $prefix;
     private float $timeout;
     private string $salt;
+    private bool $useIgbinary = false;
 
     public function __construct(
         string $host = "127.0.0.1",
@@ -39,6 +40,8 @@ final class RedisCache extends AbstractCacheDriver
         $this->timeout = $timeout;
         $this->password = $password;
         $this->prefix = $prefix;
+
+        $this->useIgbinary = extension_loaded("igbinary");
 
         // Sentinel: Initialize Salt for HMAC signing
         // Use standard WP keys if available.
@@ -315,6 +318,12 @@ final class RedisCache extends AbstractCacheDriver
      */
     private function maybeSerialize(mixed $value): string
     {
+        if ($this->useIgbinary) {
+            $serialized = igbinary_serialize($value);
+            $hash = hash_hmac("sha256", $serialized, $this->salt);
+            return "I:" . $hash . ":" . $serialized;
+        }
+
         $serialized = serialize($value);
         $hash = hash_hmac("sha256", $serialized, $this->salt);
 
@@ -336,8 +345,11 @@ final class RedisCache extends AbstractCacheDriver
             return [false, null];
         }
 
+        $type = $value[0];
+        $sep = $value[1];
+
         // Sentinel: Verify signed payloads
-        if (str_starts_with($value, "S:")) {
+        if (($type === "S" || $type === "I") && $sep === ":") {
             $parts = explode(":", $value, 3);
             if (count($parts) === 3) {
                 $hash = $parts[1];
@@ -346,12 +358,18 @@ final class RedisCache extends AbstractCacheDriver
 
                 if (hash_equals($hash, $calc)) {
                     try {
-                        $val = @unserialize($payload);
+                        if ($type === "I") {
+                            // Check extension availability before attempting decode
+                            if (!$this->useIgbinary && !function_exists("igbinary_unserialize")) {
+                                return [false, null];
+                            }
+                            $val = @igbinary_unserialize($payload);
+                        } else {
+                            $val = @unserialize($payload);
+                        }
+
                         // If unserialize returns false, it could be the value false or an error.
-                        // Since we signed it, we trust it, unless payload is corrupted in a way hash didn't catch (unlikely).
-                        // But serialize(false) is b:0; which unserializes to false.
-                        // If payload is garbled but hash matches (collision?), unserialize might return false.
-                        // We assume success if hash matches.
+                        // Since we signed it, we trust it.
                         return [true, $val];
                     } catch (\Exception $e) {
                         return [false, null];
