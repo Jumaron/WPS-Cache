@@ -55,6 +55,7 @@ class SettingsManager
     {
         echo '<div style="margin-top: 20px;">';
         echo '<button type="submit" name="submit" id="submit" class="button button-primary wpsc-btn-primary">';
+        echo '<span class="dashicons dashicons-yes" aria-hidden="true" style="vertical-align: middle;"></span> ';
         echo esc_html__("Save Changes", "wps-cache");
         echo '</button>';
         echo "</div>";
