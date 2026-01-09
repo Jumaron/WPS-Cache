@@ -30,7 +30,8 @@ class NoticeManager
 
         delete_transient(self::TRANSIENT_KEY);
 
-        echo '<div class="wpsc-notices-container" style="margin-bottom: 20px;">';
+        // Padding is now applied here, only if notices exist
+        echo '<div class="wpsc-notices-container" style="padding: 1.5rem 2.5rem 0; display: flex; flex-direction: column; gap: 10px;">';
 
         foreach ($notices as $notice) {
 
@@ -40,7 +41,6 @@ class NoticeManager
                 default => "success",
             };
 
-            // Palette UX: Ensure screen readers announce notices immediately (Alert for errors, Status for success/warning)
             $role = match ($notice["type"]) {
                 "error" => "alert",
                 default => "status",
@@ -52,20 +52,19 @@ class NoticeManager
                 default => "dashicons-yes-alt",
             };
             ?>
-            <div class="wpsc-notice <?php echo esc_attr($typeClass); ?>" role="<?php echo esc_attr(
-    $role,
-); ?>">
+            <div class="wpsc-notice <?php echo esc_attr(
+                $typeClass,
+            ); ?>" role="<?php echo esc_attr($role); ?>">
                 <div class="wpsc-notice-content">
-
                     <span class="dashicons <?php echo esc_attr(
                         $icon,
                     ); ?>" aria-hidden="true"></span>
                     <span><?php echo wp_kses_post($notice["message"]); ?></span>
                 </div>
-                <!-- Custom Dismiss Button (No WP Core classes) -->
+
                 <button type="button" class="wpsc-dismiss-btn"
                     aria-label="<?php echo esc_attr__(
-                        "Dismiss this notice",
+                        "Dismiss",
                         "wps-cache",
                     ); ?>">
                     <span class="dashicons dashicons-dismiss" aria-hidden="true"></span>
@@ -77,4 +76,3 @@ class NoticeManager
         echo "</div>";
     }
 }
-?>

@@ -556,3 +556,73 @@ progress.wpsc-progress-bar::-webkit-progress-value {
     width: 100%;
     line-height: 1.6;
 }
+
+/* --- Notices --- */
+.wpsc-notices-container {
+    /* Container styling handled in PHP to manage empty states */
+    margin-bottom: 0;
+}
+
+.wpsc-notice {
+    background: var(--wpsc-bg-surface);
+    border: 1px solid var(--wpsc-border);
+    border-left: 4px solid var(--wpsc-primary);
+    border-radius: 8px; /* Slightly tighter radius for alerts */
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center; /* This fixes the button alignment */
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    animation: wpsc-slide-in 0.3s var(--wpsc-ease);
+}
+
+.wpsc-notice.success {
+    border-left-color: var(--wpsc-success);
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+.wpsc-notice.warning {
+    border-left-color: var(--wpsc-warning);
+    background: #fefce8;
+    border-color: #fde047;
+}
+.wpsc-notice.error {
+    border-left-color: var(--wpsc-danger);
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.wpsc-notice-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    color: var(--wpsc-text-main);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+.wpsc-notice-content .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.wpsc-dismiss-btn {
+    background: transparent;
+    border: none;
+    color: var(--wpsc-text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    flex-shrink: 0; /* Prevents button from being squished */
+    margin-left: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.wpsc-dismiss-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--wpsc-text-main);
+}

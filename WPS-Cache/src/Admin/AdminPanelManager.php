@@ -100,7 +100,6 @@ final class AdminPanelManager
         remove_all_actions("admin_notices");
         $current_tab = $this->tabManager->getCurrentTab();
 
-        // Map tab IDs to human readable titles for the header
         $titles = [
             "dashboard" => "Dashboard",
             "cache" => "Cache Rules",
@@ -138,7 +137,6 @@ final class AdminPanelManager
 
                 <!-- 2. Main Content -->
                 <main class="wpsc-content-area">
-                    <!-- Sticky Header inside content -->
                     <header class="wpsc-header-bar">
                         <h2 class="wpsc-page-title"><?php echo esc_html(
                             $pageTitle,
@@ -158,17 +156,13 @@ final class AdminPanelManager
                         </div>
                     </header>
 
-                    <!-- Notices -->
-                    <div style="padding: 1rem 2.5rem 0;">
-                        <?php settings_errors("wpsc_settings"); ?>
-                        <?php $this->noticeManager->renderNotices(); ?>
-                    </div>
+                    <!-- Notices Area (Now handled inside NoticeManager so no gap if empty) -->
+                    <?php settings_errors("wpsc_settings"); ?>
+                    <?php $this->noticeManager->renderNotices(); ?>
 
                     <!-- Scrollable Settings Canvas -->
                     <div class="wpsc-scroll-canvas">
-                        <?php // Route to correct tab content
-
-        switch ($current_tab) {
+                        <?php switch ($current_tab) {
                             case "cache":
                                 $this->settingsManager->renderCacheTab();
                                 break;
