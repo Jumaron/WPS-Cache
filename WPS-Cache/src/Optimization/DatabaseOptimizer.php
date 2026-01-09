@@ -240,7 +240,9 @@ class DatabaseOptimizer
             // Sentinel Fix: Limit optimization to this site's tables and escape table names
             // Prevents touching shared DB tables and mitigates potential injection risks
             $like = $wpdb->esc_like($wpdb->prefix) . "%";
-            $tables = $wpdb->get_col($wpdb->prepare("SHOW TABLES LIKE %s", $like));
+            // Optimization: Only optimize tables that actually have overhead (Data_free > 0).
+            // This prevents running expensive OPTIMIZE TABLE (rebuild) on tables that don't need it.
+            $tables = $wpdb->get_col($wpdb->prepare("SHOW TABLE STATUS WHERE Name LIKE %s AND Data_free > 0", $like));
 
             // Optimization: Batch OPTIMIZE TABLE commands to reduce DB round-trips
             // Process in chunks of 20 to avoid query length limits
