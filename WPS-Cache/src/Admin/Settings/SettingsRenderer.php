@@ -156,13 +156,32 @@ class SettingsRenderer
                     $description,
                 ); ?></div>
             </div>
-            <div class="wpsc-setting-control" style="width: 100%; max-width: 300px;">
+            <div class="wpsc-setting-control" style="width: 100%; max-width: 300px; <?php echo $type ===
+            "password"
+                ? "display:flex; gap:8px; align-items:center;"
+                : ""; ?>">
                 <input type="<?php echo esc_attr($type); ?>"
                        class="wpsc-input"
                        id="wpsc_<?php echo esc_attr($key); ?>"
                        name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                        value="<?php echo esc_attr($value); ?>"
                        <?php echo $attrStr; ?>>
+                <?php if ($type === "password"): ?>
+                    <button type="button"
+                            class="wpsc-dismiss-btn wpsc-password-toggle"
+                            aria-controls="wpsc_<?php echo esc_attr($key); ?>"
+                            aria-label="<?php esc_attr_e(
+                                "Show password",
+                                "wps-cache",
+                            ); ?>"
+                            title="<?php esc_attr_e(
+                                "Show password",
+                                "wps-cache",
+                            ); ?>"
+                            style="margin:0;">
+                        <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
         <?php
