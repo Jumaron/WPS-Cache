@@ -17,3 +17,8 @@
 **Vulnerability:** The Redis cache driver implemented a fallback salt generation mechanism for HMAC signing that relied on standard environment variables (`DB_NAME`, `DB_USER`, `DOCUMENT_ROOT`) when security keys were missing. In standardized containerized environments (e.g., Docker, Kubernetes), these values are often identical across installations (e.g., `wordpress`, `root`, `/var/www/html`), making the "secret" salt predictable and allowing attackers to forge signatures and exploit PHP Object Injection.
 **Learning:** Security secrets must never be derived solely from configuration values that are common defaults or widely known patterns. Entropy must come from instance-specific state that is hard to guess remotely.
 **Prevention:** Enhanced the salt generation to include filesystem metadata (`filemtime` and `fileinode` of the plugin file), which varies based on the specific installation time and filesystem allocation, providing significantly higher entropy even in default configurations.
+
+## 2024-06-15 - Deprecated Security Headers (XS-Leak Risk)
+**Vulnerability:** The `X-XSS-Protection` header, once recommended, is now deprecated and can introduce Cross-Site Leak (XS-Leak) vulnerabilities in older browsers by allowing attackers to detect if a specific script was executed or blocked. Modern browsers like Chrome and Edge have removed their XSS Auditor entirely.
+**Learning:** Security best practices evolve. Headers that were once protective can become liabilities. Always consult modern resources (MDN, OWASP) rather than copying legacy configs.
+**Prevention:** Removed `X-XSS-Protection` and `X-Download-Options` (IE8 specific) headers. Reliance should be placed on Content Security Policy (CSP) for robust XSS protection.
