@@ -690,7 +690,7 @@ class SettingsManager
                             $key,
                         ); ?>]" value="0">
                         <label class="wpsc-switch">
-                            <input type="checkbox" class="wpsc-db-checkbox" aria-describedby="<?php echo $descId; ?>" data-key="<?php echo esc_attr(
+                            <input type="checkbox" role="switch" class="wpsc-db-checkbox" aria-describedby="<?php echo $descId; ?>" data-key="<?php echo esc_attr(
                                 $key,
                             ); ?>" id="wpsc_db_clean_<?php echo esc_attr(
     $key,
