@@ -507,6 +507,7 @@ class SettingsManager
                     "Skip first X images (Recommended: 3).",
                     $settings,
                     "number",
+                    ["min" => "0"],
                 );
             },
             "dashicons-images-alt2",
@@ -552,6 +553,7 @@ class SettingsManager
                     "https://cdn.example.com",
                     $settings,
                     "url",
+                    ["placeholder" => "https://cdn.example.com"],
                 );
             },
             "dashicons-earth",
