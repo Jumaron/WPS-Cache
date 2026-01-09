@@ -322,12 +322,18 @@ final class MinifyCSS extends AbstractCacheDriver
             // 6. Optimization: Zero Units
             // Transform '0px' -> '0'. But NOT '0s', '0deg', or inside calc()
             if ($token["type"] === self::T_WORD && $calcDepth === 0) {
-                $token["value"] = $this->optimizeZeroUnits($token["value"]);
+                // Optimization: Inline check to avoid function call overhead
+                if (($token["value"][0] ?? '') === '0') {
+                    $token["value"] = $this->optimizeZeroUnits($token["value"]);
+                }
             }
 
             // 7. Optimization: Hex Colors
             if ($token["type"] === self::T_WORD) {
-                $token["value"] = $this->compressHex($token["value"]);
+                // Optimization: Inline check to avoid function call overhead
+                if (($token["value"][0] ?? '') === '#') {
+                    $token["value"] = $this->compressHex($token["value"]);
+                }
             }
 
             // 8. Insert Space Logic
