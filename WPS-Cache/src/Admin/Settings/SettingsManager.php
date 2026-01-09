@@ -730,12 +730,12 @@ class SettingsManager
                             ? "Overhead: {$count}"
                             : "Count: {$count}";
                     $checked = !empty($settings["db_clean_" . $key]);
-                    ?>
+                    $inputId = "wpsc_db_clean_" . $key; ?>
                 <div class="wpsc-setting-row">
                     <div class="wpsc-setting-info">
-                        <label class="wpsc-setting-label"><?php echo esc_html(
-                            $label,
-                        ); ?></label>
+                        <label class="wpsc-setting-label" for="<?php echo esc_attr(
+                            $inputId,
+                        ); ?>"><?php echo esc_html($label); ?></label>
                         <p class="wpsc-setting-desc" style="color:var(--wpsc-primary);"><?php echo esc_html(
                             $display,
                         ); ?></p>
@@ -745,9 +745,11 @@ class SettingsManager
                             $key,
                         ); ?>]" value="0">
                         <label class="wpsc-switch">
-                            <input type="checkbox" role="switch" class="wpsc-db-checkbox" data-key="<?php echo esc_attr(
-                                $key,
-                            ); ?>" name="wpsc_settings[db_clean_<?php echo esc_attr(
+                            <input type="checkbox" role="switch" id="<?php echo esc_attr(
+                                $inputId,
+                            ); ?>" class="wpsc-db-checkbox" data-key="<?php echo esc_attr(
+    $key,
+); ?>" name="wpsc_settings[db_clean_<?php echo esc_attr(
     $key,
 ); ?>]" value="1" <?php checked($checked); ?>>
                             <span class="wpsc-slider"></span>
@@ -784,6 +786,7 @@ class SettingsManager
                         cb.checked = isSelect;
                         cb.dispatchEvent(new Event('change'));
                     });
+                    if (typeof announce === 'function') { announce(isSelect ? 'All items selected' : 'All items deselected'); }
                 });
             }
 
@@ -810,6 +813,7 @@ class SettingsManager
                             btn.innerHTML = '<span class="dashicons dashicons-yes"></span> Cleaned!';
                             status.style.color = 'var(--wpsc-success)';
                             status.textContent = res.data;
+                            if (typeof announce === 'function') { announce(res.data); }
                             setTimeout(() => window.location.reload(), 1500);
                         } else {
                              throw new Error(res.data);
@@ -818,7 +822,9 @@ class SettingsManager
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                         status.style.color = 'var(--wpsc-danger)';
-                        status.textContent = 'Error: ' + (err.message || 'Unknown error');
+                        const msg = 'Error: ' + (err.message || 'Unknown error');
+                        status.textContent = msg;
+                        if (typeof announce === 'function') { announce(msg); }
                     });
                 });
             }
