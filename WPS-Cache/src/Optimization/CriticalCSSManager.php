@@ -109,7 +109,7 @@ class CriticalCSSManager
         foreach ($xpath->query("//@id") as $attr) {
             $value = $attr->nodeValue;
             if ($value !== "") {
-                $this->domStats["ids"][$value] = true;
+                $this->domStats["ids"]["#" . $value] = true;
             }
         }
 
@@ -123,7 +123,7 @@ class CriticalCSSManager
                 $classes = explode(" ", $trimmed);
                 foreach ($classes as $c) {
                     if ($c !== "") {
-                        $this->domStats["classes"][$c] = true;
+                        $this->domStats["classes"]["." . $c] = true;
                     }
                 }
             } else {
@@ -134,7 +134,7 @@ class CriticalCSSManager
                     PREG_SPLIT_NO_EMPTY,
                 );
                 foreach ($classes as $c) {
-                    $this->domStats["classes"][$c] = true;
+                    $this->domStats["classes"]["." . $c] = true;
                 }
             }
         }
@@ -203,9 +203,9 @@ class CriticalCSSManager
         }
 
         if (str_starts_with($target, "#")) {
-            $result = isset($this->domStats["ids"][substr($target, 1)]);
+            $result = isset($this->domStats["ids"][$target]);
         } elseif (str_starts_with($target, ".")) {
-            $result = isset($this->domStats["classes"][substr($target, 1)]);
+            $result = isset($this->domStats["classes"][$target]);
         } elseif (ctype_alnum($target)) {
             $result = isset($this->domStats["tags"][strtolower($target)]);
         } else {
