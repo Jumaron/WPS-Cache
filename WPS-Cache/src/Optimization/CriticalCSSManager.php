@@ -177,15 +177,26 @@ class CriticalCSSManager
             return true;
         }
 
-        $cleanSelector = preg_replace("/:[a-zA-Z-]+(\(.*?\))?/", "", $selector);
+        $cleanSelector = $selector;
+
+        // Optimization: Skip expensive regex if no pseudo-class chars exist
+        if (strpos($selector, ":") !== false) {
+            $cleanSelector = preg_replace("/:[a-zA-Z-]+(\(.*?\))?/", "", $selector);
+        }
         $cleanSelector = trim($cleanSelector);
+
         if (empty($cleanSelector)) {
             $this->selectorCache[$selector] = true;
             return true;
         }
 
-        $parts = preg_split("/[\s>+~]+/", $cleanSelector);
-        $target = end($parts);
+        // Optimization: Skip expensive regex split if no combinators exist
+        if (strpbrk($cleanSelector, " >+~\t\n\r\f\v") === false) {
+            $target = $cleanSelector;
+        } else {
+            $parts = preg_split("/[\s>+~]+/", $cleanSelector);
+            $target = end($parts);
+        }
         if ($target === false) {
             $this->selectorCache[$selector] = true;
             return true;
