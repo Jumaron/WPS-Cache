@@ -11,3 +11,7 @@
 ## 2024-05-22 - Password Input State
 **Learning:** Empty password fields for saved credentials cause user anxiety ("Did it save?").
 **Action:** Use `placeholder="••••••••"` to indicate a saved value while keeping the actual value hidden (empty) in the input.
+
+## 2025-10-31 - ARIA Switch Initialization
+**Learning:** The `switch` role requires an explicit `aria-checked` attribute on page load. Relying solely on JavaScript change listeners leaves the initial accessibility state undefined.
+**Action:** Always render `aria-checked="<?php echo $checked ? 'true' : 'false'; ?>"` server-side for any input using `role="switch"`.
