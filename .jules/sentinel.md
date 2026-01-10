@@ -32,3 +32,8 @@
 **Vulnerability:** `sanitize_text_field` was used for `redis_password`, which strips HTML tags. This corrupts complex passwords containing characters like `<` or `>`, forcing users to use weaker passwords or causing authentication failures.
 **Learning:** Standard WordPress sanitization functions like `sanitize_text_field` are not suitable for raw secrets or passwords where character fidelity is critical.
 **Prevention:** Use `trim()` and remove null bytes for password fields instead of aggressive tag stripping functions, while ensuring output is properly escaped with `esc_attr`.
+
+## 2024-06-25 - [Incomplete User Enumeration Protection]
+**Vulnerability:** The logic to block user enumeration missed two critical vectors: 1) Author Archives used `isset($_GET['author'])` which fails on pretty permalinks (e.g., `/author/admin`), and 2) REST API filtering only unset the exact default route `/wp/v2/users`, failing to block variations or sub-routes.
+**Learning:** Security controls that rely on exact string matching or specific URL parameters are brittle in flexible frameworks like WordPress.
+**Prevention:** Use robust pattern matching (e.g., `str_starts_with`) to cover all route variations and use high-level checks (e.g., `is_author()`) that work regardless of the URL structure.

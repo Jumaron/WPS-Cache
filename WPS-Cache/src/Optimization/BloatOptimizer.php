@@ -82,19 +82,23 @@ class BloatOptimizer
 
         // 3.5. Disable User Enumeration (Security)
         if (!empty($this->settings["bloat_disable_user_enumeration"])) {
-            // Block Author Archives (/?author=N)
+            // Block Author Archives (All types including pretty permalinks)
             add_action("template_redirect", function () {
-                if (is_author() && isset($_GET["author"])) {
+                if (is_author()) {
                     wp_redirect(home_url(), 301);
                     exit();
                 }
             });
 
-            // Block REST API Users Endpoint
+            // Block REST API Users Endpoint (Robust Pattern Matching)
             add_filter("rest_endpoints", function ($endpoints) {
-                if (!is_user_logged_in() && isset($endpoints["/wp/v2/users"])) {
-                    unset($endpoints["/wp/v2/users"]);
-                    unset($endpoints["/wp/v2/users/(?P<id>[\d]+)"]);
+                if (is_user_logged_in()) {
+                    return $endpoints;
+                }
+                foreach ($endpoints as $route => $endpoint) {
+                    if (str_starts_with($route, "/wp/v2/users")) {
+                        unset($endpoints[$route]);
+                    }
                 }
                 return $endpoints;
             });
