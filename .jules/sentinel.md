@@ -27,3 +27,8 @@
 **Vulnerability:** The JavaScript `URLSearchParams` constructor incorrectly stringified the array of database cleanup items (e.g., `items[]=a,b`), causing the backend PHP logic to receive malformed data and fail silently. This prevented critical maintenance tasks (expired transient cleanup) from running.
 **Learning:** PHP's array handling for query parameters (e.g., `key[]=value&key[]=value2`) is not automatically supported by JS `URLSearchParams` when passing an array directly. It converts the array to a single comma-separated string, which PHP treats as a single value.
 **Prevention:** Always iterate over arrays and use `params.append('key[]', value)` explicitly when constructing POST bodies for PHP backends.
+
+## 2024-10-24 - [Redis Password Sanitization]
+**Vulnerability:** `sanitize_text_field` was used for `redis_password`, which strips HTML tags. This corrupts complex passwords containing characters like `<` or `>`, forcing users to use weaker passwords or causing authentication failures.
+**Learning:** Standard WordPress sanitization functions like `sanitize_text_field` are not suitable for raw secrets or passwords where character fidelity is critical.
+**Prevention:** Use `trim()` and remove null bytes for password fields instead of aggressive tag stripping functions, while ensuring output is properly escaped with `esc_attr`.

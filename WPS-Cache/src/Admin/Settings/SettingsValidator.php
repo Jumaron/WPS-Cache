@@ -135,6 +135,12 @@ class SettingsValidator
             $val = sanitize_text_field($val);
             return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
         }
+        if ($key === "redis_password") {
+            // Sentinel Fix: Allow special characters in passwords (e.g. < > &)
+            // sanitize_text_field strips tags, corrupting complex passwords.
+            // We only trim whitespace and null bytes.
+            return substr(trim(str_replace(chr(0), "", (string) $val)), 0, 1024);
+        }
         if ($key === "preload_interval") {
             return $this->sanitizeEnum(
                 $val,
