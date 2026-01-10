@@ -22,6 +22,11 @@
         0 8px 10px -6px rgba(0, 0, 0, 0.01);
     --wpsc-shadow-float: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
 
+    /* Status Colors */
+    --wpsc-success: #22c55e;
+    --wpsc-warning: #f59e0b;
+    --wpsc-danger: #ef4444;
+
     --wpsc-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -280,7 +285,7 @@ input:checked + .wpsc-slider:before {
     transform: translateX(20px);
 }
 
-/* Premium Radio Cards (The big change) */
+/* Premium Radio Cards */
 .wpsc-radio-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -397,37 +402,6 @@ input:checked + .wpsc-slider:before {
 .wpsc-stats-container {
     padding: 2.5rem;
 }
-.wpsc-stat-card {
-    background: #f8fafc;
-    border: 1px solid var(--wpsc-border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-    .wpsc-app-container {
-        flex-direction: column;
-    }
-    .wpsc-sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--wpsc-border);
-    }
-    .wpsc-nav {
-        display: flex;
-        overflow-x: auto;
-    }
-    .wpsc-nav-item {
-        white-space: nowrap;
-        margin-right: 10px;
-    }
-}
-
-/* --- Analytics & Tools Specific Styling --- */
-
-/* 1. Analytics Grid */
 .wpsc-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -559,7 +533,6 @@ progress.wpsc-progress-bar::-webkit-progress-value {
 
 /* --- Notices --- */
 .wpsc-notices-container {
-    /* Container styling handled in PHP to manage empty states */
     margin-bottom: 0;
 }
 
@@ -567,10 +540,10 @@ progress.wpsc-progress-bar::-webkit-progress-value {
     background: var(--wpsc-bg-surface);
     border: 1px solid var(--wpsc-border);
     border-left: 4px solid var(--wpsc-primary);
-    border-radius: 8px; /* Slightly tighter radius for alerts */
+    border-radius: 8px;
     padding: 1rem 1.25rem;
     display: flex;
-    align-items: center; /* This fixes the button alignment */
+    align-items: center;
     justify-content: space-between;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     animation: wpsc-slide-in 0.3s var(--wpsc-ease);
@@ -614,7 +587,7 @@ progress.wpsc-progress-bar::-webkit-progress-value {
     cursor: pointer;
     padding: 6px;
     border-radius: 6px;
-    flex-shrink: 0; /* Prevents button from being squished */
+    flex-shrink: 0;
     margin-left: 1rem;
     display: flex;
     align-items: center;
@@ -654,4 +627,20 @@ progress.wpsc-progress-bar::-webkit-progress-value {
 .wpsc-btn-secondary:focus-visible,
 .wpsc-btn-ghost-danger:focus-visible {
     border-color: var(--wpsc-primary);
+}
+
+/* --- ANIMATION FIXES (Added for spinner) --- */
+@keyframes wpsc-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.wpsc-spin {
+    animation: wpsc-rotate 2s linear infinite !important;
+    display: inline-block !important; /* Required for transforms */
+    transform-origin: center center;
 }

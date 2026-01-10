@@ -55,7 +55,7 @@ class SettingsManager
     private function formEnd(): void
     {
         echo '<div class="wpsc-sticky-footer">';
-        echo '<button type="submit" name="submit" id="submit" class="wpsc-btn-primary">';
+        echo '<button type="submit" name="submit" id="submit" class="wpsc-btn-primary" data-loading-text="Saving Changes...">';
         echo '<span class="dashicons dashicons-saved" aria-hidden="true"></span> ';
         echo esc_html__("Save Changes", "wps-cache");
         echo "</button>";
@@ -82,12 +82,15 @@ class SettingsManager
                 <div class="wpsc-stats-grid">
                     <div class="wpsc-stat-card">
                         <div>
-                            <div class="wpsc-stat-header"><span class="dashicons dashicons-database"></span> Redis Object Cache</div>
+                            <div class="wpsc-stat-header"><span class="dashicons dashicons-database"></span> Redis Object Cache
+                            </div>
                             <?php if (!empty($redis["enabled"])): ?>
                                 <?php if (!empty($redis["connected"])): ?>
-                                    <div class="wpsc-stat-big-number"><?php echo esc_html(
-                                        $redis["hit_ratio"],
-                                    ); ?>%</div>
+                                    <div class="wpsc-stat-big-number">
+                                        <?php echo esc_html(
+                                            $redis["hit_ratio"],
+                                        ); ?>%
+                                    </div>
                                     <div style="color: var(--wpsc-text-muted);">Hit Ratio</div>
                                 <?php else: ?>
                                     <div class="wpsc-status-pill error">Connection Failed</div>
@@ -101,9 +104,9 @@ class SettingsManager
                         <div>
                             <div class="wpsc-stat-header"><span class="dashicons dashicons-html"></span> Page Cache</div>
                             <?php if ($html["enabled"]): ?>
-                                <div class="wpsc-stat-big-number"><?php echo esc_html(
-                                    $html["files"],
-                                ); ?></div>
+                                <div class="wpsc-stat-big-number">
+                                    <?php echo esc_html($html["files"]); ?>
+                                </div>
                                 <div style="color: var(--wpsc-text-muted);">Cached Pages</div>
                             <?php else: ?>
                                 <div class="wpsc-status-pill warning">Disabled</div>
@@ -113,12 +116,16 @@ class SettingsManager
                     <div class="wpsc-stat-card">
                         <div class="wpsc-stat-header"><span class="dashicons dashicons-desktop"></span> Server</div>
                         <div style="font-size: 0.9rem; display:flex; flex-direction:column; gap:5px;">
-                            <div>PHP: <strong><?php echo esc_html(
-                                $stats["system"]["php_version"],
-                            ); ?></strong></div>
-                            <div>Server: <strong><?php echo esc_html(
-                                $stats["system"]["server"],
-                            ); ?></strong></div>
+                            <div>PHP: <strong>
+                                    <?php echo esc_html(
+                                        $stats["system"]["php_version"],
+                                    ); ?>
+                                </strong></div>
+                            <div>Server: <strong>
+                                    <?php echo esc_html(
+                                        $stats["system"]["server"],
+                                    ); ?>
+                                </strong></div>
                         </div>
                     </div>
                 </div>
@@ -152,19 +159,19 @@ class SettingsManager
             "Automatically generate cache files.",
             function () use ($settings) {
                 ?>
-                <div id="wpsc-preload-progress" class="wpsc-progress-container" style="display:none;">
-                    <div class="wpsc-progress-header">
-                        <span id="wpsc-preload-status" role="status" aria-live="polite">Initializing...</span>
-                        <span id="wpsc-preload-percent">0%</span>
-                    </div>
-                    <progress id="wpsc-preload-bar" class="wpsc-progress-bar" value="0" max="100"></progress>
+            <div id="wpsc-preload-progress" class="wpsc-progress-container" style="display:none;">
+                <div class="wpsc-progress-header">
+                    <span id="wpsc-preload-status" role="status" aria-live="polite">Initializing...</span>
+                    <span id="wpsc-preload-percent">0%</span>
                 </div>
-                <div style="display: flex; justify-content: flex-start; margin-top: 15px;">
-                    <button type="button" id="wpsc-start-preload" class="wpsc-btn-primary" aria-controls="wpsc-preload-progress">
-                        <span class="dashicons dashicons-controls-play"></span> Start Preloading
-                    </button>
-                </div>
-                <?php
+                <progress id="wpsc-preload-bar" class="wpsc-progress-bar" value="0" max="100"></progress>
+            </div>
+            <div style="display: flex; justify-content: flex-start; margin-top: 15px;">
+                <button type="button" id="wpsc-start-preload" class="wpsc-btn-primary" aria-controls="wpsc-preload-progress">
+                    <span class="dashicons dashicons-controls-play"></span> Start Preloading
+                </button>
+            </div>
+            <?php
             },
             "dashicons-update",
         );
@@ -177,40 +184,39 @@ class SettingsManager
             "Required for Redis functionality.",
             function () use ($object_cache_installed) {
                 ?>
-                <div class="wpsc-tool-status-box">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <strong>Status:</strong>
-                        <?php if ($object_cache_installed): ?>
-                            <span class="wpsc-status-pill success"><span class="dashicons dashicons-yes"></span> Installed</span>
-                        <?php else: ?>
-                            <span class="wpsc-status-pill warning"><span class="dashicons dashicons-warning"></span> Not Installed</span>
-                        <?php endif; ?>
-                    </div>
-                    <div>
-                        <?php if ($object_cache_installed): ?>
-                            <a href="<?php echo esc_url(
-                                wp_nonce_url(
-                                    admin_url(
-                                        "admin-post.php?action=wpsc_remove_object_cache",
-                                    ),
-                                    "wpsc_remove_object_cache",
-                                ),
-                            ); ?>"
-                               class="wpsc-btn-ghost-danger wpsc-confirm-trigger" data-confirm="Disable Object Cache?">Uninstall</a>
-                        <?php else: ?>
-                            <a href="<?php echo esc_url(
-                                wp_nonce_url(
-                                    admin_url(
-                                        "admin-post.php?action=wpsc_install_object_cache",
-                                    ),
-                                    "wpsc_install_object_cache",
-                                ),
-                            ); ?>"
-                               class="wpsc-btn-primary">Install Drop-in</a>
-                        <?php endif; ?>
-                    </div>
+            <div class="wpsc-tool-status-box">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <strong>Status:</strong>
+                    <?php if ($object_cache_installed): ?>
+                        <span class="wpsc-status-pill success"><span class="dashicons dashicons-yes"></span> Installed</span>
+                    <?php else: ?>
+                        <span class="wpsc-status-pill warning"><span class="dashicons dashicons-warning"></span> Not Installed</span>
+                    <?php endif; ?>
                 </div>
-                <?php
+                <div>
+                    <?php if ($object_cache_installed): ?>
+                        <a href="<?php echo esc_url(
+                            wp_nonce_url(
+                                admin_url(
+                                    "admin-post.php?action=wpsc_remove_object_cache",
+                                ),
+                                "wpsc_remove_object_cache",
+                            ),
+                        ); ?>" class="wpsc-btn-ghost-danger wpsc-confirm-trigger"
+                            data-confirm="Disable Object Cache?">Uninstall</a>
+                    <?php else: ?>
+                        <a href="<?php echo esc_url(
+                            wp_nonce_url(
+                                admin_url(
+                                    "admin-post.php?action=wpsc_install_object_cache",
+                                ),
+                                "wpsc_install_object_cache",
+                            ),
+                        ); ?>" class="wpsc-btn-primary">Install Drop-in</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php
             },
             "dashicons-database-view",
         );
@@ -627,46 +633,49 @@ class SettingsManager
             },
             "dashicons-trash",
         );
-        $this->renderer->renderCard("Security", "Hardening.", function () use (
-            $settings,
-        ) {
-            $this->renderer->renderToggle(
-                "bloat_disable_xmlrpc",
-                "Disable XML-RPC",
-                "",
-                $settings,
-            );
-            $this->renderer->renderToggle(
-                "bloat_disable_user_enumeration",
-                "Disable User Enumeration",
-                "Block author scans and user REST endpoints.",
-                $settings,
-            );
-            $this->renderer->renderToggle(
-                "bloat_hide_wp_version",
-                "Hide WP Version",
-                "",
-                $settings,
-            );
-            $this->renderer->renderToggle(
-                "bloat_remove_wlw_rsd",
-                "Remove WLW & RSD",
-                "",
-                $settings,
-            );
-            $this->renderer->renderToggle(
-                "bloat_remove_shortlink",
-                "Remove Shortlinks",
-                "",
-                $settings,
-            );
-            $this->renderer->renderToggle(
-                "bloat_disable_self_pingbacks",
-                "Disable Self Pingbacks",
-                "",
-                $settings,
-            );
-        }, "dashicons-shield");
+        $this->renderer->renderCard(
+            "Security",
+            "Hardening.",
+            function () use ($settings) {
+                $this->renderer->renderToggle(
+                    "bloat_disable_xmlrpc",
+                    "Disable XML-RPC",
+                    "",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "bloat_disable_user_enumeration",
+                    "Disable User Enumeration",
+                    "Block author scans and user REST endpoints.",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "bloat_hide_wp_version",
+                    "Hide WP Version",
+                    "",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "bloat_remove_wlw_rsd",
+                    "Remove WLW & RSD",
+                    "",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "bloat_remove_shortlink",
+                    "Remove Shortlinks",
+                    "",
+                    $settings,
+                );
+                $this->renderer->renderToggle(
+                    "bloat_disable_self_pingbacks",
+                    "Disable Self Pingbacks",
+                    "",
+                    $settings,
+                );
+            },
+            "dashicons-shield",
+        );
         $this->renderer->renderCard(
             "Heartbeat",
             "Server load.",
@@ -747,7 +756,7 @@ class SettingsManager
             function () use ($settings, $stats, $items) {
                 echo '<div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">';
                 echo '<button type="button" id="wpsc-db-toggle-all" class="wpsc-btn-secondary"><span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Select All</button>';
-                echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary"><span class="dashicons dashicons-database" style="vertical-align:middle;"></span> Optimize Selected</button>';
+                echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary" data-loading-text="Optimizing..."><span class="dashicons dashicons-database" style="vertical-align:middle;"></span> Optimize Selected</button>';
                 echo "</div>";
                 echo '<div id="wpsc-db-status" style="margin-bottom:20px; text-align:right; font-weight:600;"></div>';
 
@@ -759,15 +768,18 @@ class SettingsManager
                             ? "Overhead: {$count}"
                             : "Count: {$count}";
                     $checked = !empty($settings["db_clean_" . $key]);
-                    $inputId = "wpsc_db_clean_" . $key; ?>
+                    $inputId = "wpsc_db_clean_" . $key;
+                    ?>
                 <div class="wpsc-setting-row">
                     <div class="wpsc-setting-info">
                         <label class="wpsc-setting-label" for="<?php echo esc_attr(
                             $inputId,
-                        ); ?>"><?php echo esc_html($label); ?></label>
-                        <p class="wpsc-setting-desc" style="color:var(--wpsc-primary);"><?php echo esc_html(
-                            $display,
-                        ); ?></p>
+                        ); ?>">
+                            <?php echo esc_html($label); ?>
+                        </label>
+                        <p class="wpsc-setting-desc" style="color:var(--wpsc-primary);">
+                            <?php echo esc_html($display); ?>
+                        </p>
                     </div>
                     <div class="wpsc-setting-control">
                         <input type="hidden" name="wpsc_settings[db_clean_<?php echo esc_attr(
@@ -794,79 +806,77 @@ class SettingsManager
         );
         $this->formEnd();?>
         <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const btn = document.getElementById('wpsc-db-optimize');
-            const toggleBtn = document.getElementById('wpsc-db-toggle-all');
-            const status = document.getElementById('wpsc-db-status');
-            const checkboxes = document.querySelectorAll('.wpsc-db-checkbox');
+            document.addEventListener('DOMContentLoaded', function () {
+                const btn = document.getElementById('wpsc-db-optimize');
+                const toggleBtn = document.getElementById('wpsc-db-toggle-all');
+                const status = document.getElementById('wpsc-db-status');
+                const checkboxes = document.querySelectorAll('.wpsc-db-checkbox');
 
-            function updateButtonState() {
-                if (btn && btn.dataset.originalText) return;
-                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-                if(btn) btn.disabled = !anyChecked;
-                if(toggleBtn) {
-                    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-                    toggleBtn.innerHTML = allChecked ? '<span class="dashicons dashicons-dismiss" style="vertical-align:middle;"></span> Deselect All' : '<span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Select All';
-                    toggleBtn.dataset.state = allChecked ? 'deselect' : 'select';
+                function updateButtonState() {
+                    if (btn && btn.dataset.originalText) return;
+                    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                    if (btn) btn.disabled = !anyChecked;
+                    if (toggleBtn) {
+                        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                        toggleBtn.innerHTML = allChecked ? '<span class="dashicons dashicons-dismiss" style="vertical-align:middle;"></span> Deselect All' : '<span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Select All';
+                        toggleBtn.dataset.state = allChecked ? 'deselect' : 'select';
+                    }
                 }
-            }
 
-            if(toggleBtn) {
-                toggleBtn.addEventListener('click', function() {
-                    const isSelect = toggleBtn.dataset.state !== 'deselect';
-                    checkboxes.forEach(cb => {
-                        cb.checked = isSelect;
-                        cb.dispatchEvent(new Event('change'));
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', function () {
+                        const isSelect = toggleBtn.dataset.state !== 'deselect';
+                        checkboxes.forEach(cb => {
+                            cb.checked = isSelect;
+                            cb.dispatchEvent(new Event('change'));
+                        });
+                        if (typeof announce === 'function') { announce(isSelect ? 'All items selected' : 'All items deselected'); }
                     });
-                    if (typeof announce === 'function') { announce(isSelect ? 'All items selected' : 'All items deselected'); }
-                });
-            }
+                }
 
-            if(checkboxes) checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
-            if(btn) updateButtonState();
+                if (checkboxes) checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
+                if (btn) updateButtonState();
 
-            if(btn) {
-                btn.addEventListener('click', function() {
-                    const items = [];
-                    document.querySelectorAll('.wpsc-db-checkbox:checked').forEach(el => { items.push(el.dataset.key); });
-                    if (items.length === 0) return;
+                if (btn) {
+                    btn.addEventListener('click', function () {
+                        const items = [];
+                        document.querySelectorAll('.wpsc-db-checkbox:checked').forEach(el => { items.push(el.dataset.key); });
+                        if (items.length === 0) return;
 
-                    if (!btn.dataset.originalText) { btn.dataset.originalText = btn.innerHTML; }
-                    const originalText = btn.dataset.originalText;
-                    btn.disabled = true;
-                    btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin"></span> Optimizing...';
+                        if (!btn.dataset.originalText) { btn.dataset.originalText = btn.innerHTML; }
+                        const originalText = btn.dataset.originalText;
+                        btn.disabled = true;
+                        // ADDED wpsc-spin CLASS HERE
+                        btn.innerHTML = '<span class="dashicons dashicons-update wpsc-spin"></span> Optimizing...';
 
-                    // Sentinel Fix: Correctly serialize array parameters for PHP handling.
-                    // Previous 'URLSearchParams' usage sent 'items[]=a,b' (string) which caused silent failures.
-                    // By appending individually, we send 'items[]=a&items[]=b' which PHP parses correctly as an array.
-                    const params = new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce });
-                    items.forEach(item => params.append('items[]', item));
+                        const params = new URLSearchParams({ action: 'wpsc_manual_db_cleanup', _ajax_nonce: wpsc_admin.nonce });
+                        items.forEach(item => params.append('items[]', item));
 
-                    fetch(wpsc_admin.ajax_url, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: params
-                    }).then(res => res.json()).then(res => {
-                        if(res.success) {
-                            btn.innerHTML = '<span class="dashicons dashicons-yes"></span> Cleaned!';
-                            status.style.color = 'var(--wpsc-success)';
-                            status.textContent = res.data;
-                            if (typeof announce === 'function') { announce(res.data); }
-                            setTimeout(() => window.location.reload(), 1500);
-                        } else {
-                             throw new Error(res.data);
-                        }
-                    }).catch(err => {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                        status.style.color = 'var(--wpsc-danger)';
-                        const msg = 'Error: ' + (err.message || 'Unknown error');
-                        status.textContent = msg;
-                        if (typeof announce === 'function') { announce(msg); }
+                        fetch(wpsc_admin.ajax_url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: params
+                        }).then(res => res.json()).then(res => {
+                            if (res.success) {
+                                btn.innerHTML = '<span class="dashicons dashicons-yes"></span> Cleaned!';
+                                status.style.color = 'var(--wpsc-success)';
+                                status.textContent = res.data;
+                                if (typeof announce === 'function') { announce(res.data); }
+                                setTimeout(() => window.location.reload(), 1500);
+                            } else {
+                                throw new Error(res.data);
+                            }
+                        }).catch(err => {
+                            btn.innerHTML = originalText;
+                                  btn.disabled = false;
+                            status.style.color = 'var(--wpsc-danger)';
+                            const msg = 'Error: ' + (err.message || 'Unknown error');
+                            status.textContent = msg;
+                            if (typeof announce === 'function') { announce(msg); }
+                        });
                     });
-                });
-            }
-        });
+                }
+            });
         </script>
         <?php
     }
