@@ -780,7 +780,9 @@ class SettingsManager
     $key,
 ); ?>" name="wpsc_settings[db_clean_<?php echo esc_attr(
     $key,
-); ?>]" value="1" <?php checked($checked); ?>>
+); ?>]" value="1" aria-checked="<?php echo $checked
+    ? "true"
+    : "false"; ?>" <?php checked($checked); ?>>
                             <span class="wpsc-slider"></span>
                         </label>
                     </div>

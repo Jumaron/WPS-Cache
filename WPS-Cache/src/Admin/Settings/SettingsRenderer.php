@@ -77,6 +77,9 @@ class SettingsRenderer
                     ); ?>"
                         name="wpsc_settings[<?php echo esc_attr($key); ?>]"
                         value="1"
+                        aria-checked="<?php echo $checked
+                            ? "true"
+                            : "false"; ?>"
                         aria-describedby="<?php echo $descId; ?>"
                         <?php checked($checked); ?>>
                     <span class="wpsc-slider"></span>
