@@ -23,6 +23,8 @@ final class RedisCache extends AbstractCacheDriver
     private float $timeout;
     private string $salt;
     private bool $useIgbinary = false;
+    private bool $useUnlink = false;
+    private bool $useAsyncFlush = false;
 
     public function __construct(
         string $host = "127.0.0.1",
@@ -171,6 +173,10 @@ final class RedisCache extends AbstractCacheDriver
                 Redis::COMPRESSION_LZ4,
             );
         }
+
+        // 6. Capability Checks (Cache once to avoid redundant function calls in hot paths)
+        $this->useUnlink = method_exists($this->redis, "unlink");
+        $this->useAsyncFlush = version_compare(phpversion("redis"), "3.1.3", ">=");
     }
 
     /**
@@ -251,7 +257,7 @@ final class RedisCache extends AbstractCacheDriver
             return;
         }
         try {
-            if (method_exists($this->redis, "unlink")) {
+            if ($this->useUnlink) {
                 $this->redis->unlink($key);
             } else {
                 $this->redis->del($key);
@@ -281,7 +287,7 @@ final class RedisCache extends AbstractCacheDriver
             // But if we are the only user of this DB, flushDB is faster.
             if (empty($this->prefix)) {
                 // Async flush if available (Redis 4.0+)
-                if (version_compare(phpversion("redis"), "3.1.3", ">=")) {
+                if ($this->useAsyncFlush) {
                     $this->redis->flushDB(true);
                 } else {
                     $this->redis->flushDB();
@@ -298,7 +304,7 @@ final class RedisCache extends AbstractCacheDriver
             // We loop until iterator returns to 0
             while ($keys = $this->redis->scan($iterator, "*", 100)) {
                 if (!empty($keys)) {
-                    if (method_exists($this->redis, "unlink")) {
+                    if ($this->useUnlink) {
                         $this->redis->unlink($keys);
                     } else {
                         $this->redis->del($keys);

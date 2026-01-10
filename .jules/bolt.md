@@ -25,3 +25,7 @@
 ## 2026-01-28 - [Optimizing CSS String Tokenization]
 **Learning:** Parsing strings character-by-character in PHP is inefficient due to interpreter overhead.
 **Action:** Replaced the manual `while` loop for CSS string tokenization in `MinifyCSS` with `strcspn`, using a mask of `\\\n` plus the quote character to quickly skip non-special characters. This mirrors the earlier optimization in `MinifyJS`.
+
+## 2026-02-04 - [Caching Capability Checks in Drivers]
+**Learning:** Checks like `method_exists` and `version_compare` are relatively fast but add up when called thousands of times in a loop (e.g., clearing cache keys).
+**Action:** Added `useUnlink` and `useAsyncFlush` properties to `RedisCache`, calculated once in `connect()`, to avoid repeated function calls during `delete` and `clear` operations.
