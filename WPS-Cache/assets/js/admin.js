@@ -7,7 +7,20 @@ document.addEventListener("DOMContentLoaded", function () {
   initDismissButtons();
   initSwitches();
   initTabsResponsive();
+  initKeyboardShortcuts();
 });
+
+function initKeyboardShortcuts() {
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      const saveBtn = document.getElementById("submit");
+      if (saveBtn) {
+        e.preventDefault();
+        saveBtn.click();
+      }
+    }
+  });
+}
 
 function initTabsResponsive() {
   const nav = document.querySelector(".wpsc-nav");

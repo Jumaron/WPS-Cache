@@ -55,7 +55,7 @@ class SettingsManager
     private function formEnd(): void
     {
         echo '<div class="wpsc-sticky-footer">';
-        echo '<button type="submit" name="submit" id="submit" class="wpsc-btn-primary">';
+        echo '<button type="submit" name="submit" id="submit" class="wpsc-btn-primary" title="' . esc_attr__("Save Changes (Cmd/Ctrl + S)", "wps-cache") . '">';
         echo '<span class="dashicons dashicons-saved" aria-hidden="true"></span> ';
         echo esc_html__("Save Changes", "wps-cache");
         echo "</button>";
