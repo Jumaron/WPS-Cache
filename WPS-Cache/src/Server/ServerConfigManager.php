@@ -136,8 +136,21 @@ class ServerConfigManager
         $cache_path = "/" . trim($this->cachePathRel, "/"); // ensure leading slash
         $mobile_agents = self::MOBILE_AGENT_REGEX;
 
+        // Sentinel: Apply Security Hardening based on settings
+        $settings = get_option("wpsc_settings", \WPSCache\Plugin::DEFAULT_SETTINGS);
+        $security_rules = "";
+
+        if (!empty($settings["bloat_disable_xmlrpc"])) {
+            $security_rules .= "\n# Sentinel: Block XML-RPC\n<Files xmlrpc.php>\n    <IfModule mod_authz_core.c>\n        Require all denied\n    </IfModule>\n    <IfModule !mod_authz_core.c>\n        Order Deny,Allow\n        Deny from all\n    </IfModule>\n</Files>\n";
+        }
+
+        if (!empty($settings["bloat_disable_user_enumeration"])) {
+            $security_rules .= "\n# Sentinel: Block User Enumeration\n<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteCond %{QUERY_STRING} (?:^|&)author=\d+\nRewriteRule .* /? [L,R=301]\n</IfModule>\n";
+        }
+
         return <<<EOT
         # BEGIN WPS Cache
+        {$security_rules}
         <IfModule mod_rewrite.c>
         RewriteEngine On
         RewriteBase {$base}
