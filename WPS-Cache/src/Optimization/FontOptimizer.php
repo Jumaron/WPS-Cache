@@ -72,9 +72,10 @@ class FontOptimizer
                             '/@font-face\s*\{([^}]+)\}/i',
                             function (array $matches): string {
                                 $body = $matches[1];
-                                // Only add if not already present
+                                // Replace existing font-display value with swap
                                 if (stripos($body, 'font-display') !== false) {
-                                    return $matches[0];
+                                    $body = preg_replace('/font-display\s*:\s*[a-zA-Z-]+/i', 'font-display: swap', $body);
+                                    return '@font-face{' . $body . '}';
                                 }
                                 // Trim trailing whitespace/semicolons, then append cleanly
                                 $body = rtrim($body, " \t\n\r;");
@@ -190,8 +191,10 @@ class FontOptimizer
                 '/@font-face\s*\{([^}]+)\}/i',
                 function (array $m): string {
                     $body = $m[1];
+                    // Replace existing font-display value with swap
                     if (stripos($body, 'font-display') !== false) {
-                        return $m[0];
+                        $body = preg_replace('/font-display\s*:\s*[a-zA-Z-]+/i', 'font-display: swap', $body);
+                        return '@font-face{' . $body . '}';
                     }
                     $body = rtrim($body, " \t\n\r;");
                     return '@font-face{' . $body . ';font-display:swap}';
