@@ -195,12 +195,17 @@ final class MinifyJS extends AbstractCacheDriver
         if (empty($wp_scripts->queue)) {
             return;
         }
-        // Changed key
-        $excluded = $this->settings["excluded_js_minify"] ?? [];
+
+        // Cache site_url() — avoids repeated WP option lookups
+        $siteUrl = site_url();
+
+        // Hash-map exclusion — O(1) handle lookups instead of O(N) in_array
+        $excludedRaw = $this->settings['excluded_js_minify'] ?? [];
+        $excludedHandles = array_flip($excludedRaw);
 
         foreach ($wp_scripts->queue as $handle) {
             try {
-                $this->processScript($handle, $wp_scripts, $excluded);
+                $this->processScript($handle, $wp_scripts, $excludedHandles, $siteUrl);
             } catch (\Throwable $e) {
             }
         }
@@ -209,38 +214,43 @@ final class MinifyJS extends AbstractCacheDriver
     private function processScript(
         string $handle,
         \WP_Scripts $wp_scripts,
-        array $excluded,
+        array $excludedHandles,
+        string $siteUrl,
     ): void {
         if (!isset($wp_scripts->registered[$handle])) {
             return;
         }
         $script = $wp_scripts->registered[$handle];
-        if (!$this->shouldProcessScript($script, $handle, $excluded)) {
+        if (!$this->shouldProcessScript($script, $handle, $excludedHandles, $siteUrl)) {
             return;
         }
 
-        $source = $this->getSourcePath($script);
-        if (
-            !$source ||
-            !is_readable($source) ||
-            filesize($source) > self::MAX_FILE_SIZE
-        ) {
+        $source = $this->getSourcePath($script, $siteUrl);
+        if (!$source) {
             return;
         }
 
-        $cache_key = $this->generateCacheKey(
-            $handle . $source . filemtime($source),
-        );
+        // Single stat call — filesize returns false on missing/unreadable
+        $size = @filesize($source);
+        if ($size === false || $size > self::MAX_FILE_SIZE) {
+            return;
+        }
+
+        $mtime = @filemtime($source);
+        $cache_key = $this->generateCacheKey($handle . $source . $mtime);
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
             $content = @file_get_contents($source);
-            if ($content) {
-                $this->set($cache_key, $this->minifyJS($content));
+            if ($content !== false && $content !== '') {
+                $minified = $this->minifyJS($content);
+                // Strip source map comments (they reference files that don't exist in cache)
+                $minified = preg_replace('/\/\/[#@]\s*sourceMappingURL=\S+/i', '', $minified);
+                $this->set($cache_key, $minified);
             }
         }
         if (file_exists($cache_file)) {
-            $this->updateScriptRegistration($script, $cache_file);
+            $this->updateScriptRegistration($script, $cache_file, $siteUrl);
         }
     }
 
@@ -622,40 +632,78 @@ final class MinifyJS extends AbstractCacheDriver
         }
         return false;
     }
-    private function shouldProcessScript($script, string $h, array $ex): bool
-    {
+    private function shouldProcessScript(
+        $script,
+        string $handle,
+        array $excludedHandles,
+        string $siteUrl,
+    ): bool {
         if (!isset($script->src) || empty($script->src)) {
             return false;
         }
         $src = $script->src;
-        return strpos($src, ".min.js") === false &&
-            strpos($src, site_url()) !== false &&
-            !in_array($h, $ex) &&
-            !$this->isExcluded($src);
+
+        // Already minified? Skip.
+        if (str_contains($src, '.min.js')) {
+            return false;
+        }
+        // Not local? Skip.
+        if (!str_contains($src, $siteUrl) && !str_starts_with($src, '/')) {
+            return false;
+        }
+        // Handle excluded? O(1) lookup.
+        if (isset($excludedHandles[$handle])) {
+            return false;
+        }
+        // Basename excluded? Check filename against exclusion patterns.
+        $basename = basename(parse_url($src, PHP_URL_PATH) ?: $src);
+        if ($this->isExcluded($basename) || $this->isExcluded($src)) {
+            return false;
+        }
+        return true;
     }
-    private function getSourcePath($script): ?string
+
+    private function getSourcePath($script, string $siteUrl): ?string
     {
         if (!isset($script->src)) {
             return null;
         }
-        $path = str_replace(
-            [site_url(), "wp-content"],
-            [ABSPATH, "wp-content"],
-            $script->src,
-        );
+        $src = $script->src;
+
+        // Strip query string (e.g. ?ver=5.9)
+        $cleanSrc = strtok($src, '?') ?: $src;
+
+        // Handle protocol-relative URLs
+        if (str_starts_with($cleanSrc, '//')) {
+            $cleanSrc = 'https:' . $cleanSrc;
+        }
+
+        $path = str_replace($siteUrl, rtrim(ABSPATH, '/'), $cleanSrc);
+
+        // Normalize path separators for the OS
+        $path = str_replace('/', DIRECTORY_SEPARATOR, $path);
+
+        $real = @realpath($path);
         if (
-            ($real = realpath($path)) &&
-            str_starts_with($real, ABSPATH) &&
-            pathinfo($real, PATHINFO_EXTENSION) === "js"
+            $real !== false &&
+            str_starts_with($real, realpath(ABSPATH) ?: ABSPATH) &&
+            pathinfo($real, PATHINFO_EXTENSION) === 'js'
         ) {
             return $real;
         }
         return null;
     }
-    private function updateScriptRegistration($script, string $file): void
+
+    private function updateScriptRegistration($script, string $file, string $siteUrl): void
     {
-        $script->src = str_replace(ABSPATH, site_url("/"), $file);
-        $script->ver = filemtime($file);
+        $script->src = str_replace(
+            str_replace('/', DIRECTORY_SEPARATOR, rtrim(ABSPATH, '/')),
+            rtrim($siteUrl, '/'),
+            $file,
+        );
+        // Normalize to forward slashes for URLs
+        $script->src = str_replace(DIRECTORY_SEPARATOR, '/', $script->src);
+        $script->ver = (string) @filemtime($file);
     }
     private function getCacheFile(string $key): string
     {

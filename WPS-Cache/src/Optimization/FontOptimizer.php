@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace WPSCache\Optimization;
 
 /**
- * SOTA Font Optimization.
+ * Font Optimization.
  *
  * Features:
- * 1. Localize Legacy Google Fonts (Downloads & Caches WOFF2).
- * 2. Enforces 'font-display: swap' on ALL fonts.
+ * 1. Localize Google Fonts (v1 and v2) — downloads & caches WOFF2 files locally.
+ * 2. Enforces 'font-display: swap' on ALL @font-face rules.
  * 3. Handles Unicode Ranges correctly (prevents duplicates).
  * 4. Canonicalizes URLs to prevent cache bloat from ?ver= parameters.
+ * 5. Adds preconnect hints for fonts still pending download.
  */
 class FontOptimizer
 {
@@ -23,112 +24,119 @@ class FontOptimizer
     public function __construct(array $settings)
     {
         $this->settings = $settings;
-        $this->fontCacheDir = WPSC_CACHE_DIR . "fonts/";
-        $this->fontCacheUrl = content_url("cache/wps-cache/fonts/");
-        // Optimization: Lazy creation of cache directory
+        $this->fontCacheDir = WPSC_CACHE_DIR . 'fonts/';
+        $this->fontCacheUrl = content_url('cache/wps-cache/fonts/');
     }
 
     public function process(string $html): string
     {
-        // 1. Localize Legacy Google Fonts
-        if (!empty($this->settings["font_localize_google"])) {
-            // Optimization: Fast fail if Google Fonts domain is not present
-            if (stripos($html, "fonts.googleapis.com") !== false) {
+        // 1. Localize Google Fonts (supports both v1 /css and v2 /css2)
+        if (!empty($this->settings['font_localize_google'])) {
+            // Fast fail: skip regex engine if no Google Fonts domain is present
+            if (stripos($html, 'fonts.googleapis.com') !== false) {
                 $html = preg_replace_callback(
-                    '/<link[^>]*href=[\'"](https?:\/\/fonts\.googleapis\.com\/css[^"\']*)[\'"][^>]*>/i',
-                    [$this, "localizeGoogleFont"],
+                    '/<link[^>]*href=[\'\"](https?:\/\/fonts\.googleapis\.com\/css2?[^"\']*)[\'"][^>]*>/i',
+                    [$this, 'localizeGoogleFont'],
                     $html,
                 );
+
+                // Add preconnect hint for fonts.gstatic.com (the font file CDN)
+                // Only if we haven't already localized all fonts
+                if (stripos($html, 'fonts.gstatic.com') !== false) {
+                    $preconnect = '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
+                    if (!str_contains($html, 'fonts.gstatic.com" crossorigin')) {
+                        $html = str_replace('</head>', $preconnect . "\n</head>", $html);
+                    }
+                }
             }
         }
 
-        // 2. Force 'font-display: swap' (Universal)
-        if (!empty($this->settings["font_display_swap"])) {
-            // Optimization: Fast fail if no @font-face is globally present
-            if (stripos($html, "@font-face") !== false) {
-                // Optimization: Only scan <style> blocks for @font-face rules
-                // This prevents scanning the entire HTML body (O(N) vs O(CSS)) and avoids modifying text content.
+        // 2. Force 'font-display: swap' in <style> blocks
+        if (!empty($this->settings['font_display_swap'])) {
+            // Fast fail: skip if no @font-face in the entire HTML
+            if (stripos($html, '@font-face') !== false) {
+                // Only scan <style> blocks — avoids modifying text content in the body
                 $html = preg_replace_callback(
                     '/(<style[^>]*>)(.*?)(<\/style>)/is',
-                function ($styleMatches) {
-                    $open = $styleMatches[1];
-                    $content = $styleMatches[2];
-                    $close = $styleMatches[3];
+                    function (array $styleMatches): string {
+                        $open = $styleMatches[1];
+                        $content = $styleMatches[2];
+                        $close = $styleMatches[3];
 
-                    // Optimization: Fast fail if no @font-face is present
-                    // This avoids the expensive regex engine startup for the vast majority of style blocks
-                    if (stripos($content, "@font-face") === false) {
-                        return $styleMatches[0];
-                    }
+                        // Fast fail: skip style blocks without @font-face
+                        if (stripos($content, '@font-face') === false) {
+                            return $styleMatches[0];
+                        }
 
-                    $content = preg_replace_callback(
-                        "/@font-face\s*{([^}]+)}/i",
-                        function ($matches) {
-                            $body = $matches[1];
-                            if (stripos($body, "font-display") === false) {
-                                return "@font-face {" .
-                                    $body .
-                                    "; font-display: swap; }";
-                            }
-                            return $matches[0];
-                        },
-                        $content,
-                    );
+                        $content = preg_replace_callback(
+                            '/@font-face\s*\{([^}]+)\}/i',
+                            function (array $matches): string {
+                                $body = $matches[1];
+                                // Only add if not already present
+                                if (stripos($body, 'font-display') !== false) {
+                                    return $matches[0];
+                                }
+                                // Trim trailing whitespace/semicolons, then append cleanly
+                                $body = rtrim($body, " \t\n\r;");
+                                return '@font-face{' . $body . ';font-display:swap}';
+                            },
+                            $content,
+                        );
 
-                    return $open . $content . $close;
-                },
-                $html,
-            );
-        }
+                        return $open . $content . $close;
+                    },
+                    $html,
+                );
+            }
         }
 
         return $html;
     }
 
     /**
-     * Downloads Google Fonts CSS, parses it, downloads WOFF2 files.
+     * Downloads Google Fonts CSS, parses it, downloads WOFF2 files, and returns an inline <style>.
      */
     private function localizeGoogleFont(array $matches): string
     {
         $originalTag = $matches[0];
         $rawUrl = html_entity_decode($matches[1]);
 
-        // SOTA: Canonicalize URL to prevent duplicates (remove ver, sort params)
+        // Canonicalize URL to prevent duplicates (remove ver, sort params)
         $url = $this->canonicalizeUrl($rawUrl);
 
-        // Create a cache ID based on the CLEAN URL
-        $cacheFilename = md5($url) . ".css";
-        $cacheKey = "wpsc_font_css_" . md5($url);
+        // Create a cache ID based on the clean URL
+        $cacheFilename = md5($url) . '.css';
+        $cacheKey = 'wpsc_font_css_' . md5($url);
 
-        // 1. Check Runtime Memory Cache
+        // 1. Check runtime memory cache
         if (isset($this->cssCache[$cacheKey])) {
-            $css = $this->cssCache[$cacheKey];
-            return $this->formatCss($css, $cacheFilename);
+            return $this->formatCss($this->cssCache[$cacheKey], $cacheFilename);
         }
 
-        // 2. Check Object Cache (Transient)
+        // 2. Check object cache (transient)
         $css = get_transient($cacheKey);
 
         if ($css === false) {
             $cacheFile = $this->fontCacheDir . $cacheFilename;
 
-            // 3. Fallback to File System
+            // 3. Fall back to file system
             if (file_exists($cacheFile)) {
-                $css = file_get_contents($cacheFile);
-                if ($css) {
+                $css = @file_get_contents($cacheFile);
+                if ($css !== false && $css !== '') {
                     set_transient($cacheKey, $css, MONTH_IN_SECONDS);
+                } else {
+                    $css = false;
                 }
-            } else {
-                // 4. Download and Process
+            }
+
+            if ($css === false) {
+                // 4. Download and process
                 $css = $this->downloadAndProcessFont($url);
-                if (!$css) {
+                if ($css === null) {
                     return $originalTag;
                 }
-                // Check if directory exists before writing
-                if (!is_dir($this->fontCacheDir)) {
-                    @mkdir($this->fontCacheDir, 0755, true);
-                }
-                file_put_contents($cacheFile, $css);
+                $this->ensureFontDir();
+                $this->atomicWriteFile($cacheFile, $css);
                 set_transient($cacheKey, $css, MONTH_IN_SECONDS);
             }
         }
@@ -147,13 +155,15 @@ class FontOptimizer
         );
     }
 
+    /**
+     * Downloads Google Fonts CSS, parses it, downloads WOFF2 files locally.
+     */
     private function downloadAndProcessFont(string $apiUrl): ?string
     {
-        // Fetch CSS masquerading as Chrome to get WOFF2 (Modern Format)
+        // Fetch CSS masquerading as Chrome to get WOFF2 (modern format)
         $response = wp_safe_remote_get($apiUrl, [
-            "user-agent" =>
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "timeout" => 15, // Increased timeout for font processing
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'timeout' => 15,
         ]);
 
         if (is_wp_error($response)) {
@@ -164,90 +174,147 @@ class FontOptimizer
             return null;
         }
 
-        // Extract and Download Font URLs
-        // Regex handles query strings inside url(...) if present
+        // Extract and download font file URLs
         $css = preg_replace_callback(
-            "/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/",
-            function ($m) {
+            '/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/',
+            function (array $m): string {
                 $remoteFontUrl = $m[1];
-                return "url(" . $this->downloadFontFile($remoteFontUrl) . ")";
+                return 'url(' . $this->downloadFontFile($remoteFontUrl) . ')';
             },
             $css,
         );
 
-        // Ensure display:swap
-        if (!empty($this->settings["font_display_swap"])) {
-            $css = str_replace("}", ";font-display:swap;}", $css);
+        // Ensure font-display: swap in downloaded CSS
+        if (!empty($this->settings['font_display_swap'])) {
+            $css = preg_replace_callback(
+                '/@font-face\s*\{([^}]+)\}/i',
+                function (array $m): string {
+                    $body = $m[1];
+                    if (stripos($body, 'font-display') !== false) {
+                        return $m[0];
+                    }
+                    $body = rtrim($body, " \t\n\r;");
+                    return '@font-face{' . $body . ';font-display:swap}';
+                },
+                $css,
+            );
         }
 
         return $css;
     }
 
+    /**
+     * Downloads a single font file and returns its local URL.
+     */
     private function downloadFontFile(string $url): string
     {
-        // SOTA: Use MD5 of the URL for the filename.
-        // This ensures uniqueness even if Google serves different files with same basename,
-        // and handles query strings in font URLs safely.
+        // Use MD5 of URL for filename — handles query strings and same-basename collisions
         $path = parse_url($url, PHP_URL_PATH);
-        $ext = $path ? strtolower(pathinfo($path, PATHINFO_EXTENSION)) : "";
+        $ext = $path ? strtolower(pathinfo($path, PATHINFO_EXTENSION)) : '';
 
-        // Sentinel Fix: Strictly whitelist font extensions to prevent dangerous file writes (e.g., .php)
-        // Also fixes potential RCE if upstream source is compromised or spoofed.
-        if (!in_array($ext, ["woff", "woff2", "ttf", "otf", "eot"], true)) {
-            $ext = "woff2";
+        // Strict whitelist to prevent dangerous file writes (security)
+        if (!in_array($ext, ['woff', 'woff2', 'ttf', 'otf', 'eot'], true)) {
+            $ext = 'woff2';
         }
 
-        $filename = md5($url) . "." . $ext;
-
+        $filename = md5($url) . '.' . $ext;
         $localPath = $this->fontCacheDir . $filename;
         $localUrl = $this->fontCacheUrl . $filename;
 
-        if (!file_exists($localPath)) {
-            $content = wp_safe_remote_get($url);
-            if (!is_wp_error($content)) {
-                $body = wp_remote_retrieve_body($content);
-                // Check if directory exists before writing
-                if (!is_dir($this->fontCacheDir)) {
-                    @mkdir($this->fontCacheDir, 0755, true);
-                }
-                file_put_contents($localPath, $body);
-            } else {
-                return $url; // Fallback to remote if download fails
-            }
+        if (file_exists($localPath)) {
+            return $localUrl;
         }
+
+        $response = wp_safe_remote_get($url, ['timeout' => 15]);
+        if (is_wp_error($response)) {
+            return $url; // Fallback to remote if download fails
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        if (empty($body)) {
+            return $url;
+        }
+
+        $this->ensureFontDir();
+        $this->atomicWriteFile($localPath, $body);
 
         return $localUrl;
     }
 
     /**
-     * Cleans Google Font URLs to ensure single cache file per unique font request.
+     * Ensures the font cache directory exists.
+     */
+    private function ensureFontDir(): void
+    {
+        if (!is_dir($this->fontCacheDir)) {
+            @mkdir($this->fontCacheDir, 0755, true);
+            @file_put_contents(
+                $this->fontCacheDir . 'index.php',
+                '<?php // Silence is golden',
+            );
+        }
+    }
+
+    /**
+     * Atomic file write using temp file + rename.
+     */
+    private function atomicWriteFile(string $filepath, string $content): bool
+    {
+        $dir = dirname($filepath);
+        $temp = @tempnam($dir, 'wpsc_font_');
+        if ($temp === false) {
+            // Fallback to direct write
+            return @file_put_contents($filepath, $content, LOCK_EX) !== false;
+        }
+
+        if (@file_put_contents($temp, $content, LOCK_EX) === false) {
+            @unlink($temp);
+            return false;
+        }
+
+        @chmod($temp, 0644);
+
+        if (!@rename($temp, $filepath)) {
+            @unlink($filepath);
+            if (!@rename($temp, $filepath)) {
+                @unlink($temp);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Canonicalizes Google Font URLs to prevent duplicate cache entries.
+     * Removes cache-busting params (ver, version, etc.) and sorts remaining params.
      */
     private function canonicalizeUrl(string $url): string
     {
         $parts = parse_url($url);
-        if (!isset($parts["query"])) {
+        if (!isset($parts['query'])) {
             return $url;
         }
 
-        parse_str($parts["query"], $params);
+        parse_str($parts['query'], $params);
 
         // Remove cache-busting parameters often added by WP themes
         unset(
-            $params["ver"],
-            $params["version"],
-            $params["timestamp"],
-            $params["time"],
+            $params['ver'],
+            $params['version'],
+            $params['timestamp'],
+            $params['time'],
         );
 
-        // Sort parameters to ensure ?family=A&display=swap == ?display=swap&family=A
+        // Sort parameters to ensure consistent cache keys
         ksort($params);
 
         // Rebuild URL
-        $scheme = isset($parts["scheme"]) ? $parts["scheme"] . "://" : "//";
-        $host = $parts["host"] ?? "";
-        $path = $parts["path"] ?? "";
+        $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '//';
+        $host = $parts['host'] ?? '';
+        $path = $parts['path'] ?? '';
         $query = http_build_query($params);
 
-        return $scheme . $host . $path . "?" . $query;
+        return $scheme . $host . $path . ($query !== '' ? '?' . $query : '');
     }
 }

@@ -125,12 +125,17 @@ final class MinifyCSS extends AbstractCacheDriver
         if (empty($wp_styles->queue)) {
             return;
         }
-        // Changed key
-        $excluded = $this->settings["excluded_css_minify"] ?? [];
+
+        // Cache site_url() — avoids repeated WP option lookups
+        $siteUrl = site_url();
+
+        // Hash-map exclusion — O(1) handle lookups instead of O(N) in_array
+        $excludedRaw = $this->settings['excluded_css_minify'] ?? [];
+        $excludedHandles = array_flip($excludedRaw);
 
         foreach ($wp_styles->queue as $handle) {
             try {
-                $this->processStyle($handle, $wp_styles, $excluded);
+                $this->processStyle($handle, $wp_styles, $excludedHandles, $siteUrl);
             } catch (\Throwable $e) {
             }
         }
@@ -139,38 +144,40 @@ final class MinifyCSS extends AbstractCacheDriver
     private function processStyle(
         string $handle,
         \WP_Styles $wp_styles,
-        array $excluded,
+        array $excludedHandles,
+        string $siteUrl,
     ): void {
         if (!isset($wp_styles->registered[$handle])) {
             return;
         }
         $style = $wp_styles->registered[$handle];
-        if (!$this->shouldProcessStyle($style, $handle, $excluded)) {
+        if (!$this->shouldProcessStyle($style, $handle, $excludedHandles, $siteUrl)) {
             return;
         }
 
-        $source = $this->getSourcePath($style);
-        if (
-            !$source ||
-            !is_readable($source) ||
-            filesize($source) > self::MAX_FILE_SIZE
-        ) {
+        $source = $this->getSourcePath($style, $siteUrl);
+        if (!$source) {
             return;
         }
 
-        $cache_key = $this->generateCacheKey(
-            $handle . $source . filemtime($source),
-        );
+        // Single stat call — filesize returns false on missing/unreadable
+        $size = @filesize($source);
+        if ($size === false || $size > self::MAX_FILE_SIZE) {
+            return;
+        }
+
+        $mtime = @filemtime($source);
+        $cache_key = $this->generateCacheKey($handle . $source . $mtime);
         $cache_file = $this->getCacheFile($cache_key);
 
         if (!file_exists($cache_file)) {
-            $content = file_get_contents($source);
-            if ($content) {
+            $content = @file_get_contents($source);
+            if ($content !== false && $content !== '') {
                 $this->set($cache_key, $this->minifyCSS($content));
             }
         }
         if (file_exists($cache_file)) {
-            $this->updateStyleRegistration($style, $cache_file);
+            $this->updateStyleRegistration($style, $cache_file, $siteUrl);
         }
     }
 
@@ -424,40 +431,75 @@ final class MinifyCSS extends AbstractCacheDriver
     private function shouldProcessStyle(
         $style,
         string $handle,
-        array $excluded,
+        array $excludedHandles,
+        string $siteUrl,
     ): bool {
         if (!isset($style->src) || empty($style->src)) {
             return false;
         }
         $src = $style->src;
-        return strpos($src, ".min.css") === false &&
-            strpos($src, site_url()) !== false &&
-            !in_array($handle, $excluded) &&
-            !$this->isExcluded($src);
+
+        // Already minified? Skip.
+        if (str_contains($src, '.min.css')) {
+            return false;
+        }
+        // Not local? Skip.
+        if (!str_contains($src, $siteUrl) && !str_starts_with($src, '/')) {
+            return false;
+        }
+        // Handle excluded? O(1) lookup.
+        if (isset($excludedHandles[$handle])) {
+            return false;
+        }
+        // Basename excluded? Check filename against exclusion patterns.
+        $basename = basename(parse_url($src, PHP_URL_PATH) ?: $src);
+        if ($this->isExcluded($basename) || $this->isExcluded($src)) {
+            return false;
+        }
+        return true;
     }
-    private function getSourcePath($style): ?string
+
+    private function getSourcePath($style, string $siteUrl): ?string
     {
         if (!isset($style->src)) {
             return null;
         }
-        $path = str_replace(
-            [site_url(), "wp-content"],
-            [ABSPATH, "wp-content"],
-            $style->src,
-        );
+        $src = $style->src;
+
+        // Strip query string (e.g. ?ver=5.9)
+        $cleanSrc = strtok($src, '?') ?: $src;
+
+        // Handle protocol-relative URLs
+        if (str_starts_with($cleanSrc, '//')) {
+            $cleanSrc = 'https:' . $cleanSrc;
+        }
+
+        $path = str_replace($siteUrl, rtrim(ABSPATH, '/'), $cleanSrc);
+
+        // Normalize path separators for the OS
+        $path = str_replace('/', DIRECTORY_SEPARATOR, $path);
+
+        $real = @realpath($path);
         if (
-            ($real = realpath($path)) &&
-            str_starts_with($real, ABSPATH) &&
-            pathinfo($real, PATHINFO_EXTENSION) === "css"
+            $real !== false &&
+            str_starts_with($real, realpath(ABSPATH) ?: ABSPATH) &&
+            pathinfo($real, PATHINFO_EXTENSION) === 'css'
         ) {
             return $real;
         }
         return null;
     }
-    private function updateStyleRegistration($style, string $file): void
+
+    private function updateStyleRegistration($style, string $file, string $siteUrl): void
     {
-        $style->src = str_replace(ABSPATH, site_url("/"), $file);
-        $style->ver = filemtime($file);
+        $style->src = str_replace(
+            str_replace('/', DIRECTORY_SEPARATOR, rtrim(ABSPATH, '/')),
+            rtrim($siteUrl, '/'),
+            $file,
+        );
+        // Normalize to forward slashes for URLs
+        $style->src = str_replace(DIRECTORY_SEPARATOR, '/', $style->src);
+        $style->ver = (string) @filemtime($file);
     }
     private function getCacheFile(string $key): string
     {
