@@ -1,178 +1,206 @@
 <?php
 
 /**
- * WPS Cache - Advanced Cache Drop-in
- * Supports Query Strings via hashed filenames.
- * Supports Mobile Cache Separation.
+ * WPS Cache — Advanced Cache Drop-in (High-Performance Edition)
+ *
+ * This drop-in is loaded by WordPress BEFORE the entire core boots.
+ * Every microsecond here is multiplied by every page view.
+ *
+ * Architecture: Flat procedural — no class instantiation, no method dispatch.
+ * All checks ordered by cost (cheapest/most-likely-to-bail first).
+ *
+ * Supports: Query string caching, mobile separation, precomputed gzip/brotli,
+ *           ETag/304, Content-Length, HTTP keep-alive pipelining.
  */
 
-if (!defined("ABSPATH")) {
-    exit("Direct access not allowed.");
+if (!defined('ABSPATH')) {
+    return;
 }
 
-if (!defined("WP_CONTENT_DIR")) {
-    define("WP_CONTENT_DIR", dirname(__FILE__));
+// ─── 0. FAST EXITS (cheapest checks first) ─────────────────────────────────
+
+// Non-GET? Bail immediately — no further work.
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+    return;
 }
 
-class WPSAdvancedCache
-{
-    private const CACHE_LIFETIME = 3600;
-    private const COOKIE_HEADER = "wordpress_logged_in_";
-
-    public function execute(): void
-    {
-        if ($this->shouldBypass()) {
-            return;
-        }
-
-        $file = $this->getCacheFilePath();
-
-        if (file_exists($file)) {
-            $mtime = filemtime($file);
-            if (time() - $mtime > self::CACHE_LIFETIME) {
-                return;
-            }
-            $this->serve($file, $mtime);
-        }
-    }
-
-    private function shouldBypass(): bool
-    {
-        if (($_SERVER["REQUEST_METHOD"] ?? "GET") !== "GET") {
-            return true;
-        }
-
-        // Note: We removed the generic Query String bypass check here.
-        // We now rely on the file existence check.
-        // If query params exist but no file matches the hash, it falls through to WP.
-
-        foreach ($_COOKIE as $key => $value) {
-            if (
-                strpos($key, self::COOKIE_HEADER) === 0 ||
-                $key === "wp-postpass_" ||
-                $key === "comment_author_"
-            ) {
-                return true;
-            }
-        }
-
-        // Special paths
-        $uri = $_SERVER["REQUEST_URI"] ?? "/";
-        if (
-            strpos($uri, "/wp-admin") !== false ||
-            strpos($uri, "/xmlrpc.php") !== false
-        ) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private function getCacheFilePath(): string
-    {
-        $host = preg_replace(
-            "/[^a-zA-Z0-9\-\.]/",
-            "",
-            $_SERVER["HTTP_HOST"] ?? "unknown",
-        );
-        $uri = $_SERVER["REQUEST_URI"] ?? "/";
-
-        $path = parse_url($uri, PHP_URL_PATH);
-        // $path = str_replace("..", "", $path); // Security
-        $path = $this->sanitizePath($path);
-
-        if (
-            substr($path, -1) !== "/" &&
-            !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
-        ) {
-            $path .= "/";
-        }
-
-        // Determine Mobile Suffix
-        $suffix = $this->getMobileSuffix();
-
-        // Determine Filename
-        $query = parse_url($uri, PHP_URL_QUERY);
-        if ($query) {
-            parse_str($query, $queryParams);
-            ksort($queryParams);
-            // Append suffix to query-string based filenames
-            $filename =
-                "index" .
-                $suffix .
-                "-" .
-                md5(http_build_query($queryParams)) .
-                ".html";
-        } else {
-            // Append suffix to standard filenames
-            $filename = "index" . $suffix . ".html";
-        }
-
-        return WP_CONTENT_DIR .
-            "/cache/wps-cache/html/" .
-            $host .
-            $path .
-            $filename;
-    }
-
-    /**
-     * Efficiently detects mobile devices based on User-Agent.
-     * Must match logic in HTMLCache.php
-     */
-    private function getMobileSuffix(): string
-    {
-        $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
-        if (empty($ua)) {
-            return "";
-        }
-        if (
-            preg_match(
-                "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
-                $ua,
-            )
-        ) {
-            return "-mobile";
-        }
-        return "";
-    }
-
-    private function sanitizePath(string $path): string
-    {
-        $path = str_replace(chr(0), "", $path);
-        $parts = explode("/", $path);
-        $safeParts = [];
-        foreach ($parts as $part) {
-            if ($part === "" || $part === ".") {
-                continue;
-            }
-            if ($part === "..") {
-                array_pop($safeParts);
-            } else {
-                $safeParts[] = $part;
-            }
-        }
-        return "/" . implode("/", $safeParts);
-    }
-
-    private function serve(string $file, int $mtime): void
-    {
-        $etag = '"' . $mtime . '"';
-        if (
-            isset($_SERVER["HTTP_IF_NONE_MATCH"]) &&
-            trim($_SERVER["HTTP_IF_NONE_MATCH"]) === $etag
-        ) {
-            header("HTTP/1.1 304 Not Modified");
-            exit();
-        }
-
-        header("Content-Type: text/html; charset=UTF-8");
-        header("Cache-Control: public, max-age=3600");
-        header("ETag: " . $etag);
-        header("X-WPS-Cache: HIT");
-
-        readfile($file);
-        exit();
+// Logged-in or special WP cookies? Check raw header string — O(1) scan,
+// avoids PHP parsing $_COOKIE into an array + iterating it.
+$rawCookie = $_SERVER['HTTP_COOKIE'] ?? '';
+if ($rawCookie !== '') {
+    if (
+        str_contains($rawCookie, 'wordpress_logged_in_') ||
+        str_contains($rawCookie, 'wp-postpass_') ||
+        str_contains($rawCookie, 'comment_author_')
+    ) {
+        return;
     }
 }
 
-new WPSAdvancedCache()->execute();
+// Admin / XMLRPC paths? Single check on REQUEST_URI before any parsing.
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+if (
+    str_contains($requestUri, '/wp-admin') ||
+    str_contains($requestUri, '/xmlrpc.php') ||
+    str_contains($requestUri, '/wp-login.php')
+) {
+    return;
+}
+
+// ─── 1. RESOLVE CACHE FILE PATH ────────────────────────────────────────────
+
+if (!defined('WP_CONTENT_DIR')) {
+    define('WP_CONTENT_DIR', dirname(__FILE__));
+}
+
+// Parse URI once — extract both path and query in a single call.
+$parsed = parse_url($requestUri);
+$path   = $parsed['path'] ?? '/';
+$query  = $parsed['query'] ?? '';
+
+// Lightweight path sanitization — the web server already normalizes most of this.
+// We only defend against directory traversal (null bytes + ".." segments).
+$path = str_replace("\0", '', $path);
+if (str_contains($path, '..')) {
+    // Full sanitization only when ".." is actually present (extremely rare)
+    $parts = [];
+    foreach (explode('/', $path) as $seg) {
+        if ($seg === '' || $seg === '.') continue;
+        if ($seg === '..') { array_pop($parts); }
+        else { $parts[] = $seg; }
+    }
+    $path = '/' . implode('/', $parts);
+}
+
+// Ensure trailing slash for directory-like paths
+if ($path[-1] !== '/' && !str_contains(basename($path), '.')) {
+    $path .= '/';
+}
+
+// Host — fast sanitization (no regex on hot path)
+$host = $_SERVER['HTTP_HOST'] ?? 'unknown';
+$colonPos = strpos($host, ':');
+if ($colonPos !== false) {
+    $host = substr($host, 0, $colonPos);
+}
+// Validate host characters — only allow alphanumeric, hyphens, dots
+$host = preg_replace('/[^a-zA-Z0-9\-.]/', '', $host);
+if ($host === '') {
+    $host = 'unknown';
+}
+
+// Determine device suffix — fast strpos checks before regex fallback
+$mobileSuffix = '';
+$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+if ($ua !== '' && (
+    str_contains($ua, 'Mobile') ||
+    str_contains($ua, 'Android') ||
+    str_contains($ua, 'Kindle') ||
+    str_contains($ua, 'BlackBerry') ||
+    str_contains($ua, 'Opera Mini') ||
+    str_contains($ua, 'Opera Mobi') ||
+    str_contains($ua, 'Silk/')
+)) {
+    $mobileSuffix = '-mobile';
+}
+
+// Build filename
+if ($query !== '') {
+    parse_str($query, $qp);
+    ksort($qp);
+    $filename = 'index' . $mobileSuffix . '-' . md5(http_build_query($qp)) . '.html';
+} else {
+    $filename = 'index' . $mobileSuffix . '.html';
+}
+
+$cacheBase = WP_CONTENT_DIR . '/cache/wps-cache/html/' . $host . $path;
+$cacheFile = $cacheBase . $filename;
+
+// ─── 2. SERVE CACHED FILE ──────────────────────────────────────────────────
+
+// Single stat() call — @filemtime returns false if file doesn't exist.
+// This replaces the old file_exists() + filemtime() (2 stat calls → 1).
+$mtime = @filemtime($cacheFile);
+if ($mtime === false) {
+    return; // Cache miss — fall through to WordPress
+}
+
+// TTL check (3600s = 1 hour)
+if (time() - $mtime > 3600) {
+    return; // Expired — fall through to WordPress for regeneration
+}
+
+// ─── 3. ETag / 304 Not Modified ─────────────────────────────────────────────
+
+// Use file size + mtime for fast, unique ETag (no hashing needed)
+$size = @filesize($cacheFile);
+$etag = '"' . dechex($mtime) . '-' . dechex($size ?: 0) . '"';
+
+if (
+    isset($_SERVER['HTTP_IF_NONE_MATCH']) &&
+    trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag
+) {
+    http_response_code(304);
+    header('ETag: ' . $etag);
+    header('Cache-Control: public, max-age=3600');
+    header('X-WPS-Cache: HIT');
+    exit;
+}
+
+// ─── 4. DETERMINE BEST ENCODING ────────────────────────────────────────────
+
+$acceptEncoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '';
+$serveFile      = $cacheFile;
+$encoding       = '';
+$serveSize      = $size;
+
+// Try brotli first (better compression), then gzip
+if (str_contains($acceptEncoding, 'br')) {
+    $brFile = $cacheFile . '.br';
+    $brSize = @filesize($brFile);
+    if ($brSize !== false) {
+        $serveFile = $brFile;
+        $encoding  = 'br';
+        $serveSize = $brSize;
+    }
+}
+
+if ($encoding === '' && str_contains($acceptEncoding, 'gzip')) {
+    $gzFile = $cacheFile . '.gz';
+    $gzSize = @filesize($gzFile);
+    if ($gzSize !== false) {
+        $serveFile = $gzFile;
+        $encoding  = 'gzip';
+        $serveSize = $gzSize;
+    }
+}
+
+// ─── 5. SEND RESPONSE ──────────────────────────────────────────────────────
+
+// Clean any output buffers that WordPress or plugins may have started
+// to avoid double-encoding or buffer overhead.
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+// Status + core headers
+http_response_code(200);
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: public, max-age=3600');
+header('ETag: ' . $etag);
+header('Vary: Accept-Encoding, Cookie');
+header('X-WPS-Cache: HIT');
+
+// Compression header (only if serving precompressed file)
+if ($encoding !== '') {
+    header('Content-Encoding: ' . $encoding);
+}
+
+// Content-Length enables HTTP keep-alive pipelining
+if ($serveSize !== false && $serveSize > 0) {
+    header('Content-Length: ' . $serveSize);
+}
+
+// Serve the file — readfile() is the fastest PHP method (single syscall, no userspace buffering)
+readfile($serveFile);
+exit;

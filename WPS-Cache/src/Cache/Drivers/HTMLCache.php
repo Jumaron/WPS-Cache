@@ -17,6 +17,12 @@ final class HTMLCache extends AbstractCacheDriver
     private string $cacheDir;
     private ?string $exclusionRegex = null;
     private ?string $mobileSuffix = null;
+    private ?string $sanitizedHost = null;
+
+    /** Gzip compression level — 6 is the best speed/ratio trade-off */
+    private const GZIP_LEVEL = 6;
+    /** Brotli compression quality — 4 is fast with good ratio */
+    private const BROTLI_QUALITY = 4;
 
     private ?CommerceManager $commerceManager;
 
@@ -242,48 +248,75 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function writeCacheFile(string $content): void
     {
-        $host = $_SERVER["HTTP_HOST"] ?? "unknown";
-        $host = explode(":", $host)[0];
-        $host = preg_replace("/[^a-z0-9\-\.]/i", "", $host);
-        $host = preg_replace("/\.+/", ".", $host);
-        $host = trim($host, ".");
-
-        if (empty($host)) {
-            $host = "unknown";
-        }
+        $host = $this->getSanitizedHost();
 
         $uri = $_SERVER["REQUEST_URI"] ?? "/";
-        $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
+        $parsed = parse_url($uri);
+        $path = $this->sanitizePath($parsed['path'] ?? '/');
+        $query = $parsed['query'] ?? '';
 
         if (
-            substr($path, -1) !== "/" &&
-            !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
+            $path[-1] !== '/' &&
+            !str_contains(basename($path), '.')
         ) {
-            $path .= "/";
+            $path .= '/';
         }
 
         $suffix = $this->getMobileSuffix();
-        $query = parse_url($uri, PHP_URL_QUERY);
 
-        if ($query) {
+        if ($query !== '') {
             parse_str($query, $queryParams);
             ksort($queryParams);
-            $filename =
-                "index" .
-                $suffix .
-                "-" .
-                md5(http_build_query($queryParams)) .
-                ".html";
+            $filename = 'index' . $suffix . '-' . md5(http_build_query($queryParams)) . '.html';
         } else {
-            $filename = "index" . $suffix . ".html";
+            $filename = 'index' . $suffix . '.html';
         }
 
         $fullPath = $this->cacheDir . $host . $path;
-        if (substr($fullPath, -1) !== "/") {
-            $fullPath .= "/";
+        if ($fullPath[-1] !== '/') {
+            $fullPath .= '/';
         }
 
-        $this->atomicWrite($fullPath . $filename, $content);
+        $filepath = $fullPath . $filename;
+
+        // 1. Write plain HTML
+        $this->atomicWrite($filepath, $content);
+
+        // 2. Write precomputed gzip (moves compression from serve-time to write-time)
+        $gzContent = gzencode($content, self::GZIP_LEVEL);
+        if ($gzContent !== false) {
+            $this->atomicWrite($filepath . '.gz', $gzContent);
+        }
+
+        // 3. Write precomputed brotli if extension is available (PHP 8.4+)
+        if (function_exists('brotli_compress')) {
+            $brContent = brotli_compress($content, self::BROTLI_QUALITY);
+            if ($brContent !== false) {
+                $this->atomicWrite($filepath . '.br', $brContent);
+            }
+        }
+    }
+
+    /**
+     * Memoized host sanitization — computed once per request.
+     */
+    private function getSanitizedHost(): string
+    {
+        if ($this->sanitizedHost !== null) {
+            return $this->sanitizedHost;
+        }
+
+        $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
+        $colonPos = strpos($host, ':');
+        if ($colonPos !== false) {
+            $host = substr($host, 0, $colonPos);
+        }
+        $host = preg_replace('/[^a-zA-Z0-9\-.]/', '', $host);
+        if ($host === '') {
+            $host = 'unknown';
+        }
+
+        return $this->sanitizedHost = $host;
     }
 
     private function getMobileSuffix(): string
@@ -309,20 +342,25 @@ final class HTMLCache extends AbstractCacheDriver
 
     private function sanitizePath(string $path): string
     {
-        $path = str_replace(chr(0), "", $path);
-        $parts = explode("/", $path);
-        $safeParts = [];
-        foreach ($parts as $part) {
-            if ($part === "" || $part === ".") {
-                continue;
+        $path = str_replace("\0", '', $path);
+
+        // Fast path: no traversal segments → skip expensive parsing
+        if (!str_contains($path, '..')) {
+            // Just normalize double slashes
+            while (str_contains($path, '//')) {
+                $path = str_replace('//', '/', $path);
             }
-            if ($part === "..") {
-                array_pop($safeParts);
-            } else {
-                $safeParts[] = $part;
-            }
+            return $path === '' ? '/' : $path;
         }
-        return "/" . implode("/", $safeParts);
+
+        // Slow path: full sanitization only when ".." present
+        $parts = [];
+        foreach (explode('/', $path) as $seg) {
+            if ($seg === '' || $seg === '.') continue;
+            if ($seg === '..') { array_pop($parts); }
+            else { $parts[] = $seg; }
+        }
+        return '/' . implode('/', $parts);
     }
 
     public function set(string $key, mixed $value, int $ttl = 3600): void {}

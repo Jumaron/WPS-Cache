@@ -145,7 +145,7 @@ class ServerConfigManager
         }
 
         if (!empty($settings["bloat_disable_user_enumeration"])) {
-            $security_rules .= "\n# Sentinel: Block User Enumeration\n<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteCond %{QUERY_STRING} (?:^|&)author=\d+\nRewriteRule .* /? [L,R=301]\n</IfModule>\n";
+            $security_rules .= "\n# Sentinel: Block User Enumeration\n<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteCond %{QUERY_STRING} (?:^|&)author=\\d+\nRewriteRule .* /? [L,R=301]\n</IfModule>\n";
         }
 
         return <<<EOT
@@ -155,40 +155,70 @@ class ServerConfigManager
         RewriteEngine On
         RewriteBase {$base}
 
-        # 1. Bypass if method is POST
+        # ── BYPASS CHECKS ──────────────────────────────────────────
+        # S=7 skips all 7 cache-serving rules below when bypassing
+
+        # 1. Bypass POST requests
         RewriteCond %{REQUEST_METHOD} POST
-        RewriteRule .* - [S=3]
+        RewriteRule .* - [S=7]
 
-        # 2. Bypass if Query String exists
+        # 2. Bypass if Query String exists (query-string pages use hashed filenames,
+        #    which can't be resolved by mod_rewrite — PHP handles those)
         RewriteCond %{QUERY_STRING} !^$
-        RewriteRule .* - [S=2]
+        RewriteRule .* - [S=6]
 
-        # 3. Bypass if logged in or special WP cookies
+        # 3. Bypass if logged-in or special WP cookies
         RewriteCond %{HTTP_COOKIE} (wp-postpass|wordpress_logged_in|comment_author)_ [NC]
-        RewriteRule .* - [S=1]
+        RewriteRule .* - [S=5]
 
-        # 4. MOBILE CACHE RULE
-        # Only if User-Agent matches Mobile AND index-mobile.html exists
+        # ── MOBILE CACHE: Precompressed (brotli → gzip → plain) ───
+
+        # 4a. MOBILE + BROTLI
+        RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
+        RewriteCond %{HTTP:Accept-Encoding} br
+        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html.br -f
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html.br [L,E=WPS_ENC:br,E=WPS_HIT:1]
+
+        # 4b. MOBILE + GZIP
+        RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
+        RewriteCond %{HTTP:Accept-Encoding} gzip
+        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html.gz -f
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html.gz [L,E=WPS_ENC:gzip,E=WPS_HIT:1]
+
+        # 4c. MOBILE + PLAIN
         RewriteCond %{HTTP_USER_AGENT} "{$mobile_agents}" [NC]
         RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html -f
-        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html [L]
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index-mobile.html [L,E=WPS_HIT:1]
 
-        # 5. DESKTOP CACHE RULE
-        # Critical: Explicitly EXCLUDE Mobile Agents here.
-        # If we don't exclude them, a mobile user visiting an uncached page
-        # (where index-mobile.html doesn't exist yet) would be served the Desktop index.html.
+        # ── DESKTOP CACHE: Precompressed (brotli → gzip → plain) ──
+        # Explicitly exclude mobile agents to prevent serving desktop to mobile on miss
+
+        # 5a. DESKTOP + BROTLI
+        RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
+        RewriteCond %{HTTP:Accept-Encoding} br
+        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html.br -f
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html.br [L,E=WPS_ENC:br,E=WPS_HIT:1]
+
+        # 5b. DESKTOP + GZIP
+        RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
+        RewriteCond %{HTTP:Accept-Encoding} gzip
+        RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html.gz -f
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html.gz [L,E=WPS_ENC:gzip,E=WPS_HIT:1]
+
+        # 5c. DESKTOP + PLAIN
         RewriteCond %{HTTP_USER_AGENT} !"{$mobile_agents}" [NC]
         RewriteCond %{DOCUMENT_ROOT}{$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html -f
-        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L]
+        RewriteRule .* {$cache_path}/%{HTTP_HOST}%{REQUEST_URI}index.html [L,E=WPS_HIT:1]
 
         </IfModule>
 
         <IfModule mod_headers.c>
-            # Serve correct headers for cached HTML
-            <FilesMatch "index(-mobile)?\.html$">
+            # ── Headers for ALL cache-served responses ──────────────
+            <FilesMatch "index(-mobile)?\.html(\.gz|\.br)?$">
                 Header set Content-Type "text/html; charset=UTF-8"
                 Header set Cache-Control "max-age=3600, public"
                 Header set X-WPS-Cache "HIT"
+                Header set Vary "Accept-Encoding, Cookie"
                 Header set Strict-Transport-Security "max-age=31536000"
                 Header set X-Content-Type-Options "nosniff"
                 Header set X-Frame-Options "SAMEORIGIN"
@@ -197,6 +227,30 @@ class ServerConfigManager
                 Header set Referrer-Policy "strict-origin-when-cross-origin"
                 Header set Permissions-Policy "camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()"
             </FilesMatch>
+
+            # ── Content-Encoding for precompressed files ───────────
+            <FilesMatch "\.html\.gz$">
+                Header set Content-Encoding "gzip"
+                # Prevent double-compression by mod_deflate
+                Header set Content-Type "text/html; charset=UTF-8"
+            </FilesMatch>
+            <FilesMatch "\.html\.br$">
+                Header set Content-Encoding "br"
+                Header set Content-Type "text/html; charset=UTF-8"
+            </FilesMatch>
+        </IfModule>
+
+        # ── Prevent mod_deflate from double-compressing precompressed files ──
+        <IfModule mod_deflate.c>
+            <FilesMatch "\.html\.(gz|br)$">
+                SetEnv no-gzip 1
+            </FilesMatch>
+        </IfModule>
+
+        # ── Correct MIME type for precompressed files ──
+        <IfModule mod_mime.c>
+            AddType text/html .gz
+            AddType text/html .br
         </IfModule>
         # END WPS Cache
         EOT;
