@@ -102,6 +102,8 @@ delete_transient("wpsc_stats_cache");
 delete_transient("wpsc_admin_notices");
 
 // Clear opcode cache to ensure no old code remains in memory
-if (function_exists("opcache_reset")) {
-    @opcache_reset();
+if (function_exists("opcache_invalidate")) {
+    @opcache_invalidate(WP_CONTENT_DIR . "/advanced-cache.php", true);
+    @opcache_invalidate(WP_CONTENT_DIR . "/object-cache.php", true);
+    @opcache_invalidate(ABSPATH . "wp-config.php", true);
 }

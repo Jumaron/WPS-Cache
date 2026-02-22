@@ -118,9 +118,12 @@ final class CacheManager
         // 2. Clear WordPress Internals (Object Cache & Transients)
         $this->clearWordPressInternals(true);
 
-        // 3. Clear OpCache (PHP Code Cache)
-        if (function_exists("opcache_reset")) {
-            @opcache_reset();
+        // 3. Clear OpCache (PHP Code Cache) safely for specific drop-ins instead of a full reset
+        // A full opcache_reset() can cause 521 errors / segfaults on high-traffic sites.
+        if (function_exists("opcache_invalidate")) {
+            @opcache_invalidate(WP_CONTENT_DIR . "/advanced-cache.php", true);
+            @opcache_invalidate(WP_CONTENT_DIR . "/object-cache.php", true);
+            @opcache_invalidate(ABSPATH . "wp-config.php", true);
         }
 
         // 4. Fire Signal
