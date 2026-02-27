@@ -214,15 +214,21 @@ final class Plugin
             );
         }
         if ($settings["redis_cache"]) {
+            $host = defined("WP_REDIS_HOST") ? (string) WP_REDIS_HOST : (string) $settings["redis_host"];
+            $port = defined("WP_REDIS_PORT") ? (int) WP_REDIS_PORT : (int) $settings["redis_port"];
+            $db = defined("WP_REDIS_DATABASE") ? (int) WP_REDIS_DATABASE : (int) $settings["redis_db"];
+            $password = defined("WP_REDIS_PASSWORD") ? (string) WP_REDIS_PASSWORD : (string) $settings["redis_password"];
+            $prefix = defined("WP_REDIS_PREFIX") ? (string) WP_REDIS_PREFIX : (string) $settings["redis_prefix"];
+
             $this->cacheManager->addDriver(
                 new RedisCache(
-                    (string) $settings["redis_host"],
-                    (int) $settings["redis_port"],
-                    (int) $settings["redis_db"],
+                    $host,
+                    $port,
+                    $db,
                     1.0,
                     1.0,
-                    (string) $settings["redis_password"],
-                    (string) $settings["redis_prefix"],
+                    $password,
+                    $prefix,
                 ),
             );
         }

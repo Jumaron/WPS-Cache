@@ -21,10 +21,12 @@ final class RedisCache extends AbstractCacheDriver
     private string $password;
     private string $prefix;
     private float $timeout;
+    private float $readTimeout;
     private string $salt;
     private bool $useIgbinary = false;
     private bool $useUnlink = false;
     private bool $useAsyncFlush = false;
+    private ?string $connectionError = null;
 
     public function __construct(
         string $host = "127.0.0.1",
@@ -40,6 +42,7 @@ final class RedisCache extends AbstractCacheDriver
         $this->port = $port;
         $this->db = $db;
         $this->timeout = $timeout;
+        $this->readTimeout = $readTimeout;
         $this->password = $password;
         $this->prefix = $prefix;
 
@@ -98,7 +101,24 @@ final class RedisCache extends AbstractCacheDriver
      */
     public function getConnection(): ?Redis
     {
+        if ($this->redis) {
+            try {
+                $this->redis->ping();
+            } catch (RedisException $e) {
+                // If ping fails (e.g. server went away), try reconnecting
+                try {
+                    $this->connect();
+                } catch (\Throwable $e) {
+                    $this->redis = null;
+                }
+            }
+        }
         return $this->redis;
+    }
+
+    public function getConnectionError(): ?string
+    {
+        return $this->connectionError;
     }
 
     public function initialize(): void
@@ -109,9 +129,11 @@ final class RedisCache extends AbstractCacheDriver
 
         try {
             $this->connect();
+            $this->connectionError = null;
         } catch (RedisException $e) {
             // Sentinel Fix: Redact sensitive info from error logs
             $safeMsg = $this->redactSensitiveInfo($e->getMessage());
+            $this->connectionError = $safeMsg;
             $this->logError("Redis Connection Failed: " . $safeMsg);
         }
     }
@@ -148,6 +170,11 @@ final class RedisCache extends AbstractCacheDriver
         // 3. Select Database
         if ($this->db !== 0 && !$this->redis->select($this->db)) {
             throw new RedisException("Redis DB selection failed.");
+        }
+
+        // Set Read Timeout to prevent hanging operations
+        if ($this->readTimeout > 0) {
+            $this->redis->setOption(Redis::OPT_READ_TIMEOUT, $this->readTimeout);
         }
 
         // 4. Set Prefix

@@ -93,7 +93,12 @@ class SettingsManager
                                     </div>
                                     <div style="color: var(--wpsc-text-muted);">Hit Ratio</div>
                                 <?php else: ?>
-                                    <div class="wpsc-status-pill error">Connection Failed</div>
+                                    <div class="wpsc-status-pill error" title="<?php echo esc_attr($redis['error'] ?? 'Connection Failed'); ?>">Connection Failed</div>
+                                    <?php if (!empty($redis['error'])): ?>
+                                        <div style="color: var(--wpsc-text-muted); font-size: 0.8rem; margin-top: 5px; line-height: 1.2;">
+                                            <?php echo esc_html($redis['error']); ?>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             <?php else: ?>
                                 <div class="wpsc-status-pill warning">Disabled</div>

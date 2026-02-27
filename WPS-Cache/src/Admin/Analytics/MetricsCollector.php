@@ -112,11 +112,21 @@ class MetricsCollector
             $redis = $driver->getConnection();
 
             if (!$redis) {
-                return ["enabled" => true, "connected" => false];
+                $errorMsg = method_exists($driver, 'getConnectionError') ? $driver->getConnectionError() : null;
+                return ["enabled" => true, "connected" => false, "error" => $errorMsg ?: "Connection could not be established."];
             }
 
-            $info = $redis->info();
-
+            try {
+                $info = $redis->info();
+            } catch (\Throwable $e) {
+                // Some environments or proxies restrict the INFO command or drop the connection when sent
+                if (method_exists($driver, 'getConnection') && $driver->getConnection()) {
+                     $info = ['used_memory_human' => 'Unknown', 'keyspace_hits' => 0, 'keyspace_misses' => 0, 'uptime_in_days' => 0];
+                } else {
+                     throw $e;
+                }
+            }
+            
             // Calculate Hit Ratio
             $hits = $info["keyspace_hits"] ?? 0;
             $misses = $info["keyspace_misses"] ?? 0;
