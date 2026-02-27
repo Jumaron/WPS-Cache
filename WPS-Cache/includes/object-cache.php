@@ -16,6 +16,14 @@ defined('ABSPATH') || exit();
 
 if (!defined('WP_REDIS_DISABLED') || !WP_REDIS_DISABLED):
 
+// Temporary debugging for the 500 error 
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
+        file_put_contents(__DIR__ . '/oc-error.log', date('Y-m-d H:i:s') . " - Fatal Error: " . print_r($err, true) . "\n", FILE_APPEND);
+    }
+});
+
 // ─── Global API Functions ────────────────────────────────────────────────────
 
 /**
