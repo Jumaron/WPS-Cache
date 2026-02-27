@@ -176,9 +176,12 @@ final class AdminPanelManager
 
         $file = WP_CONTENT_DIR . "/object-cache.php";
         if (file_exists($file)) {
-            @unlink($file);
-            wp_cache_flush();
-            $this->redirectWithNotice("Drop-in removed.", "success");
+            if (@unlink($file)) {
+                wp_cache_flush();
+                $this->redirectWithNotice("Drop-in removed.", "success");
+            } else {
+                $this->redirectWithNotice("Failed to remove object-cache.php. Please check file permissions or delete it manually.", "error");
+            }
         } else {
             $this->redirectWithNotice("File not found.", "warning");
         }
