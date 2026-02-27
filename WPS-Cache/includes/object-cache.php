@@ -278,7 +278,7 @@ class WP_Object_Cache
 
         // ── Precompute key prefixes ──────────────────────────────────────
         $pfx = defined('WP_REDIS_PREFIX') ? WP_REDIS_PREFIX : '';
-        $multi = is_multisite();
+        $multi = function_exists('is_multisite') ? is_multisite() : (defined('MULTISITE') && MULTISITE);
         $this->globalPrefix = $pfx . ($multi ? '' : ($table_prefix ?? ''));
         $this->blogPrefix   = $pfx . ($multi ? ((string) ($blog_id ?? 1)) : ($table_prefix ?? ''));
 
@@ -1149,7 +1149,7 @@ class WP_Object_Cache
             do_action('redis_object_cache_error', $e, $msg);
         }
 
-        if (!$this->failGracefully) {
+        if (!$this->failGracefully && $ctx !== 'boot') {
             throw $e;
         }
 
@@ -1163,11 +1163,13 @@ class WP_Object_Cache
     private function boot(): void
     {
         if (!class_exists('Redis')) {
+            $msg = 'PhpRedis extension not found. Object cache disabled.';
             if ($this->failGracefully) {
-                error_log('WPS-Cache: PhpRedis extension not found. Object cache disabled.');
-                return;
+                error_log("WPS-Cache: {$msg}");
+            } else {
+                $this->fail(new \RuntimeException($msg), 'boot');
             }
-            throw new \RuntimeException('PhpRedis extension is required for WPS-Cache object cache.');
+            return;
         }
 
         try {
