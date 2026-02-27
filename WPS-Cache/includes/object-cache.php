@@ -1504,7 +1504,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 throw new Exception("Could not connect to Redis");
             }
 
-            if (!empty($config["password"])) {
+            if (isset($config["password"]) && $config["password"] !== "") {
                 $this->redis->auth($config["password"]);
             }
 

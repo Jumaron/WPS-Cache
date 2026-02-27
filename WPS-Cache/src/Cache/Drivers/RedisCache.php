@@ -128,7 +128,7 @@ final class RedisCache extends AbstractCacheDriver
         }
 
         // 2. Authentication
-        if (!empty($this->password)) {
+        if ($this->password !== "") {
             $auth = is_array($this->password)
                 ? $this->password
                 : [$this->password];
@@ -184,7 +184,7 @@ final class RedisCache extends AbstractCacheDriver
      */
     private function redactSensitiveInfo(string $message): string
     {
-        if (empty($this->password)) {
+        if ($this->password === "") {
             return $message;
         }
 

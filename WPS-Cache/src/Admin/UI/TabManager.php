@@ -10,12 +10,13 @@ class TabManager
 
     public function __construct()
     {
-        $this->initializeTabs();
     }
 
-    private function initializeTabs(): void
+    private function getTabs(): array
     {
-        $this->tabs = [
+        if (empty($this->tabs)) {
+            $this->tabs = [
+
             "dashboard" => [
                 "label" => __("Dashboard", "wps-cache"),
                 "icon" => "dashicons-dashboard",
@@ -51,15 +52,20 @@ class TabManager
                 "icon" => "dashicons-controls-volumeon",
                 "order" => 70,
             ],
-        ];
+            ];
 
-        uasort($this->tabs, fn($a, $b) => $a["order"] <=> $b["order"]);
+            uasort($this->tabs, fn($a, $b) => $a["order"] <=> $b["order"]);
+        }
+
+        return $this->tabs;
     }
 
     public function getCurrentTab(): string
     {
+        $tabs = $this->getTabs();
+
         return isset($_GET["tab"]) &&
-            array_key_exists($_GET["tab"], $this->tabs)
+            array_key_exists($_GET["tab"], $tabs)
             ? sanitize_key($_GET["tab"])
             : "dashboard";
     }
@@ -67,7 +73,7 @@ class TabManager
     public function renderSidebar(string $current): void
     {
         echo '<nav class="wpsc-nav">';
-        foreach ($this->tabs as $key => $data) {
+        foreach ($this->getTabs() as $key => $data) {
 
             $isActive = $current === $key;
             $activeClass = $isActive ? "active" : "";
