@@ -448,8 +448,26 @@ final class Plugin
     {
         $src = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
         $dest = WP_CONTENT_DIR . "/advanced-cache.php";
-        if (file_exists($src) && !file_exists($dest)) {
-            @copy($src, $dest);
+
+        if (file_exists($src)) {
+            $should_copy = false;
+
+            if (!file_exists($dest)) {
+                $should_copy = true;
+            } elseif (filesize($dest) === 0) {
+                // Another plugin (like WP Rocket) left a 0KB file
+                $should_copy = true;
+            } else {
+                // Check if it's our own file to ensure it's up to date
+                $content = @file_get_contents($dest);
+                if ($content && (str_contains($content, 'WPS-Cache') || str_contains($content, 'WPS Cache'))) {
+                    $should_copy = true;
+                }
+            }
+
+            if ($should_copy) {
+                @copy($src, $dest);
+            }
         }
     }
 
