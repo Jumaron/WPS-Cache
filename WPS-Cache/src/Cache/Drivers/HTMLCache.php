@@ -21,7 +21,8 @@ final class HTMLCache extends AbstractCacheDriver
     private ?CommerceManager $commerceManager;
 
     // Optimization: Use hash map for O(1) lookups
-    private const BYPASS_PARAMS = [
+    // PHP 8.3: typed class constants
+    private const array BYPASS_PARAMS = [
         "add-to-cart" => true,
         "wp_nonce" => true,
         "preview" => true,
@@ -29,12 +30,12 @@ final class HTMLCache extends AbstractCacheDriver
     ];
 
     // Sentinel: Limits to prevent Cache DoS (Disk Exhaustion)
-    private const MAX_QUERY_LEN = 512;
-    private const MAX_QUERY_PARAMS = 10;
+    private const int MAX_QUERY_LEN    = 512;
+    private const int MAX_QUERY_PARAMS = 10;
 
     // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
     // Optimization: Use hash map for O(1) lookups
-    private const IGNORED_EXTENSIONS = [
+    private const array IGNORED_EXTENSIONS = [
         "xml" => true,
         "json" => true,
         "map" => true,
@@ -161,6 +162,18 @@ final class HTMLCache extends AbstractCacheDriver
             return $buffer;
         }
 
+        // Only cache actual HTML responses; skip JSON/XML/feeds etc.
+        $contentType = "";
+        foreach (headers_list() as $h) {
+            if (stripos($h, "Content-Type:") === 0) {
+                $contentType = $h;
+                break;
+            }
+        }
+        if ($contentType !== "" && stripos($contentType, "text/html") === false) {
+            return $buffer;
+        }
+
         // --- PHASE 1: DOM MANIPULATION (Robust & Safe) ---
         $useDomPipeline =
             !empty($this->settings["remove_unused_css"]) ||
@@ -170,7 +183,9 @@ final class HTMLCache extends AbstractCacheDriver
         $content = $buffer;
 
         if ($useDomPipeline) {
-            libxml_use_internal_errors(true);
+            // Save and restore the previous libxml error-handling state so we
+            // don't permanently silence errors for the rest of the request.
+            $prevLibxmlErrors = libxml_use_internal_errors(true);
             $dom = new DOMDocument();
             // Hack: force UTF-8
             @$dom->loadHTML(
@@ -178,6 +193,7 @@ final class HTMLCache extends AbstractCacheDriver
                 LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
             );
             libxml_clear_errors();
+            libxml_use_internal_errors($prevLibxmlErrors);
 
             // 1. Remove Unused CSS (DOM)
             if (!empty($this->settings["remove_unused_css"])) {
@@ -227,6 +243,11 @@ final class HTMLCache extends AbstractCacheDriver
         } catch (\Throwable $e) {
         }
 
+        // 6. HTML Minification – strip HTML comments and collapse inter-tag
+        //    whitespace.  Done after all other processors to avoid interfering
+        //    with DOM-based pipelines above.
+        $content = $this->minifyHtml($content);
+
         // Add Timestamp & Signature
         $deviceType = $this->getMobileSuffix() ? "Mobile" : "Desktop";
         $content .= sprintf(
@@ -238,6 +259,35 @@ final class HTMLCache extends AbstractCacheDriver
         $this->writeCacheFile($content);
 
         return $content;
+    }
+
+    /**
+     * Lightweight HTML minifier.
+     *
+     * - Strips HTML comments (preserves IE conditional comments).
+     * - Collapses whitespace-only gaps between block-level elements.
+     *
+     * Intentionally conservative: it does NOT touch content inside
+     * <pre>, <script>, <style>, or <textarea> to avoid breaking those blocks.
+     */
+    private function minifyHtml(string $html): string
+    {
+        // 1. Remove HTML comments except IE conditionals (<!--[if …]> … <![endif]-->)
+        $result = preg_replace('/<!--(?!\[if\s)[\s\S]*?-->/u', '', $html);
+        // Guard: if regex failed (e.g. invalid UTF-8), keep original.
+        if ($result !== null) {
+            $html = $result;
+        }
+
+        // 2. Collapse runs of whitespace between tags to a single newline.
+        //    Using \s+ rather than a more aggressive trim to preserve
+        //    inline-element spacing.
+        $result = preg_replace('/>\s{2,}</u', ">\n<", $html);
+        if ($result !== null) {
+            $html = $result;
+        }
+
+        return $html;
     }
 
     private function writeCacheFile(string $content): void
@@ -252,18 +302,18 @@ final class HTMLCache extends AbstractCacheDriver
             $host = "unknown";
         }
 
-        $uri = $_SERVER["REQUEST_URI"] ?? "/";
+        $uri  = $_SERVER["REQUEST_URI"] ?? "/";
         $path = $this->sanitizePath(parse_url($uri, PHP_URL_PATH));
 
         if (
-            substr($path, -1) !== "/" &&
+            !str_ends_with($path, "/") &&
             !preg_match('/\.[a-z0-9]{2,4}$/i', $path)
         ) {
             $path .= "/";
         }
 
         $suffix = $this->getMobileSuffix();
-        $query = parse_url($uri, PHP_URL_QUERY);
+        $query  = parse_url($uri, PHP_URL_QUERY);
 
         if ($query) {
             parse_str($query, $queryParams);
@@ -279,11 +329,22 @@ final class HTMLCache extends AbstractCacheDriver
         }
 
         $fullPath = $this->cacheDir . $host . $path;
-        if (substr($fullPath, -1) !== "/") {
+        if (!str_ends_with($fullPath, "/")) {
             $fullPath .= "/";
         }
 
-        $this->atomicWrite($fullPath . $filename, $content);
+        $htmlFile = $fullPath . $filename;
+        $this->atomicWrite($htmlFile, $content);
+
+        // Write a pre-compressed gzip version alongside the plain file so the
+        // advanced-cache drop-in can serve it directly, eliminating per-request
+        // compression overhead entirely.
+        if (function_exists("gzencode")) {
+            $compressed = gzencode($content, 6);
+            if ($compressed !== false) {
+                $this->atomicWrite($htmlFile . ".gz", $compressed);
+            }
+        }
     }
 
     private function getMobileSuffix(): string
