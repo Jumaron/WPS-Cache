@@ -80,9 +80,12 @@ class DatabaseOptimizer
         // Optimization: Combined "Local" and "Site" checks into one query.
         // This requires reading 'option_value' but does it in 1 round-trip instead of 2.
         $expired_count = $wpdb->get_var(
-            "SELECT COUNT(*) FROM $wpdb->options
-             WHERE (option_name LIKE '\_transient\_timeout\_%' OR option_name LIKE '\_site\_transient\_timeout\_%')
-             AND option_value < '$time'"
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM $wpdb->options
+                 WHERE (option_name LIKE '\_transient\_timeout\_%' OR option_name LIKE '\_site\_transient\_timeout\_%')
+                 AND option_value < %d",
+                $time
+            )
         );
 
         // 2. All Transients (Local + Site)
@@ -201,24 +204,30 @@ class DatabaseOptimizer
             // Matches _transient_timeout_KEY and joins to _transient_KEY
             // _transient_timeout_ is 19 chars long. SUBSTRING is 1-based, so start at 20.
             $wpdb->query(
-                "DELETE a, b FROM $wpdb->options a
-                 LEFT JOIN $wpdb->options b ON (
-                    b.option_name = CONCAT('_transient_', SUBSTRING(a.option_name, 20))
-                 )
-                 WHERE a.option_name LIKE '\_transient\_timeout\_%'
-                 AND a.option_value < '$time'"
+                $wpdb->prepare(
+                    "DELETE a, b FROM $wpdb->options a
+                     LEFT JOIN $wpdb->options b ON (
+                        b.option_name = CONCAT('_transient_', SUBSTRING(a.option_name, 20))
+                     )
+                     WHERE a.option_name LIKE '\_transient\_timeout\_%'
+                     AND a.option_value < %d",
+                    $time
+                )
             );
 
             // 2. Site Transients
             // Matches _site_transient_timeout_KEY and joins to _site_transient_KEY
             // _site_transient_timeout_ is 24 chars long. Start at 25.
             $wpdb->query(
-                "DELETE a, b FROM $wpdb->options a
-                 LEFT JOIN $wpdb->options b ON (
-                    b.option_name = CONCAT('_site_transient_', SUBSTRING(a.option_name, 25))
-                 )
-                 WHERE a.option_name LIKE '\_site\_transient\_timeout\_%'
-                 AND a.option_value < '$time'"
+                $wpdb->prepare(
+                    "DELETE a, b FROM $wpdb->options a
+                     LEFT JOIN $wpdb->options b ON (
+                        b.option_name = CONCAT('_site_transient_', SUBSTRING(a.option_name, 25))
+                     )
+                     WHERE a.option_name LIKE '\_site\_transient\_timeout\_%'
+                     AND a.option_value < %d",
+                    $time
+                )
             );
 
             $count++;

@@ -156,8 +156,8 @@ final class AdminPanelManager
         if (file_exists($destination)) {
             $this->redirectWithNotice("Drop-in already exists.", "error");
         }
-        if (@copy($source, $destination)) {
-            @chmod($destination, 0644);
+        if (copy($source, $destination)) {
+            chmod($destination, 0644);
             $this->redirectWithNotice(
                 "Object Cache Drop-in installed.",
                 "success",
@@ -176,7 +176,7 @@ final class AdminPanelManager
 
         $file = WP_CONTENT_DIR . "/object-cache.php";
         if (file_exists($file)) {
-            @unlink($file);
+            unlink($file);
             wp_cache_flush();
             $this->redirectWithNotice("Drop-in removed.", "success");
         } else {

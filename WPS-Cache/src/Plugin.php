@@ -357,7 +357,7 @@ final class Plugin
             // Critical for Nginx/IIS where .htaccess is ignored.
             $silence = rtrim($path, "/") . "/index.php";
             if (!file_exists($silence)) {
-                @file_put_contents($silence, "<?php // Silence is golden");
+                file_put_contents($silence, "<?php // Silence is golden");
             }
         }
     }
@@ -369,9 +369,9 @@ final class Plugin
         if (!file_exists($htaccess)) {
             $shouldUpdate = true;
         } else {
-            $content = @file_get_contents($htaccess);
+            $content = file_get_contents($htaccess);
             if (
-                $content &&
+                $content !== false &&
                 str_contains($content, "Deny from all") &&
                 !str_contains($content, "<FilesMatch")
             ) {
@@ -379,7 +379,9 @@ final class Plugin
             }
         }
         if ($shouldUpdate) {
-            @file_put_contents($htaccess, self::HTACCESS_CONTENT);
+            if (file_put_contents($htaccess, self::HTACCESS_CONTENT) === false) {
+                error_log("WPS Cache: Failed to write .htaccess in cache directory.");
+            }
         }
     }
 
@@ -442,8 +444,8 @@ final class Plugin
     {
         $src = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
         $dest = WP_CONTENT_DIR . "/advanced-cache.php";
-        if (file_exists($src) && !file_exists($dest)) {
-            @copy($src, $dest);
+        if (file_exists($src) && !file_exists($dest) && !copy($src, $dest)) {
+            error_log("WPS Cache: Failed to install advanced-cache drop-in.");
         }
     }
 
@@ -454,12 +456,19 @@ final class Plugin
             WP_CONTENT_DIR . "/object-cache.php",
         ];
         foreach ($files as $file) {
+            if (!file_exists($file)) {
+                continue;
+            }
+            $content = file_get_contents($file);
+            if ($content === false) {
+                error_log("WPS Cache: Failed to read drop-in file: $file");
+                continue;
+            }
             if (
-                file_exists($file) &&
-                (str_contains(file_get_contents($file), "WPS-Cache") ||
-                    str_contains(file_get_contents($file), "WPS Cache"))
+                str_contains($content, "WPS-Cache") ||
+                str_contains($content, "WPS Cache")
             ) {
-                @unlink($file);
+                unlink($file);
             }
         }
     }
