@@ -173,7 +173,7 @@ final class HTMLCache extends AbstractCacheDriver
             libxml_use_internal_errors(true);
             $dom = new DOMDocument();
             // Hack: force UTF-8
-            @$dom->loadHTML(
+            $dom->loadHTML(
                 '<?xml encoding="utf-8" ?>' . $content,
                 LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
             );
@@ -185,6 +185,7 @@ final class HTMLCache extends AbstractCacheDriver
                     $cssShaker = new CriticalCSSManager($this->settings);
                     $cssShaker->processDom($dom);
                 } catch (\Throwable $e) {
+                    $this->logError("CriticalCSS processing failed", $e);
                 }
             }
 
@@ -197,6 +198,7 @@ final class HTMLCache extends AbstractCacheDriver
                     $jsOpt = new JSOptimizer($this->settings);
                     $jsOpt->processDom($dom);
                 } catch (\Throwable $e) {
+                    $this->logError("JS optimization failed", $e);
                 }
             }
 
@@ -211,6 +213,7 @@ final class HTMLCache extends AbstractCacheDriver
             $cdnManager = new CdnManager($this->settings);
             $content = $cdnManager->process($content);
         } catch (\Throwable $e) {
+            $this->logError("CDN rewrite failed", $e);
         }
 
         // 4. Font Optimization
@@ -218,6 +221,7 @@ final class HTMLCache extends AbstractCacheDriver
             $fontOpt = new FontOptimizer($this->settings);
             $content = $fontOpt->process($content);
         } catch (\Throwable $e) {
+            $this->logError("Font optimization failed", $e);
         }
 
         // 5. Media Optimization
@@ -225,6 +229,7 @@ final class HTMLCache extends AbstractCacheDriver
             $mediaOpt = new MediaOptimizer($this->settings);
             $content = $mediaOpt->process($content);
         } catch (\Throwable $e) {
+            $this->logError("Media optimization failed", $e);
         }
 
         // Add Timestamp & Signature

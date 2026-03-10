@@ -75,7 +75,7 @@ if (file_exists($htaccess) && is_writable($htaccess)) {
             $content,
         );
         if ($new_content !== $content) {
-            @file_put_contents($htaccess, $new_content);
+            file_put_contents($htaccess, $new_content);
         }
     }
 }
@@ -92,7 +92,7 @@ if (file_exists($config) && is_writable($config)) {
         $content,
     );
     if ($new_content !== $content) {
-        @file_put_contents($config, $new_content);
+        file_put_contents($config, $new_content);
     }
 }
 
@@ -103,5 +103,5 @@ delete_transient("wpsc_admin_notices");
 
 // Clear opcode cache to ensure no old code remains in memory
 if (function_exists("opcache_reset")) {
-    @opcache_reset();
+    opcache_reset();
 }
