@@ -271,6 +271,15 @@ final class Plugin
         $this->enableWPCacheConstant();
         $this->installAdvancedCache();
         $this->setupDefaultSettings();
+        // Write the runtime config file read by the advanced-cache drop-in so
+        // it picks up admin-configured settings (e.g. cache_lifetime) without
+        // needing to bootstrap WordPress.
+        $settings = get_option("wpsc_settings", self::DEFAULT_SETTINGS);
+        $settings = array_merge(
+            self::DEFAULT_SETTINGS,
+            is_array($settings) ? $settings : [],
+        );
+        $this->writeAdvancedCacheConfig($settings);
         $this->scheduleMaintenance();
         $this->serverManager->applyConfiguration();
         flush_rewrite_rules();
@@ -325,10 +334,31 @@ final class Plugin
 
     public function refreshServerConfig(array $settings): void
     {
+        $this->writeAdvancedCacheConfig($settings);
         if ($settings["html_cache"] ?? false) {
             $this->serverManager->applyConfiguration();
         } else {
             $this->serverManager->removeConfiguration();
+        }
+    }
+
+    /**
+     * Writes a small PHP config file into the cache directory so the
+     * advanced-cache drop-in can read admin settings (e.g. cache_lifetime)
+     * without bootstrapping WordPress on every request.
+     */
+    private function writeAdvancedCacheConfig(array $settings): void
+    {
+        if (!defined("WPSC_CACHE_DIR")) {
+            return;
+        }
+        $config = [
+            "cache_lifetime" => (int) ($settings["cache_lifetime"] ?? 3600),
+        ];
+        $content  = "<?php\nreturn " . var_export($config, true) . ";\n";
+        $written  = file_put_contents(WPSC_CACHE_DIR . "config.php", $content, LOCK_EX);
+        if ($written === false && defined("WP_DEBUG") && WP_DEBUG) {
+            error_log("WPS-Cache: Failed to write advanced-cache config file.");
         }
     }
 
@@ -440,9 +470,11 @@ final class Plugin
 
     private function installAdvancedCache(): void
     {
-        $src = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
+        $src  = WPSC_PLUGIN_DIR . "includes/advanced-cache-template.php";
         $dest = WP_CONTENT_DIR . "/advanced-cache.php";
-        if (file_exists($src) && !file_exists($dest)) {
+        // Always overwrite on activation so the drop-in stays in sync with
+        // the installed plugin version.
+        if (file_exists($src)) {
             @copy($src, $dest);
         }
     }

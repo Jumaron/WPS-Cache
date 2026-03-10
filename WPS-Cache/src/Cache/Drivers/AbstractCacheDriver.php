@@ -94,7 +94,7 @@ abstract class AbstractCacheDriver implements CacheDriverInterface
             return false;
         }
 
-        if (file_put_contents($temp_file, $content) === false) {
+        if (file_put_contents($temp_file, $content, LOCK_EX) === false) {
             $this->logError("Failed to write content to $temp_file");
             @unlink($temp_file);
             return false;
