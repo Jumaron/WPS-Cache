@@ -98,7 +98,7 @@ final class LifecycleManager
         }
 
         if ($settings->enabled('html_cache')) {
-            $this->apache->applyConfiguration($settings);
+            $this->apache->applyConfiguration();
             if (!$this->dropIns->installAdvancedCache()) {
                 error_log('[WPS-Cache] Could not install advanced-cache.php; another drop-in may own it.');
             } elseif (!$this->wpConfig->enableCache()) {

@@ -79,7 +79,7 @@ if (file_exists($htaccess) && is_writable($htaccess)) {
     $content = file_get_contents($htaccess);
     if ($content) {
         $new_content = preg_replace(
-            "/# BEGIN WPS Cache.*?# END WPS Cache\s*/s",
+            '/^[ \t]*# BEGIN WPS Cache[^\r\n]*\R.*?^[ \t]*# END WPS Cache[^\r\n]*(?:\R)?/ms',
             "",
             $content,
         );

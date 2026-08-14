@@ -7,7 +7,7 @@ $testRoot = __DIR__ . '/.tmp';
 
 defined('ABSPATH') || define('ABSPATH', $testRoot . '/wp/');
 defined('WP_CONTENT_DIR') || define('WP_CONTENT_DIR', ABSPATH . 'wp-content');
-defined('WPSC_VERSION') || define('WPSC_VERSION', '0.1.0');
+defined('WPSC_VERSION') || define('WPSC_VERSION', '0.1.1');
 defined('WPSC_PLUGIN_FILE') || define('WPSC_PLUGIN_FILE', dirname(__DIR__) . '/WPS-Cache/wps-cache.php');
 defined('WPSC_PLUGIN_DIR') || define('WPSC_PLUGIN_DIR', dirname(__DIR__) . '/WPS-Cache/');
 defined('WPSC_PLUGIN_URL') || define('WPSC_PLUGIN_URL', 'https://example.test/wp-content/plugins/WPS-Cache/');

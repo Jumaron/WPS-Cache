@@ -66,7 +66,7 @@ final class Application
         $databaseOptimizer = new DatabaseOptimizer($settings->all());
         $preloadScheduler = new PreloadScheduler(new SameOriginUrlGuard(home_url('/')));
         $maintenanceScheduler = new MaintenanceScheduler($cacheManager, $databaseOptimizer);
-        $apache = new ApacheConfigManager($settings);
+        $apache = new ApacheConfigManager();
         $dropIns = new DropInManager(WPSC_PLUGIN_DIR . 'includes', WP_CONTENT_DIR);
         $earlyCacheConfig = new EarlyCacheConfig(WPSC_CACHE_DIR . 'runtime.php');
         if (!is_file(WPSC_CACHE_DIR . 'runtime.php')) {

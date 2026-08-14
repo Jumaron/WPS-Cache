@@ -6,7 +6,8 @@ namespace WPSCache\Infrastructure\Filesystem;
 
 final class CacheDirectory
 {
-    private const ACCESS_RULES = <<<'HTACCESS'
+    /** Rules written by releases before 0.1.1. Only this exact file is removed. */
+    private const LEGACY_ACCESS_RULES = <<<'HTACCESS'
 <IfModule mod_authz_core.c>
     Require all denied
 </IfModule>
@@ -44,7 +45,7 @@ HTACCESS;
             }
         }
 
-        return $this->writeIfChanged($this->root . '.htaccess', self::ACCESS_RULES);
+        return $this->removeLegacyHtaccess();
     }
 
     private function ensure(string $directory): bool
@@ -61,12 +62,23 @@ HTACCESS;
         return is_writable($directory);
     }
 
-    private function writeIfChanged(string $file, string $content): bool
+    private function removeLegacyHtaccess(): bool
     {
-        if (is_file($file) && file_get_contents($file) === $content) {
+        $file = $this->root . '.htaccess';
+        if (!is_file($file)) {
             return true;
         }
 
-        return file_put_contents($file, $content, LOCK_EX) !== false;
+        $content = file_get_contents($file);
+        if (!is_string($content) || $this->normalize($content) !== $this->normalize(self::LEGACY_ACCESS_RULES)) {
+            return true;
+        }
+
+        return @unlink($file) || !is_file($file);
+    }
+
+    private function normalize(string $content): string
+    {
+        return str_replace(["\r\n", "\r"], "\n", trim($content));
     }
 }

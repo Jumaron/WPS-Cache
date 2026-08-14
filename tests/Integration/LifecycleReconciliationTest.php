@@ -43,7 +43,7 @@ final class LifecycleReconciliationTest extends TestCase
             new WpConfigManager($wpConfig),
             $dropIns,
             new EarlyCacheConfig($directory . '/cache/runtime.php'),
-            new ApacheConfigManager($settings, $htaccess),
+            new ApacheConfigManager($htaccess),
             $cacheManager,
             new PreloadScheduler(new SameOriginUrlGuard('https://example.test/')),
             new MaintenanceScheduler($cacheManager, $databaseOptimizer),

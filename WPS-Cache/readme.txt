@@ -4,7 +4,7 @@ Tags: caching, performance, HTML, Redis, Varnish
 Requires at least: 6.3
 Tested up to: 6.7
 Requires PHP: 8.3
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,6 +39,11 @@ This plugin is currently experimental. We recommend testing in a staging environ
 2. Front-end cache status indicator.
 
 == Changelog ==
+= 0.1.1 =
+* Stopped writing Apache/LiteSpeed directives to `.htaccess` on activation.
+* Added ownership-scoped cleanup for server rules created by older releases.
+* Kept page-cache delivery portable through the existing PHP drop-in.
+
 = 0.1.0 =
 * Rebuilt the plugin around modular cache, optimization, lifecycle, and infrastructure services.
 * Added independent frontend optimization, automated tests, static analysis, and deterministic release builds.
@@ -53,6 +58,8 @@ This plugin is currently experimental. We recommend testing in a staging environ
 * External services documentation added.
 
 == Upgrade Notice ==
+= 0.1.1 =
+Prevents shared-host HTTP 500 errors caused by restricted `.htaccess` directives.
 = 0.1.0 =
 Architecture rebuild. Test on staging and clear all cache layers after upgrading.
 = 0.0.4 =

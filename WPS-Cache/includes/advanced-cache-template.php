@@ -153,6 +153,22 @@ if (time() - $mtime > $cacheTtl) {
     return; // Expired — fall through to WordPress for regeneration
 }
 
+// Cache hits exit before WordPress's send_headers hook, so preserve the same
+// security headers here without relying on web-server configuration.
+$sendSecurityHeaders = static function (): void {
+    $https = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
+    if ($https || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+        header('Strict-Transport-Security: max-age=31536000');
+    }
+
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header("Content-Security-Policy: frame-ancestors 'self'");
+    header('X-Permitted-Cross-Domain-Policies: none');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: camera=(), microphone=(), payment=(), geolocation=(), browsing-topics=(), interest-cohort=(), magnetometer=(), gyroscope=(), usb=(), bluetooth=(), serial=(), midi=(), picture-in-picture=()');
+};
+
 // ─── 3. ETag / 304 Not Modified ─────────────────────────────────────────────
 
 // Use file size + mtime for fast, unique ETag (no hashing needed)
@@ -164,6 +180,7 @@ if (
     trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag
 ) {
     http_response_code(304);
+    $sendSecurityHeaders();
     header('ETag: ' . $etag);
     header('Cache-Control: public, max-age=' . $cacheTtl);
     header('X-WPS-Cache: HIT');
@@ -208,6 +225,7 @@ while (ob_get_level() > 0) {
 
 // Status + core headers
 http_response_code(200);
+$sendSecurityHeaders();
 header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: public, max-age=' . $cacheTtl);
 header('ETag: ' . $etag);

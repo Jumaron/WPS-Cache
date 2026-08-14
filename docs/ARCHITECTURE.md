@@ -22,7 +22,7 @@ WPS-Cache/
 │   │   └── ReverseProxy/           Varnish integration
 │   ├── Config/                     Immutable settings and repository
 │   ├── Contracts/                  Small module/processor contracts
-│   ├── Infrastructure/             Filesystem, Apache, drop-in, wp-config I/O
+│   ├── Infrastructure/             Filesystem, server headers, drop-in, wp-config I/O
 │   ├── Integration/                Third-party compatibility boundaries
 │   ├── Lifecycle/                  Activation, settings changes, deactivation
 │   ├── Maintenance/                Database maintenance
@@ -56,8 +56,9 @@ dist/       Versioned ZIP archives and SHA-256 checksums
 5. Activation and settings updates generate `runtime.php` for the standalone
    early cache drop-in. The file contains only validated TTL and bypass data—no
    secrets.
-6. Filesystem, drop-in, `wp-config.php`, and Apache mutations are isolated in
-   infrastructure services and guarded by ownership checks.
+6. Filesystem, drop-in, and `wp-config.php` mutations are isolated in
+   infrastructure services and guarded by ownership checks. The plugin does not
+   write web-server configuration; upgrades only remove legacy owned blocks.
 7. The lifecycle reconciler refreshes owned drop-ins once per version upgrade
    and removes early page-cache serving when that layer is disabled.
 

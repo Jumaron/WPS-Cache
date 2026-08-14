@@ -17,8 +17,8 @@ graph and contribution boundaries.
 - PHP 8.3 or newer
 - Optional: phpredis for persistent Redis caching
 - Optional: Varnish for reverse-proxy caching
-- Apache or LiteSpeed for generated direct-serving rules; PHP drop-in serving
-  remains available on other servers
+- Any web server supported by WordPress; page-cache hits are served by the
+  dependency-free PHP drop-in without changing server configuration
 
 ## Repository layout
 
@@ -60,9 +60,9 @@ byte-for-byte reproducible ZIP plus SHA-256 checksum in `dist/`.
 4. Configure **WPS Cache** in the WordPress admin.
 
 Activation prepares the runtime cache directories, safely installs the owned
-`advanced-cache.php` drop-in, enables `WP_CACHE` when possible, and adds
-Apache/LiteSpeed rules only when the detected server supports them. Existing
-third-party drop-ins are never overwritten.
+`advanced-cache.php` drop-in, and enables `WP_CACHE` when possible. It does not
+write `.htaccess`; upgrades remove blocks created by older WPS-Cache releases.
+Existing third-party drop-ins are never overwritten.
 
 ## License
 
