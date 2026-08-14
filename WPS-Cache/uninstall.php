@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Fired when the plugin is uninstalled.
  *
@@ -18,6 +20,7 @@ if (!defined("WP_UNINSTALL_PLUGIN")) {
 }
 
 // 1. Remove Drop-ins
+$removedAdvancedCache = false;
 $dropins = [
     WP_CONTENT_DIR . "/advanced-cache.php",
     WP_CONTENT_DIR . "/object-cache.php",
@@ -27,11 +30,14 @@ foreach ($dropins as $file) {
     if (file_exists($file)) {
         // Read first to ensure we don't delete another plugin's drop-in
         $content = file_get_contents($file);
-        if (
+        if (is_string($content) && (
             str_contains($content, "WPS Cache") ||
-            str_contains($content, "WPSCache")
-        ) {
-            @unlink($file);
+            str_contains($content, "WPSCache") ||
+            str_contains($content, "WPS-Cache")
+        )) {
+            if (@unlink($file) && basename($file) === 'advanced-cache.php') {
+                $removedAdvancedCache = true;
+            }
         }
     }
 }
@@ -40,12 +46,15 @@ foreach ($dropins as $file) {
 $cache_dir = WP_CONTENT_DIR . "/cache/wps-cache/";
 
 // Simple recursive delete helper
-function wpsc_uninstall_rrmdir($dir)
+function wpsc_uninstall_rrmdir(string $dir): void
 {
     if (is_dir($dir)) {
         $objects = scandir($dir);
+        if ($objects === false) {
+            return;
+        }
         foreach ($objects as $object) {
-            if ($object != "." && $object != "..") {
+            if ($object !== "." && $object !== "..") {
                 if (
                     is_dir($dir . DIRECTORY_SEPARATOR . $object) &&
                     !is_link($dir . "/" . $object)
@@ -75,7 +84,7 @@ if (file_exists($htaccess) && is_writable($htaccess)) {
             $content,
         );
         if ($new_content !== $content) {
-            @file_put_contents($htaccess, $new_content);
+            @file_put_contents($htaccess, $new_content, LOCK_EX);
         }
     }
 }
@@ -84,7 +93,10 @@ if (file_exists($htaccess) && is_writable($htaccess)) {
 // Note: Modifying wp-config on uninstall is risky and often discouraged due to permissions,
 // but we attempt it safely.
 $config = ABSPATH . "wp-config.php";
-if (file_exists($config) && is_writable($config)) {
+if (!file_exists($config)) {
+    $config = dirname(rtrim(ABSPATH, '/\\')) . '/wp-config.php';
+}
+if ($removedAdvancedCache && file_exists($config) && is_writable($config)) {
     $content = file_get_contents($config);
     $new_content = preg_replace(
         "/define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*true\s*\)\s*;\s*/i",
@@ -92,14 +104,19 @@ if (file_exists($config) && is_writable($config)) {
         $content,
     );
     if ($new_content !== $content) {
-        @file_put_contents($config, $new_content);
+        @file_put_contents($config, $new_content, LOCK_EX);
     }
 }
 
 // 5. Remove Database Options
 delete_option("wpsc_settings");
+delete_option('wpsc_version');
 delete_transient("wpsc_stats_cache");
 delete_transient("wpsc_admin_notices");
+delete_option('wpsc_last_preload');
+wp_clear_scheduled_hook('wpsc_cache_cleanup');
+wp_clear_scheduled_hook('wpsc_scheduled_preload');
+wp_clear_scheduled_hook('wpsc_db_cleanup');
 
 // Clear opcode cache to ensure no old code remains in memory
 if (function_exists("opcache_invalidate")) {

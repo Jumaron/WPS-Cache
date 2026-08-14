@@ -4,7 +4,7 @@
  * Plugin Name: WPS-Cache
  * Plugin URI: https://github.com/Jumaron/WPS-Cache
  * Description: Free and Open-Source High-performance caching solution with Redis, Varnish, and HTML cache support.
- * Version: 0.0.4
+ * Version: 0.1.0
  * Requires PHP: 8.3
  * Author: Jumaron
  * License: GPL v2 or later
@@ -13,67 +13,51 @@
 
 declare(strict_types=1);
 
-namespace WPSCache;
-
-// Prevent direct access
 if (!defined("ABSPATH")) {
     exit();
 }
 
-// 1. Strict Requirement Check (Fail Fast)
-if (version_compare(PHP_VERSION, "8.3", "<")) {
+if (version_compare(PHP_VERSION, '8.3', '<')) {
     add_action("admin_notices", function (): void {
         $message = sprintf(
             esc_html__(
-                "WPS-Cache requires PHP 8.3+. You are running PHP %s. The plugin has been disabled.",
-                "wps-cache",
+                'WPS-Cache requires PHP 8.3+. You are running PHP %s. The plugin has been disabled.',
+                'wps-cache',
             ),
             PHP_VERSION,
         );
-        echo '<div class="notice notice-error"><p>' . $message . "</p></div>";
+        echo '<div class="notice notice-error"><p>' . $message . '</p></div>';
     });
     return;
 }
 
-// 2. Constants Definition (Early binding)
-const VERSION = "0.0.4";
-const FILE = __FILE__;
-const DIR = __DIR__;
+define('WPSC_VERSION', '0.1.0');
+define('WPSC_PLUGIN_FILE', __FILE__);
+define('WPSC_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('WPSC_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('WPSC_CACHE_DIR', WP_CONTENT_DIR . '/cache/wps-cache/');
 
-// 3. PSR-4 Compliant Autoloader
-spl_autoload_register(function (string $class): void {
-    // Project-specific namespace prefix
-    $prefix = "WPSCache\\";
-
-    // Base directory for the namespace prefix
-    $base_dir = DIR . "/src/";
-
-    // Does the class use the namespace prefix?
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'WPSCache\\';
+    if (!str_starts_with($class, $prefix)) {
         return;
     }
 
-    // Get the relative class name
-    $relative_class = substr($class, $len);
+    $relativeClass = substr($class, strlen($prefix));
+    if (!preg_match('/^[A-Za-z0-9_\\\\]+$/', $relativeClass)) {
+        return;
+    }
 
-    // Replace the namespace prefix with the base directory, replace namespace
-    // separators with directory separators in the relative class name, append
-    // with .php
-    $file = $base_dir . str_replace("\\", "/", $relative_class) . ".php";
-
-    // If the file exists, require it
-    if (file_exists($file)) {
+    $file = WPSC_PLUGIN_DIR . 'src/' . str_replace('\\', '/', $relativeClass) . '.php';
+    if (is_file($file)) {
         require_once $file;
     }
 });
 
-// 4. Bootstrap
 try {
-    Plugin::getInstance()->initialize();
-} catch (\Throwable $e) {
-    // Fail silently in production, log in debug
-    if (defined("WP_DEBUG") && WP_DEBUG) {
-        error_log("WPS-Cache Bootstrap Error: " . $e->getMessage());
+    \WPSCache\Bootstrap\Application::boot();
+} catch (\Throwable $exception) {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('[WPS-Cache] Bootstrap failed: ' . $exception->getMessage());
     }
 }

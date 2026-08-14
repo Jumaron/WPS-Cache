@@ -1,2 +1,6 @@
-*.zip
-/wordpress
+/wordpress/
+/vendor/
+/.phpunit.cache/
+/tests/.tmp/
+/WPS-Cache.zip
+/dist/

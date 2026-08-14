@@ -3,10 +3,10 @@ Contributors: Jumaron
 Tags: caching, performance, HTML, Redis, Varnish
 Requires at least: 6.3
 Tested up to: 6.7
-Requires PHP: 8.2
-Stable tag: 0.0.4
+Requires PHP: 8.3
+Stable tag: 0.1.0
 License: GPLv2 or later
-License URI: http://www.gnu.org/licenses/gpl-2.0.html
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Boost your WordPress speed with multi-layer caching: HTML, Redis, and Varnish for fast performance.
 
@@ -39,6 +39,11 @@ This plugin is currently experimental. We recommend testing in a staging environ
 2. Front-end cache status indicator.
 
 == Changelog ==
+= 0.1.0 =
+* Rebuilt the plugin around modular cache, optimization, lifecycle, and infrastructure services.
+* Added independent frontend optimization, automated tests, static analysis, and deterministic release builds.
+* Fixed cache lifetime propagation and early WooCommerce/session bypass rules.
+
 = 0.0.4 =
 * Full rework.
 
@@ -48,6 +53,8 @@ This plugin is currently experimental. We recommend testing in a staging environ
 * External services documentation added.
 
 == Upgrade Notice ==
+= 0.1.0 =
+Architecture rebuild. Test on staging and clear all cache layers after upgrading.
 = 0.0.4 =
 Clear Cache on update!
 = 0.0.3 =

@@ -17,6 +17,29 @@ if (!defined('ABSPATH')) {
     return;
 }
 
+if (!defined('WP_CONTENT_DIR')) {
+    define('WP_CONTENT_DIR', dirname(__FILE__));
+}
+
+$runtimeConfig = [
+    'ttl' => 3600,
+    'bypass_cookies' => [
+        'wordpress_logged_in_',
+        'wp-postpass_',
+        'comment_author_',
+        'woocommerce_items_in_cart',
+        'woocommerce_cart_hash',
+        'wp_woocommerce_session_',
+    ],
+    'excluded_urls' => [],
+];
+$runtimeFile = WP_CONTENT_DIR . '/cache/wps-cache/runtime.php';
+$loadedConfig = is_file($runtimeFile) ? @include $runtimeFile : null;
+if (is_array($loadedConfig)) {
+    $runtimeConfig = array_replace($runtimeConfig, $loadedConfig);
+}
+$cacheTtl = max(60, min(31536000, (int) ($runtimeConfig['ttl'] ?? 3600)));
+
 // ─── 0. FAST EXITS (cheapest checks first) ─────────────────────────────────
 
 // Non-GET? Bail immediately — no further work.
@@ -28,12 +51,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 // avoids PHP parsing $_COOKIE into an array + iterating it.
 $rawCookie = $_SERVER['HTTP_COOKIE'] ?? '';
 if ($rawCookie !== '') {
-    if (
-        str_contains($rawCookie, 'wordpress_logged_in_') ||
-        str_contains($rawCookie, 'wp-postpass_') ||
-        str_contains($rawCookie, 'comment_author_')
-    ) {
-        return;
+    foreach ((array) ($runtimeConfig['bypass_cookies'] ?? []) as $cookieFragment) {
+        if (is_string($cookieFragment) && $cookieFragment !== '' && str_contains($rawCookie, $cookieFragment)) {
+            return;
+        }
     }
 }
 
@@ -47,11 +68,13 @@ if (
     return;
 }
 
-// ─── 1. RESOLVE CACHE FILE PATH ────────────────────────────────────────────
-
-if (!defined('WP_CONTENT_DIR')) {
-    define('WP_CONTENT_DIR', dirname(__FILE__));
+foreach ((array) ($runtimeConfig['excluded_urls'] ?? []) as $excludedUrl) {
+    if (is_string($excludedUrl) && $excludedUrl !== '' && str_contains($requestUri, $excludedUrl)) {
+        return;
+    }
 }
+
+// ─── 1. RESOLVE CACHE FILE PATH ────────────────────────────────────────────
 
 // Parse URI once — extract both path and query in a single call.
 $parsed = parse_url($requestUri);
@@ -125,8 +148,8 @@ if ($mtime === false) {
     return; // Cache miss — fall through to WordPress
 }
 
-// TTL check (3600s = 1 hour)
-if (time() - $mtime > 3600) {
+// TTL is generated from the validated WordPress setting.
+if (time() - $mtime > $cacheTtl) {
     return; // Expired — fall through to WordPress for regeneration
 }
 
@@ -142,7 +165,7 @@ if (
 ) {
     http_response_code(304);
     header('ETag: ' . $etag);
-    header('Cache-Control: public, max-age=3600');
+    header('Cache-Control: public, max-age=' . $cacheTtl);
     header('X-WPS-Cache: HIT');
     exit;
 }
@@ -186,7 +209,7 @@ while (ob_get_level() > 0) {
 // Status + core headers
 http_response_code(200);
 header('Content-Type: text/html; charset=UTF-8');
-header('Cache-Control: public, max-age=3600');
+header('Cache-Control: public, max-age=' . $cacheTtl);
 header('ETag: ' . $etag);
 header('Vary: Accept-Encoding, Cookie');
 header('X-WPS-Cache: HIT');

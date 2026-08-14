@@ -1,96 +1,69 @@
 # WPS-Cache
 
-[![WordPress Compatible](https://img.shields.io/badge/WordPress-Compatible-0073aa.svg)](https://wordpress.org)
-[![PHP Version](https://img.shields.io/badge/PHP-8.3%2B-blue.svg)](https://php.net)
-[![License](https://img.shields.io/badge/License-GPLv2%20or%20later-blue.svg)](http://www.gnu.org/licenses/gpl-2.0.html)
-[![Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)]()
+WPS-Cache is an experimental, dependency-free WordPress performance plugin with
+static HTML caching, Redis object-cache integration, Varnish purging, asset and
+frontend optimizations, database maintenance, and WordPress bloat controls.
 
-**Boost your WordPress speed with multi-layer caching** using HTML, Redis, and Varnish for lightning-fast performance.
+The 0.1 architecture separates WordPress bootstrap, configuration, cache layers,
+HTML processing, infrastructure mutations, integrations, schedules, maintenance,
+and admin code. See [the architecture guide](docs/ARCHITECTURE.md) for the object
+graph and contribution boundaries.
 
-> ⚠️ **Experimental Status:** This plugin is under active development. Please test thoroughly in a staging environment before production use.
+> This plugin is experimental. Test releases on staging before production use.
 
-## ✨ Features
+## Requirements
 
-- 🔄 **HTML Cache** - Lightning-fast static page delivery
-- 📦 **Redis Cache** - Turbocharged database query performance
-- 🚄 **Varnish Cache** - HTTP acceleration that reduces server load
-- 📊 **Real-time Analytics** - Monitor cache performance metrics
-- 🎨 **CSS Optimization** - Automatic minification
-- 🔧 **Easy Management** - Intuitive WordPress admin integration
-- 💾 **Import/Export** - Simple configuration backup and migration
+- WordPress 6.3 or newer
+- PHP 8.3 or newer
+- Optional: phpredis for persistent Redis caching
+- Optional: Varnish for reverse-proxy caching
+- Apache or LiteSpeed for generated direct-serving rules; PHP drop-in serving
+  remains available on other servers
 
-## External Services
+## Repository layout
 
-This plugin connects to external services to enhance caching performance:
-
-- **Varnish Cache:**  
-  The plugin sends HTTP requests (including purge requests and connection checks) to a configured Varnish caching server. No personally identifiable data is transmitted during these communications. For more details, please review the [Varnish Cache documentation](https://varnish-cache.org/), its [Terms of Service](https://varnish-cache.org/TOS), and [Privacy Policy](https://varnish-cache.org/privacy).
-
-_Note: If you configure your setup to use a remote Varnish server, ensure that you trust the server and have reviewed its policies._
-
-## 🚀 Quick Start
-
-1. Upload `WPS-Cache` to `/wp-content/plugins/` or directly via the WordPress Admin Interface (Add Plugin → Upload Plugin)
-2. Activate via the WordPress Plugins menu
-3. Configure in the "WPS Cache" settings
-
-## 💡 Usage
-
-### Cache Management
-
-- Access "WPS Cache" in the admin panel
-- Toggle individual cache types
-- Clear specific or all caches
-- Import/export settings
-
-## 🔧 Development
-
-### Structure
-
-```
-wps-cache/
-├── includes/           # Object Cache
-├── src/
-│   ├── Admin/         # Admin Interface
-│   └── Cache/         # Cache Drivers
-├── assets/            # Static Assets
-└── wps-cache.php      # Main Plugin File
+```text
+WPS-Cache/   Distributable WordPress plugin
+docs/        Architecture documentation
+tests/       Unit and integration tests
+tools/       Lint and deterministic build scripts
+dist/        Versioned release ZIPs and checksums
 ```
 
-### Core Classes
+## Development
 
-- `WPSCache\Plugin` - Core initialization
-- `WPSCache\Cache\CacheManager` - Cache operations
-- `WPSCache\Admin\AdminPanelManager` - UI/UX handling
-- `WPSCache\Admin\Tools\CacheTools` - Management utilities
+The runtime uses its own small PSR-4 autoloader and ships without dependencies.
+The test and build commands also work without Composer:
 
-## 🤝 Contributing
+```bash
+php tools/lint.php
+php tests/run.php
+php tools/build.php
+```
 
-We love your input! Check out our (Coming Soon) [Contributing Guidelines](CONTRIBUTING.md).
+Optional static analysis uses Composer development dependencies:
 
-1. Fork it
-2. Create your feature branch (`git checkout -b feature/amazingness`)
-3. Commit your changes (`git commit -am 'Add: Amazing Feature'`)
-4. Push to the branch (`git push origin feature/amazingness`)
-5. Open a Pull Request
+```bash
+composer install
+vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=2G
+```
 
-## 📚 Documentation
+The test suite includes subprocess coverage of the standalone early page-cache
+drop-in. The release builder validates version consistency and creates a
+byte-for-byte reproducible ZIP plus SHA-256 checksum in `dist/`.
 
-Detailed documentation available at (Coming Soon) [docs.wps-cache.com](https://docs.wps-cache.com)
+## Installation
 
-## 🙏 Acknowledgements
+1. Build or download `dist/wps-cache-<version>.zip`.
+2. In WordPress, open **Plugins → Add New → Upload Plugin**.
+3. Upload and activate the ZIP.
+4. Configure **WPS Cache** in the WordPress admin.
 
-Built with love and support from:
+Activation prepares the runtime cache directories, safely installs the owned
+`advanced-cache.php` drop-in, enables `WP_CACHE` when possible, and adds
+Apache/LiteSpeed rules only when the detected server supports them. Existing
+third-party drop-ins are never overwritten.
 
-- [WordPress](https://wordpress.org/) – The world's favorite CMS
-- [Redis](https://redis.io/) – Lightning-fast data store
-- [Varnish](https://varnish-cache.org/) – Web acceleration magic
+## License
 
-## 📝 License
-
-GPLv2 or later © Jumaron  
-For more details, please see the [GNU General Public License](http://www.gnu.org/licenses/gpl-2.0.html).
-
----
-
-<p align="center">Made with ❤️ for the WordPress community</p>
+GPL-2.0-or-later.

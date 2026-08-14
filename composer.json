@@ -1,0 +1,30 @@
+{
+  "name": "jumaron/wps-cache",
+  "description": "A modular WordPress performance and multi-layer caching plugin.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.3"
+  },
+  "require-dev": {
+    "php-stubs/woocommerce-stubs": "^10.9",
+    "php-stubs/wordpress-stubs": "^7.0",
+    "phpstan/phpstan": "^2.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "WPSCache\\": "WPS-Cache/src/"
+    }
+  },
+  "scripts": {
+    "lint": "@php tools/lint.php",
+    "test": "@php tests/run.php",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
+    "build": "@php tools/build.php",
+    "check": [
+      "@lint",
+      "@test",
+      "@analyse"
+    ]
+  }
+}

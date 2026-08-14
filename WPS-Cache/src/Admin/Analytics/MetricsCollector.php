@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Analytics;
 
 use WPSCache\Cache\CacheManager;
-use WPSCache\Cache\Drivers\RedisCache;
+use WPSCache\Cache\Object\RedisObjectCache;
+use WPSCache\Config\Settings;
 
 /**
  * Service responsible for gathering performance data.
@@ -15,7 +16,7 @@ class MetricsCollector
 {
     private CacheManager $cacheManager;
 
-    public function __construct(CacheManager $cacheManager)
+    public function __construct(CacheManager $cacheManager, private readonly Settings $settings)
     {
         $this->cacheManager = $cacheManager;
     }
@@ -25,9 +26,7 @@ class MetricsCollector
      */
     public function getStats(): array
     {
-        $settings = get_option("wpsc_settings", []);
-
-        if (empty($settings["enable_metrics"])) {
+        if (!$this->settings->enabled('enable_metrics')) {
             return [
                 "timestamp" => current_time("mysql"),
                 "html" => ["enabled" => false, "files" => 0, "size" => "0 B"],
@@ -89,8 +88,7 @@ class MetricsCollector
         }
 
         return [
-            "enabled" =>
-                (bool) get_option("wpsc_settings")["html_cache"] ?? false,
+            "enabled" => $this->settings->enabled('html_cache'),
             "files" => $count,
             "size" => size_format($size),
         ];
@@ -103,16 +101,15 @@ class MetricsCollector
     {
         $driver = $this->cacheManager->getDriver("redis");
 
-        if (!$driver || !method_exists($driver, "getConnection")) {
+        if (!$driver instanceof RedisObjectCache) {
             return ["enabled" => false];
         }
 
         try {
-            /** @var \Redis $redis */
             $redis = $driver->getConnection();
 
-            if (!$redis) {
-                $errorMsg = method_exists($driver, 'getConnectionError') ? $driver->getConnectionError() : null;
+            if ($redis === null) {
+                $errorMsg = $driver->getConnectionError();
                 return ["enabled" => true, "connected" => false, "error" => $errorMsg ?: "Connection could not be established."];
             }
 
@@ -120,7 +117,7 @@ class MetricsCollector
                 $info = $redis->info();
             } catch (\Throwable $e) {
                 // Some environments or proxies restrict the INFO command or drop the connection when sent
-                if (method_exists($driver, 'getConnection') && $driver->getConnection()) {
+                if ($driver->getConnection() !== null) {
                      $info = ['used_memory_human' => 'Unknown', 'keyspace_hits' => 0, 'keyspace_misses' => 0, 'uptime_in_days' => 0];
                 } else {
                      throw $e;

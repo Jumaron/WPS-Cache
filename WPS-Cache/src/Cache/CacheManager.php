@@ -4,262 +4,196 @@ declare(strict_types=1);
 
 namespace WPSCache\Cache;
 
-use WPSCache\Cache\Drivers\CacheDriverInterface;
-use WPSCache\Cache\Drivers\RedisCache;
-use WPSCache\Cache\Drivers\VarnishCache;
 use Throwable;
+use WPSCache\Contracts\Module;
+use WPSCache\Contracts\Purgeable;
 
-/**
- * Orchestrates multiple cache drivers and handles global cache operations.
- */
+/** Registry and purge coordinator for cache-owning runtime modules. */
 final class CacheManager
 {
-    /** @var array<CacheDriverInterface> */
-    private array $drivers = [];
+    /** @var array<string, Module&Purgeable> */
+    private array $modules = [];
 
-    private bool $initialized = false;
-    private array $errorLog = [];
+    /** @var array<string, string> */
+    private array $errors = [];
 
-    /**
-     * Registers a driver instance.
-     */
-    public function addDriver(CacheDriverInterface $driver): void
+    private bool $booted = false;
+
+    public function register(Module&Purgeable $module): void
     {
-        $this->drivers[] = $driver;
+        $id = $module->id();
+        if (isset($this->modules[$id])) {
+            throw new \LogicException('Duplicate cache module: ' . $id);
+        }
+
+        $this->modules[$id] = $module;
     }
 
-    /**
-     * Bootstraps drivers and local hooks.
-     */
-    public function initializeCache(): void
+    public function boot(): void
     {
-        if ($this->initialized) {
+        if ($this->booted) {
             return;
         }
 
-        foreach ($this->drivers as $driver) {
+        foreach ($this->modules as $id => $module) {
             try {
-                $driver->initialize();
-            } catch (Throwable $e) {
-                error_log(
-                    sprintf(
-                        "WPS Cache: Driver %s failed to init: %s",
-                        get_class($driver),
-                        $e->getMessage(),
-                    ),
-                );
+                $module->boot();
+            } catch (Throwable $exception) {
+                $this->errors[$id] = $exception->getMessage();
+                error_log(sprintf(
+                    '[WPS-Cache] Module %s failed to boot: %s',
+                    $module::class,
+                    $exception->getMessage(),
+                ));
             }
         }
 
-        $this->setupCacheHooks();
-        $this->initialized = true;
+        $this->booted = true;
     }
 
-    private function setupCacheHooks(): void
+    /** Backward-compatible hook callback. */
+    public function initializeCache(): void
     {
-        // Content updates: Clear data caches only (No OpCache reset)
-        add_action("save_post", [$this, "clearContentCaches"]);
-        add_action("comment_post", [$this, "clearContentCaches"]);
-
-        // System updates: Clear everything including OpCache
-        add_action("switched_theme", [$this, "clearAllCaches"]);
-        add_action("activated_plugin", [$this, "clearAllCaches"]);
-        add_action("deactivated_plugin", [$this, "clearAllCaches"]);
+        $this->boot();
     }
 
-    /**
-     * Clears content-related caches (Drivers + WP Internals) but preserves OpCache.
-     * This prevents performance degradation on frequent content updates.
-     */
     public function clearContentCaches(): bool
     {
-        $this->errorLog = [];
-        $success = true;
-
-        // 1. Clear Drivers (HTML, Redis, Minified Assets)
-        foreach ($this->drivers as $driver) {
-            try {
-                $driver->clear();
-            } catch (Throwable $e) {
-                $this->errorLog[] =
-                    get_class($driver) . ": " . $e->getMessage();
-                $success = false;
-            }
-        }
-
-        // 2. Clear WordPress Internals (Object Cache & Transients)
-        $this->clearWordPressInternals(false);
-
-        // 3. Fire Signal
-        do_action("wpsc_cache_cleared", $success, $this->errorLog);
-
-        return $success && empty($this->errorLog);
+        return $this->purge(false);
     }
 
-    /**
-     * Master Switch: Clears every layer of caching available.
-     */
     public function clearAllCaches(): bool
     {
-        $this->errorLog = [];
-        $success = true;
+        return $this->purge(true);
+    }
 
-        // 1. Clear Drivers (HTML, Redis, Minified Assets)
-        foreach ($this->drivers as $driver) {
+    /** @return array<string, string> */
+    public function errors(): array
+    {
+        return $this->errors;
+    }
+
+    public function get(string $id): ?Module
+    {
+        return $this->modules[$id] ?? null;
+    }
+
+    /** Backward-compatible alias used by dashboard metrics. */
+    public function getDriver(string $id): ?Module
+    {
+        return $this->get($id);
+    }
+
+    public function clearHtmlCache(): bool
+    {
+        return $this->purgeOne('page', true);
+    }
+
+    public function clearRedisCache(): bool
+    {
+        return $this->purgeOne('redis');
+    }
+
+    public function clearVarnishCache(): bool
+    {
+        return $this->purgeOne('varnish');
+    }
+
+    private function purge(bool $includeRuntimeCaches): bool
+    {
+        $this->errors = [];
+
+        foreach ($this->modules as $id => $module) {
             try {
-                $driver->clear();
-            } catch (Throwable $e) {
-                $this->errorLog[] =
-                    get_class($driver) . ": " . $e->getMessage();
-                $success = false;
+                $module->purge();
+            } catch (Throwable $exception) {
+                $this->errors[$id] = $exception->getMessage();
             }
         }
 
-        // 2. Clear WordPress Internals (Object Cache & Transients)
-        $this->clearWordPressInternals(true);
-
-        // 3. Clear OpCache (PHP Code Cache) safely for specific drop-ins instead of a full reset
-        // A full opcache_reset() can cause 521 errors / segfaults on high-traffic sites.
-        if (function_exists("opcache_invalidate")) {
-            @opcache_invalidate(WP_CONTENT_DIR . "/advanced-cache.php", true);
-            @opcache_invalidate(WP_CONTENT_DIR . "/object-cache.php", true);
-            @opcache_invalidate(ABSPATH . "wp-config.php", true);
-        }
-
-        // 4. Fire Signal
-        do_action("wpsc_cache_cleared", $success, $this->errorLog);
-
-        return $success && empty($this->errorLog);
-    }
-
-    private function clearWordPressInternals(bool $full_flush = true): void
-    {
-        // Flush Memory Object Cache & Transients only on full system reset
-        if ($full_flush) {
+        if ($includeRuntimeCaches) {
             wp_cache_flush();
             $this->clearDatabaseTransients();
+            $this->invalidateDropInOpcache();
         }
 
-        // Remove physical page cache files if driver missing but files exist (cleanup)
         $this->forceCleanupHtmlDirectory();
+        $success = $this->errors === [];
+        do_action('wpsc_cache_cleared', $success, array_values($this->errors));
+
+        return $success;
     }
 
-    /**
-     * SOTA Optimization: Direct SQL deletion for transients.
-     * WP's native delete_transient() is O(N) where N is number of transients (loops + hooks).
-     * This implementation is O(1) for millions of rows.
-     */
+    private function purgeOne(string $id, bool $fallbackToFilesystem = false): bool
+    {
+        $module = $this->modules[$id] ?? null;
+        if ($module === null) {
+            if ($fallbackToFilesystem) {
+                $this->forceCleanupHtmlDirectory();
+                return true;
+            }
+
+            return false;
+        }
+
+        try {
+            $module->purge();
+            return true;
+        } catch (Throwable $exception) {
+            $this->errors[$id] = $exception->getMessage();
+            return false;
+        }
+    }
+
     private function clearDatabaseTransients(): void
     {
         global $wpdb;
 
         try {
-            // Delete transient data (covers both data and timeouts)
-            // _transient_% covers _transient_timeout_%
-            // _site_transient_% covers _site_transient_timeout_%
+            $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_%'");
 
-            // Optimization: Split into 2 queries to ensure MySQL uses the index range scan
-            // instead of a full table scan or inefficient index merge caused by OR.
-            $wpdb->query(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%'",
-            );
-            $wpdb->query(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_site\_transient\_%'",
-            );
-        } catch (Throwable $e) {
-            $this->errorLog["db"] = $e->getMessage();
+            if (is_multisite() && isset($wpdb->sitemeta)) {
+                $wpdb->query("DELETE FROM {$wpdb->sitemeta} WHERE meta_key LIKE '\\_site\\_transient\\_%'");
+            } else {
+                $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_site\\_transient\\_%'");
+            }
+        } catch (Throwable $exception) {
+            $this->errors['database'] = $exception->getMessage();
         }
     }
 
-    /**
-     * Fallback to ensure HTML directory is empty even if driver isn't loaded.
-     */
+    private function invalidateDropInOpcache(): void
+    {
+        if (!function_exists('opcache_invalidate')) {
+            return;
+        }
+
+        @opcache_invalidate(WP_CONTENT_DIR . '/advanced-cache.php', true);
+        @opcache_invalidate(WP_CONTENT_DIR . '/object-cache.php', true);
+        @opcache_invalidate(ABSPATH . 'wp-config.php', true);
+    }
+
     private function forceCleanupHtmlDirectory(): void
     {
-        if (defined("WPSC_CACHE_DIR")) {
-            $html_dir = WPSC_CACHE_DIR . "html/";
-            if (is_dir($html_dir)) {
-                $this->recursiveRemoveDir($html_dir);
-                @mkdir($html_dir, 0755, true); // Recreate empty
-            }
+        if (!defined('WPSC_CACHE_DIR')) {
+            return;
         }
-    }
 
-    private function recursiveRemoveDir(string $dir): void
-    {
-        if (!is_dir($dir)) {
+        $directory = WPSC_CACHE_DIR . 'html/';
+        if (!is_dir($directory)) {
             return;
         }
 
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator(
-                $dir,
-                \FilesystemIterator::SKIP_DOTS,
-            ),
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST,
         );
 
-        foreach ($iterator as $file) {
-            if ($file->isDir()) {
-                @rmdir($file->getPathname());
-            } else {
-                @unlink($file->getPathname());
-            }
+        foreach ($iterator as $entry) {
+            $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
         }
-        @rmdir($dir);
-    }
 
-    /**
-     * Helper to retrieve specific driver instance.
-     */
-    public function getDriver(string $alias): ?CacheDriverInterface
-    {
-        foreach ($this->drivers as $driver) {
-            if ($alias === "redis" && $driver instanceof RedisCache) {
-                return $driver;
-            }
-            if ($alias === "varnish" && $driver instanceof VarnishCache) {
-                return $driver;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Specific Clearing Methods (Used by Admin Buttons)
-     */
-
-    public function clearHtmlCache(): bool
-    {
-        // If HTML driver is loaded, use it
-        foreach ($this->drivers as $driver) {
-            if (str_contains(get_class($driver), "HTMLCache")) {
-                $driver->clear();
-                return true;
-            }
-        }
-        // Fallback
-        $this->forceCleanupHtmlDirectory();
-        return true;
-    }
-
-    public function clearRedisCache(): bool
-    {
-        $driver = $this->getDriver("redis");
-        if ($driver) {
-            $driver->clear();
-            return true;
-        }
-        return false;
-    }
-
-    public function clearVarnishCache(): bool
-    {
-        $driver = $this->getDriver("varnish");
-        if ($driver) {
-            $driver->clear();
-            return true;
-        }
-        return false;
+        @rmdir($directory);
+        @mkdir($directory, 0755, true);
     }
 }

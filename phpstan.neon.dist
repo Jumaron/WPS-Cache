@@ -1,0 +1,16 @@
+parameters:
+    level: 5
+    parallel:
+        maximumNumberOfProcesses: 1
+    paths:
+        - WPS-Cache/src
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    scanFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        - vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+    excludePaths:
+        analyse:
+            - WPS-Cache/includes/object-cache.php
+            - WPS-Cache/includes/advanced-cache-template.php
+    reportUnmatchedIgnoredErrors: false

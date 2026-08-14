@@ -5,45 +5,30 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Settings;
 
 use WPSCache\Cache\CacheManager;
-use WPSCache\Optimization\DatabaseOptimizer;
+use WPSCache\Config\Settings;
+use WPSCache\Maintenance\DatabaseOptimizer;
 use WPSCache\Admin\Analytics\MetricsCollector;
 
-class SettingsManager
+final class SettingsManager
 {
     private CacheManager $cacheManager;
     private SettingsRenderer $renderer;
-    private SettingsValidator $validator;
+    private DatabaseOptimizer $databaseOptimizer;
 
-    public function __construct(CacheManager $cacheManager)
+    public function __construct(CacheManager $cacheManager, DatabaseOptimizer $databaseOptimizer)
     {
         $this->cacheManager = $cacheManager;
+        $this->databaseOptimizer = $databaseOptimizer;
         $this->renderer = new SettingsRenderer();
-        $this->validator = new SettingsValidator();
-
-        add_action("admin_init", [$this, "registerSettings"]);
-    }
-
-    public function registerSettings(): void
-    {
-        register_setting("wpsc_settings", "wpsc_settings", [
-            "type" => "array",
-            "sanitize_callback" => [$this->validator, "sanitizeSettings"],
-            "default" => $this->getDefaultSettings(),
-        ]);
     }
 
     private function getSettings(): array
     {
-        $defaults = $this->getDefaultSettings();
+        $defaults = Settings::defaults();
         $current = get_option("wpsc_settings", []);
         return is_array($current)
             ? array_merge($defaults, $current)
             : $defaults;
-    }
-
-    public function getDefaultSettings(): array
-    {
-        return \WPSCache\Plugin::DEFAULT_SETTINGS;
     }
 
     private function formStart(): void
@@ -68,7 +53,7 @@ class SettingsManager
         $settings = $this->getSettings();
 
         // Metrics
-        $collector = new MetricsCollector($this->cacheManager);
+        $collector = new MetricsCollector($this->cacheManager, new Settings($settings));
         $stats = $collector->getStats();
         $redis = $stats["redis"];
         $html = $stats["html"];
@@ -135,9 +120,9 @@ class SettingsManager
                     </div>
                 </div>
                 <div style="margin-top: 2rem; display:flex; justify-content:flex-end;">
-                    <form method="post" class="wpsc-form">
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="wpsc-form">
                         <?php wp_nonce_field("wpsc_refresh_stats"); ?>
-                        <input type="hidden" name="wpsc_action" value="refresh_stats">
+                        <input type="hidden" name="action" value="wpsc_refresh_stats">
                         <button type="submit" class="wpsc-btn-secondary" data-loading-text="Refreshing...">
                             <span class="dashicons dashicons-update"></span> Refresh Data
                         </button>
@@ -147,22 +132,13 @@ class SettingsManager
         </section>
 
         <?php
-        if (
-            isset($_POST["wpsc_action"]) &&
-            $_POST["wpsc_action"] === "refresh_stats"
-        ) {
-            check_admin_referer("wpsc_refresh_stats");
-            delete_transient("wpsc_stats_cache");
-            echo "<script>window.location.reload();</script>";
-        }
-
         // Preloader & Status
         $this->formStart();
 
         $this->renderer->renderCard(
             "Cache Preloader",
             "Automatically generate cache files.",
-            function () use ($settings) {
+            function () {
                 ?>
             <div id="wpsc-preload-progress" class="wpsc-progress-container" style="display:none;">
                 <div class="wpsc-progress-header">
@@ -730,8 +706,7 @@ class SettingsManager
 
     private function renderDatabaseTabContent(array $settings): void
     {
-        $optimizer = \WPSCache\Plugin::getInstance()->getDatabaseOptimizer();
-        $stats = $optimizer->getStats();
+        $stats = $this->databaseOptimizer->getStats();
         $items = DatabaseOptimizer::ITEMS;
 
         $this->formStart();

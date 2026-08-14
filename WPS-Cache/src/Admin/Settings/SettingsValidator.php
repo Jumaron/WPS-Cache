@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace WPSCache\Admin\Settings;
 
-use WPSCache\Plugin;
+use WPSCache\Config\Settings;
 
-class SettingsValidator
+final class SettingsValidator
 {
     private const PROTECTED_KEYS = ["redis_password", "cf_api_token"];
 
-    public function sanitizeSettings(array $input): array
+    public function sanitizeSettings(mixed $input): array
     {
+        $input = is_array($input) ? $input : [];
         $current = get_option("wpsc_settings", []);
         if (!is_array($current)) {
             $current = [];
         }
 
-        $defaults = Plugin::DEFAULT_SETTINGS;
+        $defaults = Settings::defaults();
         $current = array_merge($defaults, $current);
 
         $clean = [];
@@ -169,9 +170,6 @@ class SettingsValidator
     {
         if (is_string($input)) {
             $input = explode("\n", $input);
-        }
-        if (!is_array($input)) {
-            return [];
         }
         $lines = array_map("trim", $input);
         $lines = array_filter($lines);
