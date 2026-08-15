@@ -218,36 +218,39 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "html_cache",
-                    "Enable Page Caching",
-                    "Speed up your site significantly.",
+                    "Enable page cache",
+                    "Serve prebuilt HTML to eligible visitors for dramatically faster responses.",
                     $settings,
                 );
-                $this->renderer->renderInput(
-                    "cache_lifetime",
-                    "Cache TTL (Seconds)",
-                    "Default: 3600",
-                    $settings,
-                    "number",
-                );
-                $this->renderer->renderRadioGroup(
-                    "preload_interval",
-                    "Preload Interval",
-                    "How often to regenerate cache automatically.",
-                    $settings,
-                    [
-                        "hourly" => "Hourly",
-                        "daily" => "Daily",
-                        "weekly" => "Weekly",
-                        "disabled" => "Disabled",
-                    ],
-                );
-                $this->renderer->renderTextarea(
-                    "excluded_urls",
-                    "Excluded URLs",
-                    "Pages to never cache (one per line).",
-                    $settings,
-                    ["placeholder" => "/my-account/\n/contact/"],
-                );
+                $this->renderer->renderConditionalGroup(['html_cache' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput(
+                        "cache_lifetime",
+                        "Cache lifespan",
+                        "Seconds before a cached page expires. 3,600 seconds is a solid default.",
+                        $settings,
+                        "number",
+                        ["min" => "60", "max" => "31536000"],
+                    );
+                    $this->renderer->renderRadioGroup(
+                        "preload_interval",
+                        "Automatic preload",
+                        "Choose how often WPS Cache should rebuild the warm cache.",
+                        $settings,
+                        [
+                            "hourly" => "Hourly",
+                            "daily" => "Daily",
+                            "weekly" => "Weekly",
+                            "disabled" => "Off",
+                        ],
+                    );
+                    $this->renderer->renderTextarea(
+                        "excluded_urls",
+                        "Never cache these URLs",
+                        "Add one path per line. Useful for accounts, carts, and personalized pages.",
+                        $settings,
+                        ["placeholder" => "/my-account/\n/contact/"],
+                    );
+                }, 'all', 'Page cache settings');
             },
             "dashicons-html",
         );
@@ -258,51 +261,18 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "redis_cache",
-                    "Enable Redis",
-                    "Requires running Redis server.",
+                    "Enable Redis object cache",
+                    "Store repeated database results in a reachable Redis service.",
                     $settings,
                 );
-                echo '<div style="margin-top:15px; padding-left:15px; border-left:2px solid var(--wpsc-border);">';
-                $this->renderer->renderInput(
-                    "redis_host",
-                    "Redis Host",
-                    "127.0.0.1",
-                    $settings,
-                );
-                $this->renderer->renderInput(
-                    "redis_port",
-                    "Redis Port",
-                    "6379",
-                    $settings,
-                    "number",
-                );
-                $this->renderer->renderInput(
-                    "redis_db",
-                    "Database ID",
-                    "0",
-                    $settings,
-                    "number",
-                );
-                $this->renderer->renderInput(
-                    "redis_password",
-                    "Password",
-                    "Optional",
-                    $settings,
-                    "password",
-                );
-                $this->renderer->renderInput(
-                    "redis_prefix",
-                    "Key Prefix",
-                    "wpsc:",
-                    $settings,
-                );
-                $this->renderer->renderToggle(
-                    "redis_tls",
-                    "Use Redis TLS",
-                    "Connect with the tls:// transport in both runtime and object-cache drop-in.",
-                    $settings,
-                );
-                echo "</div>";
+                $this->renderer->renderConditionalGroup(['redis_cache' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput("redis_host", "Host", "Usually 127.0.0.1 or the private service hostname.", $settings);
+                    $this->renderer->renderInput("redis_port", "Port", "Redis commonly listens on 6379.", $settings, "number", ["min" => "1", "max" => "65535"]);
+                    $this->renderer->renderInput("redis_db", "Database", "Logical Redis database from 0 to 15.", $settings, "number", ["min" => "0", "max" => "15"]);
+                    $this->renderer->renderInput("redis_password", "Password", "Optional. Leave blank to keep the saved password.", $settings, "password");
+                    $this->renderer->renderInput("redis_prefix", "Key prefix", "Separates this site's keys from other applications.", $settings);
+                    $this->renderer->renderToggle("redis_tls", "Use TLS", "Encrypt the connection with the tls:// transport.", $settings);
+                }, 'all', 'Redis connection settings');
             },
             "dashicons-database",
         );
@@ -313,16 +283,16 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "memcached_cache",
-                    "Enable Memcached",
+                    "Enable Memcached object cache",
                     "Requires the PHP Memcached extension and a reachable daemon.",
                     $settings,
                 );
-                echo '<div style="margin-top:15px; padding-left:15px; border-left:2px solid var(--wpsc-border);">';
-                $this->renderer->renderInput("memcached_host", "Memcached Host", "127.0.0.1", $settings);
-                $this->renderer->renderInput("memcached_port", "Memcached Port", "11211", $settings, "number");
-                $this->renderer->renderInput("memcached_prefix", "Key Prefix", "wpsc:", $settings);
-                $this->renderer->renderInput("memcached_persistent_id", "Persistent Connection ID", "wps-cache", $settings);
-                echo "</div>";
+                $this->renderer->renderConditionalGroup(['memcached_cache' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput("memcached_host", "Host", "Usually 127.0.0.1 or the private service hostname.", $settings);
+                    $this->renderer->renderInput("memcached_port", "Port", "Memcached commonly listens on 11211.", $settings, "number", ["min" => "1", "max" => "65535"]);
+                    $this->renderer->renderInput("memcached_prefix", "Key prefix", "Separates this site's keys from other applications.", $settings);
+                    $this->renderer->renderInput("memcached_persistent_id", "Persistent connection ID", "Reuses the PHP connection between requests.", $settings);
+                }, 'all', 'Memcached connection settings');
             },
             "dashicons-database-view",
         );
@@ -332,9 +302,11 @@ final class SettingsManager
             "Purge a host-managed FastCGI cache. Copy the generated server recipe from Delivery Rules.",
             function () use ($settings) {
                 $this->renderer->renderToggle("nginx_cache", "Enable Nginx purge", "Sends non-blocking PURGE requests to the configured local endpoint.", $settings);
-                $this->renderer->renderInput("nginx_host", "Nginx host", "127.0.0.1", $settings);
-                $this->renderer->renderInput("nginx_port", "Nginx port", "80", $settings, "number");
-                $this->renderer->renderInput("nginx_purge_path", "Purge endpoint", "/purge", $settings);
+                $this->renderer->renderConditionalGroup(['nginx_cache' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput("nginx_host", "Nginx host", "Local address that accepts purge requests.", $settings);
+                    $this->renderer->renderInput("nginx_port", "Nginx port", "The internal listener port.", $settings, "number", ["min" => "1", "max" => "65535"]);
+                    $this->renderer->renderInput("nginx_purge_path", "Purge endpoint", "Path configured by the Nginx cache recipe.", $settings);
+                }, 'all', 'Nginx purge settings');
             },
             "dashicons-admin-site-alt3",
         );
@@ -345,25 +317,14 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "varnish_cache",
-                    "Enable Varnish Purge",
-                    "Purge Varnish when content updates.",
+                    "Enable Varnish purge",
+                    "Clear Varnish automatically when WordPress content changes.",
                     $settings,
                 );
-                echo '<div style="margin-top:15px; padding-left:15px; border-left:2px solid var(--wpsc-border);">';
-                $this->renderer->renderInput(
-                    "varnish_host",
-                    "Varnish Host",
-                    "127.0.0.1",
-                    $settings,
-                );
-                $this->renderer->renderInput(
-                    "varnish_port",
-                    "Varnish Port",
-                    "6081",
-                    $settings,
-                    "number",
-                );
-                echo "</div>";
+                $this->renderer->renderConditionalGroup(['varnish_cache' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput("varnish_host", "Varnish host", "Local address that accepts purge requests.", $settings);
+                    $this->renderer->renderInput("varnish_port", "Varnish port", "Varnish commonly listens on 6081.", $settings, "number", ["min" => "1", "max" => "65535"]);
+                }, 'all', 'Varnish connection settings');
             },
             "dashicons-cloud",
         );
@@ -396,33 +357,35 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "css_minify",
-                    "Minify CSS",
-                    "Remove whitespace.",
+                    "Minify CSS files",
+                    "Remove comments and unnecessary whitespace from local stylesheets.",
                     $settings,
                 );
-                $this->renderer->renderTextarea(
-                    "excluded_css_minify",
-                    "Exclude from Minification",
-                    "Filenames to skip.",
-                    $settings,
-                    ["placeholder" => "style.css\ncustom.css"],
-                );
-
-                echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--wpsc-border);">';
+                $this->renderer->renderConditionalGroup(['css_minify' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderTextarea(
+                        "excluded_css_minify",
+                        "CSS file exclusions",
+                        "Handles, filenames, or URL fragments to leave untouched, one per line.",
+                        $settings,
+                        ["placeholder" => "theme-style\nlegacy.css"],
+                    );
+                }, 'all', 'CSS minification exclusions');
 
                 $this->renderer->renderToggle(
                     "remove_unused_css",
-                    "Prune Unused Inline CSS",
-                    "Experimental selector pruning for inline <style> blocks only; this is not browser-generated critical CSS.",
+                    "Prune unused inline CSS",
+                    "Experimental selector pruning for inline style blocks; this is separate from rendered critical CSS.",
                     $settings,
                 );
-                $this->renderer->renderTextarea(
-                    "css_safelist",
-                    "CSS Safelist",
-                    "Selectors to always keep (e.g. .active).",
-                    $settings,
-                    ["placeholder" => ".active\n#mobile-menu"],
-                );
+                $this->renderer->renderConditionalGroup(['remove_unused_css' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderTextarea(
+                        "css_safelist",
+                        "Always keep these selectors",
+                        "Protect dynamic classes and IDs that are added after page load.",
+                        $settings,
+                        ["placeholder" => ".is-active\n#mobile-menu"],
+                    );
+                }, 'all', 'Unused CSS safelist');
             },
             "dashicons-art",
         );
@@ -433,39 +396,41 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "js_minify",
-                    "Minify JS",
-                    "Compress files.",
+                    "Minify JavaScript files",
+                    "Remove comments and unnecessary whitespace from local scripts.",
                     $settings,
                 );
-                $this->renderer->renderTextarea(
-                    "excluded_js_minify",
-                    "Exclude from Minification",
-                    "Filenames to skip.",
-                    $settings,
-                    ["placeholder" => "jquery.js\nmain.js"],
-                );
-
-                echo '<hr style="margin:20px 0; border:0; border-top:1px solid var(--wpsc-border);">';
+                $this->renderer->renderConditionalGroup(['js_minify' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderTextarea(
+                        "excluded_js_minify",
+                        "JavaScript file exclusions",
+                        "Handles, filenames, or URL fragments to leave untouched, one per line.",
+                        $settings,
+                        ["placeholder" => "legacy-script\ncheckout.js"],
+                    );
+                }, 'all', 'JavaScript minification exclusions');
 
                 $this->renderer->renderToggle(
                     "js_defer",
-                    "Defer Execution",
-                    "Move to footer.",
+                    "Defer JavaScript",
+                    "Let HTML parsing finish before eligible scripts execute.",
                     $settings,
                 );
                 $this->renderer->renderToggle(
                     "js_delay",
-                    "Delay Execution",
-                    "Wait for interaction.",
+                    "Delay JavaScript",
+                    "Wait for visitor interaction before running eligible scripts.",
                     $settings,
                 );
-                $this->renderer->renderTextarea(
-                    "excluded_js_execution",
-                    "Exclude from Defer/Delay",
-                    "Scripts that must run immediately.",
-                    $settings,
-                    ["placeholder" => "jquery.js\nanalytics.js"],
-                );
+                $this->renderer->renderConditionalGroup(['js_defer' => ['1'], 'js_delay' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderTextarea(
+                        "excluded_js_execution",
+                        "Execution exclusions",
+                        "Scripts that must run immediately, one handle or filename per line.",
+                        $settings,
+                        ["placeholder" => "jquery.js\ncheckout.js"],
+                    );
+                }, 'any', 'JavaScript execution exclusions');
             },
             "dashicons-editor-code",
         );
@@ -525,18 +490,20 @@ final class SettingsManager
                 );
                 $this->renderer->renderToggle(
                     "media_lazy_load_iframes",
-                    "Lazy Load Iframes",
-                    "Native lazy loading for embeds.",
+                    "Lazy-load iframes",
+                    "Use native browser lazy loading for embeds.",
                     $settings,
                 );
-                $this->renderer->renderInput(
-                    "media_lazy_load_exclude_count",
-                    "LCP Exclusion",
-                    "Skip first X images (Recommended: 3).",
-                    $settings,
-                    "number",
-                    ["min" => "0"],
-                );
+                $this->renderer->renderConditionalGroup(['media_lazy_load' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput(
+                        "media_lazy_load_exclude_count",
+                        "Leading image exclusions",
+                        "Keep this many early images eager to protect Largest Contentful Paint. Recommended: 3.",
+                        $settings,
+                        "number",
+                        ["min" => "0"],
+                    );
+                }, 'all', 'Image lazy-loading settings');
             },
             "dashicons-images-alt2",
         );
@@ -571,21 +538,23 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "cdn_enable",
-                    "Enable CDN Rewrite",
-                    "Rewrite URLs.",
+                    "Enable CDN rewriting",
+                    "Serve eligible assets from your CDN origin.",
                     $settings,
                 );
-                $this->renderer->renderInput(
-                    "cdn_url",
-                    "CDN URL",
-                    "https://cdn.example.com",
-                    $settings,
-                    "url",
-                    ["placeholder" => "https://cdn.example.com"],
-                );
-                $this->renderer->renderInput("cdn_css_url", "CSS CDN URL", "Optional type-specific origin.", $settings, "url");
-                $this->renderer->renderInput("cdn_js_url", "JavaScript CDN URL", "Optional type-specific origin.", $settings, "url");
-                $this->renderer->renderInput("cdn_media_url", "Media CDN URL", "Optional type-specific origin.", $settings, "url");
+                $this->renderer->renderConditionalGroup(['cdn_enable' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput(
+                        "cdn_url",
+                        "Default CDN origin",
+                        "Used for every supported asset type unless overridden below.",
+                        $settings,
+                        "url",
+                        ["placeholder" => "https://cdn.example.com"],
+                    );
+                    $this->renderer->renderInput("cdn_css_url", "CSS origin", "Optional origin used only for stylesheets.", $settings, "url", ["placeholder" => "https://css.example.com"]);
+                    $this->renderer->renderInput("cdn_js_url", "JavaScript origin", "Optional origin used only for scripts.", $settings, "url", ["placeholder" => "https://js.example.com"]);
+                    $this->renderer->renderInput("cdn_media_url", "Media origin", "Optional origin used for images, fonts, and media.", $settings, "url", ["placeholder" => "https://media.example.com"]);
+                }, 'all', 'CDN origin settings');
             },
             "dashicons-earth",
         );
@@ -595,24 +564,15 @@ final class SettingsManager
             function () use ($settings) {
                 $this->renderer->renderToggle(
                     "cf_enable",
-                    "Enable Cloudflare",
-                    "Purge on update.",
+                    "Connect Cloudflare",
+                    "Purge the configured zone when WordPress content changes.",
                     $settings,
                 );
-                $this->renderer->renderInput(
-                    "cf_api_token",
-                    "API Token",
-                    "Token",
-                    $settings,
-                    "password",
-                );
-                $this->renderer->renderInput(
-                    "cf_zone_id",
-                    "Zone ID",
-                    "ID",
-                    $settings,
-                );
-                $this->renderer->renderToggle("cf_edge_cache", "Manage a full-page Cache Rule", "Opt in to synchronize an anonymous HTML cache rule through the Cloudflare API.", $settings);
+                $this->renderer->renderConditionalGroup(['cf_enable' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput("cf_api_token", "API token", "Use a scoped token with cache-purge permissions. Leave blank to keep it.", $settings, "password");
+                    $this->renderer->renderInput("cf_zone_id", "Zone ID", "The 32-character identifier shown in the Cloudflare dashboard.", $settings);
+                    $this->renderer->renderToggle("cf_edge_cache", "Manage full-page edge caching", "Synchronize an anonymous HTML cache rule through the Cloudflare API.", $settings);
+                }, 'all', 'Cloudflare connection settings');
             },
             "dashicons-cloud-saved",
         );
@@ -791,7 +751,7 @@ final class SettingsManager
             function () use ($settings, $stats, $items) {
                 echo '<div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">';
                 echo '<button type="button" id="wpsc-db-toggle-all" class="wpsc-btn-secondary"><span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Select All</button>';
-                echo '<button type="button" id="wpsc-db-optimize" class="button wpsc-btn-primary" data-loading-text="Optimizing..."><span class="dashicons dashicons-database" style="vertical-align:middle;"></span> Optimize Selected</button>';
+                echo '<button type="button" id="wpsc-db-optimize" class="wpsc-btn-primary" data-loading-text="Optimizing..."><span class="dashicons dashicons-database" style="vertical-align:middle;"></span> Optimize Selected</button>';
                 echo "</div>";
                 echo '<div id="wpsc-db-status" style="margin-bottom:20px; text-align:right; font-weight:600;"></div>';
 

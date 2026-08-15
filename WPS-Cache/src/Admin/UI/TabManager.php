@@ -24,70 +24,70 @@ class TabManager
                 "group" => "Overview",
             ],
             "cache" => [
-                "label" => __("Cache Rules", "wps-cache"),
+                "label" => __("Cache", "wps-cache"),
                 "icon" => "dashicons-database",
                 "order" => 20,
-                "group" => "Caching",
+                "group" => "Optimize",
             ],
             "delivery" => [
-                "label" => __("Delivery Rules", "wps-cache"),
+                "label" => __("Cache Delivery", "wps-cache"),
                 "icon" => "dashicons-randomize",
                 "order" => 25,
-                "group" => "Caching",
+                "group" => "Optimize",
             ],
             "css_js" => [
-                "label" => __("File Optimization", "wps-cache"),
+                "label" => __("CSS & JavaScript", "wps-cache"),
                 "icon" => "dashicons-editor-code",
                 "order" => 30,
-                "group" => "Frontend",
+                "group" => "Optimize",
             ],
             "experience" => [
-                "label" => __("Web Experience", "wps-cache"),
+                "label" => __("Frontend", "wps-cache"),
                 "icon" => "dashicons-layout",
                 "order" => 35,
-                "group" => "Frontend",
+                "group" => "Optimize",
             ],
             "media" => [
-                "label" => __("Media Delivery", "wps-cache"),
+                "label" => __("Media", "wps-cache"),
                 "icon" => "dashicons-images-alt",
                 "order" => 40,
-                "group" => "Frontend",
+                "group" => "Optimize",
             ],
             "images" => [
-                "label" => __("Image Engine & Offload", "wps-cache"),
+                "label" => __("Images", "wps-cache"),
                 "icon" => "dashicons-format-image",
                 "order" => 45,
-                "group" => "Frontend",
+                "group" => "Optimize",
             ],
             "cdn" => [
                 "label" => __("CDN & Edge", "wps-cache"),
                 "icon" => "dashicons-cloud",
                 "order" => 50,
-                "group" => "Infrastructure",
+                "group" => "Connect",
             ],
             "database" => [
                 "label" => __("Database", "wps-cache"),
                 "icon" => "dashicons-archive",
                 "order" => 60,
-                "group" => "Operations",
+                "group" => "Manage",
             ],
             "monitoring" => [
                 "label" => __("Monitoring", "wps-cache"),
                 "icon" => "dashicons-chart-area",
                 "order" => 65,
-                "group" => "Operations",
+                "group" => "Manage",
             ],
             "tweaks" => [
-                "label" => __("Tweaks", "wps-cache"),
+                "label" => __("WordPress Tweaks", "wps-cache"),
                 "icon" => "dashicons-controls-volumeon",
                 "order" => 70,
-                "group" => "Operations",
+                "group" => "Manage",
             ],
             "tools" => [
-                "label" => __("Tools & Diagnostics", "wps-cache"),
+                "label" => __("Tools", "wps-cache"),
                 "icon" => "dashicons-admin-tools",
                 "order" => 80,
-                "group" => "Operations",
+                "group" => "Manage",
             ],
             ];
 
@@ -135,7 +135,8 @@ class TabManager
                 <span class="dashicons <?php echo esc_attr(
                     $data["icon"],
                 ); ?>" aria-hidden="true"></span>
-                <?php echo esc_html($data["label"]); ?>
+                <span class="wpsc-nav-label"><?php echo esc_html($data["label"]); ?></span>
+                <?php if ($isActive): ?><span class="wpsc-nav-indicator" aria-hidden="true"></span><?php endif; ?>
             </a>
 <?php
         }

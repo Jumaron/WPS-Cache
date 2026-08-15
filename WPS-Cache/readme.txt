@@ -4,7 +4,7 @@ Tags: caching, performance, HTML, Redis, Varnish
 Requires at least: 6.3
 Tested up to: 6.7
 Requires PHP: 8.3
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ This plugin is currently experimental. We recommend testing in a staging environ
 2. Front-end cache status indicator.
 
 == Changelog ==
+= 0.3.1 =
+* Completely redesigned the WordPress admin experience with a polished responsive application shell, clearer navigation groups, modern setting cards, improved typography, and mobile drawer navigation.
+* Added progressive disclosure throughout the settings UI so dependent controls appear only when their parent feature or mode is enabled, while preserving saved configuration when features are temporarily disabled.
+* Added functional CSS and JavaScript combine exclusions, clearer setting guidance, accessible control states, reduced-motion support, and unsaved-change feedback.
+
 = 0.3.0 =
 * Completed the B-F market expansion: selectable Memcached, browser-measured critical/used CSS, fragment hole punching, JavaScript delay strategies, adaptive images, above-fold learning, CSS image-set delivery, and background image queues.
 * Expanded local image/font processing with variant-only mode, smart compression/crop, jpegtran, Ghostscript, FontTools, automatic localized-font preloads, and Google Fonts glyph subsets.
@@ -94,6 +99,8 @@ This plugin is currently experimental. We recommend testing in a staging environ
 * External services documentation added.
 
 == Upgrade Notice ==
+= 0.3.1 =
+Introduces the redesigned responsive admin interface and smart conditional settings. Existing saved configuration is preserved.
 = 0.3.0 =
 Adds optional external-service integrations and a selectable Memcached drop-in. Review privacy/cost settings and test object-cache switching on staging.
 = 0.1.1 =

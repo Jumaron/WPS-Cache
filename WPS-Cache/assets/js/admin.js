@@ -6,7 +6,9 @@ document.addEventListener("DOMContentLoaded", function () {
   initConfirmButtons();
   initDismissButtons();
   initSwitches();
+  initConditionalSettings();
   initTabsResponsive();
+  initSidebar();
   initImageBulk();
   initLabTest();
 });
@@ -14,9 +16,36 @@ document.addEventListener("DOMContentLoaded", function () {
 function initTabsResponsive() {
   const nav = document.querySelector(".wpsc-nav");
   const active = document.querySelector(".wpsc-nav-item.active");
-  if (nav && active && window.innerWidth < 960) {
-    nav.scrollLeft = active.offsetLeft - 20;
+  if (nav && active) {
+    active.scrollIntoView({ block: "nearest" });
   }
+}
+
+function initSidebar() {
+  const sidebar = document.getElementById("wpsc-sidebar");
+  const toggle = document.querySelector("[data-wpsc-sidebar-toggle]");
+  const close = document.querySelector("[data-wpsc-sidebar-close]");
+  if (!sidebar || !toggle) return;
+
+  const setOpen = (open) => {
+    document.body.classList.toggle("wpsc-sidebar-open", open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+  };
+
+  toggle.addEventListener("click", () => {
+    setOpen(!document.body.classList.contains("wpsc-sidebar-open"));
+  });
+  if (close) close.addEventListener("click", () => setOpen(false));
+  sidebar.querySelectorAll(".wpsc-nav-item").forEach((item) => {
+    item.addEventListener("click", () => setOpen(false));
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setOpen(false);
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 960) setOpen(false);
+  });
 }
 
 function initDismissButtons() {
@@ -44,15 +73,81 @@ function initDismissButtons() {
 
 function initSwitches() {
   document.querySelectorAll('input[role="switch"]').forEach((input) => {
+    updateSwitchPresentation(input);
     input.addEventListener("change", function () {
       this.setAttribute("aria-checked", this.checked ? "true" : "false");
-      const row = this.closest(".wpsc-setting-row");
-      if (row) {
-        row.style.backgroundColor = "var(--wpsc-primary-soft)";
-        setTimeout(() => (row.style.backgroundColor = ""), 400);
-      }
+      updateSwitchPresentation(this);
     });
   });
+}
+
+function updateSwitchPresentation(input) {
+  const row = input.closest(".wpsc-setting-row");
+  if (!row) return;
+  row.classList.toggle("is-enabled", input.checked);
+  const state = row.querySelector(".wpsc-toggle-state");
+  if (state) state.textContent = input.checked ? "On" : "Off";
+}
+
+function initConditionalSettings() {
+  const groups = Array.from(
+    document.querySelectorAll("[data-wpsc-conditional]"),
+  );
+  if (!groups.length) return;
+
+  const getControlValue = (key) => {
+    const controls = Array.from(
+      document.getElementsByName(`wpsc_settings[${key}]`),
+    );
+    if (!controls.length) return null;
+    const choice = controls.find(
+      (control) =>
+        (control.type === "checkbox" || control.type === "radio") &&
+        control.checked,
+    );
+    if (choice) return choice.value;
+    const checkbox = controls.find((control) => control.type === "checkbox");
+    if (checkbox) return checkbox.checked ? "1" : "0";
+    const radio = controls.find((control) => control.type === "radio");
+    if (radio) return null;
+    return controls[controls.length - 1].value;
+  };
+
+  const updateGroup = (group) => {
+    let conditions = {};
+    try {
+      conditions = JSON.parse(group.dataset.wpscConditional || "{}");
+    } catch (error) {
+      return;
+    }
+
+    const matches = Object.entries(conditions)
+      .map(([key, accepted]) => {
+        const value = getControlValue(key);
+        return value === null
+          ? null
+          : accepted.map(String).includes(String(value));
+      })
+      .filter((match) => match !== null);
+
+    // A controller may live on another settings screen. In that case the
+    // server-rendered state remains authoritative until the page reloads.
+    if (!matches.length) return;
+    const visible =
+      group.dataset.wpscConditionOperator === "any"
+        ? matches.some(Boolean)
+        : matches.every(Boolean);
+
+    group.hidden = !visible;
+    group.classList.toggle("is-visible", visible);
+    if ("inert" in group) group.inert = !visible;
+  };
+
+  const updateAll = () => groups.forEach(updateGroup);
+  document.addEventListener("change", (event) => {
+    if (event.target?.name?.startsWith("wpsc_settings[")) updateAll();
+  });
+  updateAll();
 }
 
 function initPasswordToggles() {
@@ -122,6 +217,9 @@ function initConfirmButtons() {
 
 function initFormSubmissions() {
   document.querySelectorAll("form.wpsc-form").forEach((form) => {
+    form.addEventListener("change", function () {
+      form.classList.add("is-dirty");
+    });
     form.addEventListener("submit", function () {
       const btn = form.querySelector('button[type="submit"]');
       if (!btn) return;
@@ -319,11 +417,11 @@ function initCopyTriggers() {
       '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' +
       wpsc_admin.strings.copied;
     btn.classList.remove("wpsc-btn-secondary");
-    btn.classList.add("button-primary", "wpsc-btn-primary");
+    btn.classList.add("wpsc-btn-primary");
     announce(wpsc_admin.strings.copied_announcement);
     setTimeout(() => {
       btn.innerHTML = originalHtml;
-      btn.classList.remove("button-primary", "wpsc-btn-primary");
+      btn.classList.remove("wpsc-btn-primary");
       btn.classList.add("wpsc-btn-secondary");
       btn.style.width = "";
     }, 2000);

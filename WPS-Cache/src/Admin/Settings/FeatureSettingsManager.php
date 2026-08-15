@@ -24,8 +24,12 @@ final class FeatureSettingsManager
         $this->renderer->renderCard('Cache identity', 'Control exactly which requests share a page-cache entry.', function () use ($settings): void {
             $this->renderer->renderRadioGroup('cache_device_mode', 'Device variants', 'Shared, mobile/desktop, or tablet/mobile/desktop cache keys.', $settings, ['shared' => 'Shared', 'mobile' => 'Mobile + desktop', 'tablet' => 'Tablet + mobile + desktop']);
             $this->renderer->renderRadioGroup('cache_query_mode', 'Query strings', 'Ignore all parameters, create canonical variants, or accept only an allowlist.', $settings, ['variants' => 'Canonical variants', 'allowlist' => 'Allowlist only', 'ignore' => 'Ignore all']);
-            $this->renderer->renderTextarea('cache_ignored_query_params', 'Ignored tracking parameters', 'Wildcards supported. These never create extra cache files.', $settings, ['placeholder' => "utm_*\nfbclid\ngclid"]);
-            $this->renderer->renderTextarea('cache_query_allowlist', 'Allowed query parameters', 'Used in allowlist mode.', $settings);
+            $this->renderer->renderConditionalGroup(['cache_query_mode' => ['variants']], $settings, function () use ($settings): void {
+                $this->renderer->renderTextarea('cache_ignored_query_params', 'Ignored tracking parameters', 'Wildcards are supported. These parameters never create additional cache files.', $settings, ['placeholder' => "utm_*\nfbclid\ngclid"]);
+            }, 'all', 'Canonical query settings');
+            $this->renderer->renderConditionalGroup(['cache_query_mode' => ['allowlist']], $settings, function () use ($settings): void {
+                $this->renderer->renderTextarea('cache_query_allowlist', 'Allowed query parameters', 'Only these parameters may create public cache variants.', $settings, ['placeholder' => "page\nlang"]);
+            }, 'all', 'Query allowlist settings');
             $this->renderer->renderTextarea('cache_query_denylist', 'Denied query parameters', 'Any matching request bypasses cache.', $settings);
         }, 'dashicons-randomize');
 
@@ -47,8 +51,10 @@ final class FeatureSettingsManager
 
         $this->renderer->renderCard('REST API cache', 'Cache successful anonymous GET responses for public routes.', function () use ($settings): void {
             $this->renderer->renderToggle('rest_cache', 'Enable REST response cache', 'Mutation and authenticated requests always bypass.', $settings);
-            $this->renderer->renderInput('rest_cache_ttl', 'REST TTL (seconds)', 'Independent of page-cache lifetime.', $settings, 'number', ['min' => 10, 'max' => 86400]);
-            $this->renderer->renderTextarea('rest_cache_routes', 'Route allowlist', 'Route patterns such as /wp/v2/posts/*. Empty caches all public routes except users.', $settings);
+            $this->renderer->renderConditionalGroup(['rest_cache' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderInput('rest_cache_ttl', 'Response lifespan', 'Seconds to retain public REST responses, independent of page cache.', $settings, 'number', ['min' => 10, 'max' => 86400]);
+                $this->renderer->renderTextarea('rest_cache_routes', 'Route allowlist', 'Route patterns such as /wp/v2/posts/*. Leave empty to cache eligible public routes except users.', $settings);
+            }, 'all', 'REST cache settings');
             $this->renderer->renderToggle('fragment_hole_punch', 'Dynamic fragment hole punching', 'Signed no-store REST fragments update personalized regions inside otherwise static pages.', $settings);
         }, 'dashicons-rest-api');
         $this->formEnd();
@@ -78,17 +84,27 @@ final class FeatureSettingsManager
         $this->formStart();
         $this->renderer->renderCard('CSS delivery', 'Aggregation and async delivery are opt-in because theme compatibility varies.', function () use ($settings): void {
             $this->renderer->renderToggle('css_combine', 'Combine simple local CSS', 'Complex handles and inline data are kept separate.', $settings);
+            $this->renderer->renderConditionalGroup(['css_combine' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderTextarea('excluded_css_minify', 'CSS combine exclusions', 'Handles, filenames, or URL fragments that must remain separate, one per line.', $settings, ['placeholder' => "checkout-style\nlegacy.css"]);
+            }, 'all', 'CSS combine exclusions');
             $this->renderer->renderToggle('css_async', 'Load non-critical CSS asynchronously', 'Styles tagged data-wpsc-critical and media styles remain blocking.', $settings);
             $this->renderer->renderToggle('css_rendered_profiles', 'Collect rendered CSS profiles', 'A same-origin browser audit records selectors used by each URL and desktop/mobile/tablet viewport.', $settings);
-            $this->renderer->renderToggle('css_critical_rendered', 'Inline rendered critical CSS', 'Uses the collected above-the-fold profile and keeps a browser-generated fallback path.', $settings);
-            $this->renderer->renderToggle('css_linked_prune', 'Remove unused linked CSS', 'Replaces profiled same-origin stylesheets with a generated per-page used-CSS file. Requires rendered profiles.', $settings);
-            $this->renderer->renderInput('css_profile_retention', 'Profile retention (days)', 'Expired profiles are recollected automatically.', $settings, 'number', ['min' => 1, 'max' => 365]);
+            $this->renderer->renderConditionalGroup(['css_rendered_profiles' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderToggle('css_critical_rendered', 'Inline rendered critical CSS', 'Use the collected above-the-fold profile with a browser-generated fallback.', $settings);
+                $this->renderer->renderToggle('css_linked_prune', 'Remove unused linked CSS', 'Replace profiled same-origin stylesheets with a generated per-page used-CSS file.', $settings);
+                $this->renderer->renderInput('css_profile_retention', 'Profile retention', 'Days before an expired profile is collected again.', $settings, 'number', ['min' => 1, 'max' => 365]);
+            }, 'all', 'Rendered CSS profile settings');
         }, 'dashicons-art');
         $this->renderer->renderCard('JavaScript delivery', 'Tune parsing and interaction delay behavior.', function () use ($settings): void {
             $this->renderer->renderToggle('js_combine', 'Combine simple local JavaScript', 'Scripts with inline data or conditionals remain separate.', $settings);
+            $this->renderer->renderConditionalGroup(['js_combine' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderTextarea('excluded_js_minify', 'JavaScript combine exclusions', 'Handles, filenames, or URL fragments that must remain separate, one per line.', $settings, ['placeholder' => "checkout-script\nlegacy.js"]);
+            }, 'all', 'JavaScript combine exclusions');
             $this->renderer->renderToggle('js_defer_inline', 'Defer inline JavaScript', 'Eligible blocks run after DOMContentLoaded.', $settings);
-            $this->renderer->renderRadioGroup('js_delay_strategy', 'Delay strategy', 'Interaction, browser idle time, or the custom wpsc:consent event.', $settings, ['interaction' => 'First interaction', 'idle' => 'Browser idle', 'consent' => 'Consent event']);
-            $this->renderer->renderInput('js_delay_timeout', 'Interaction delay timeout (ms)', 'Fallback before delayed scripts execute.', $settings, 'number', ['min' => 0, 'max' => 30000]);
+            $this->renderer->renderConditionalGroup(['js_delay' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderRadioGroup('js_delay_strategy', 'Delay strategy', 'Run after interaction, during idle time, or after a consent event.', $settings, ['interaction' => 'First interaction', 'idle' => 'Browser idle', 'consent' => 'Consent event']);
+                $this->renderer->renderInput('js_delay_timeout', 'Fallback timeout', 'Milliseconds before delayed scripts run even without interaction.', $settings, 'number', ['min' => 0, 'max' => 30000]);
+            }, 'all', 'JavaScript delay settings');
         }, 'dashicons-editor-code');
         $this->renderer->renderCard('HTML and rendering', 'Optimize markup and below-fold rendering without coupling to page caching.', function () use ($settings): void {
             $this->renderer->renderToggle('html_minify', 'Minify HTML', 'Preserves script, style, template, textarea, and pre blocks.', $settings);
@@ -154,27 +170,39 @@ final class FeatureSettingsManager
         }, 'dashicons-format-image');
         $this->renderer->renderCard('Accessible image text', 'Generate alt text only when the WordPress attachment field is empty.', function () use ($settings): void {
             $this->renderer->renderToggle('image_ai_alt_provider', 'Generate missing alt text', 'Runs only for attachments whose alt text is empty. Custom providers can use the wpsc_generate_image_alt_text filter.', $settings);
-            $this->renderer->renderToggle('image_ai_alt_openai', 'Use built-in OpenAI vision provider', 'Explicit opt-in: supported image bytes are sent to the OpenAI Responses API and API usage may incur cost.', $settings);
-            $this->renderer->renderInput('openai_api_key', 'OpenAI API key', 'Retained when left blank and omitted from exports. WPSC_OPENAI_API_KEY can supply it from wp-config.php.', $settings, 'password');
-            $this->renderer->renderInput('openai_vision_model', 'OpenAI vision model', 'Default: gpt-5.6. Choose a model that accepts image input.', $settings);
+            $this->renderer->renderConditionalGroup(['image_ai_alt_provider' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderToggle('image_ai_alt_openai', 'Use the built-in OpenAI vision provider', 'Supported image bytes are sent to the OpenAI API and usage may incur cost.', $settings);
+                $this->renderer->renderConditionalGroup(['image_ai_alt_openai' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput('openai_api_key', 'OpenAI API key', 'Leave blank to keep the saved key. WPSC_OPENAI_API_KEY can also supply it from wp-config.php.', $settings, 'password');
+                    $this->renderer->renderInput('openai_vision_model', 'Vision model', 'Choose a model that accepts image input.', $settings);
+                }, 'all', 'OpenAI alt-text settings');
+            }, 'all', 'Automatic alt-text settings');
         }, 'dashicons-universal-access-alt');
         $this->renderer->renderCard('Media offload', 'Upload attachment objects through a custom provider or the built-in S3-compatible adapter.', function () use ($settings): void {
             $this->renderer->renderToggle('media_offload_provider', 'Enable media-offload provider', 'Calls the documented wpsc_offload_media_file lifecycle and rewrites attachment/srcset URLs after verified HTTPS responses.', $settings);
-            $this->renderer->renderToggle('media_offload_delete_local', 'Delete verified offloaded thumbnails', 'Never deletes originals; providers must explicitly return verified=true. Keep disabled until restore behavior is tested.', $settings);
-            $this->renderer->renderToggle('media_offload_s3', 'Built-in S3-compatible adapter', 'Signs direct HTTPS PUT/DELETE requests with AWS Signature Version 4. Works with S3-compatible path-style endpoints.', $settings);
-            $this->renderer->renderInput('media_offload_endpoint', 'S3 endpoint', 'https://s3.amazonaws.com', $settings, 'url');
-            $this->renderer->renderInput('media_offload_region', 'S3 region', 'us-east-1', $settings);
-            $this->renderer->renderInput('media_offload_bucket', 'S3 bucket', 'media-bucket', $settings);
-            $this->renderer->renderInput('media_offload_access_key', 'S3 access key', 'Retained when left blank and omitted from exports.', $settings, 'password');
-            $this->renderer->renderInput('media_offload_secret_key', 'S3 secret key', 'Retained when left blank and omitted from exports.', $settings, 'password');
-            $this->renderer->renderInput('media_offload_public_url', 'Public media origin', 'Optional CDN/custom-domain base URL.', $settings, 'url');
+            $this->renderer->renderConditionalGroup(['media_offload_provider' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderToggle('media_offload_delete_local', 'Delete verified offloaded thumbnails', 'Never deletes originals. Keep disabled until restore behavior is tested.', $settings);
+                $this->renderer->renderToggle('media_offload_s3', 'Use built-in S3-compatible adapter', 'Signs direct HTTPS requests with AWS Signature Version 4.', $settings);
+                $this->renderer->renderConditionalGroup(['media_offload_s3' => ['1']], $settings, function () use ($settings): void {
+                    $this->renderer->renderInput('media_offload_endpoint', 'S3 endpoint', 'HTTPS base URL for AWS S3 or a compatible path-style service.', $settings, 'url', ['placeholder' => 'https://s3.amazonaws.com']);
+                    $this->renderer->renderInput('media_offload_region', 'Region', 'For example, us-east-1.', $settings);
+                    $this->renderer->renderInput('media_offload_bucket', 'Bucket', 'The destination bucket name.', $settings);
+                    $this->renderer->renderInput('media_offload_access_key', 'Access key', 'Leave blank to keep the saved credential.', $settings, 'password');
+                    $this->renderer->renderInput('media_offload_secret_key', 'Secret key', 'Leave blank to keep the saved credential.', $settings, 'password');
+                    $this->renderer->renderInput('media_offload_public_url', 'Public media origin', 'Optional HTTPS CDN or custom-domain base URL.', $settings, 'url');
+                }, 'all', 'S3-compatible storage settings');
+            }, 'all', 'Media offload settings');
         }, 'dashicons-cloud-upload');
         $this->renderer->renderCard('Adaptive delivery', 'Generate signed, cached, browser-selected responsive derivatives without exposing arbitrary filesystem paths.', function () use ($settings): void {
             $this->renderer->renderToggle('image_adaptive_delivery', 'Enable adaptive image service', 'Same-origin uploads receive width-descriptor srcsets; AVIF/WebP is negotiated when the encoder and browser support it.', $settings);
-            $this->renderer->renderInput('image_adaptive_quality', 'Adaptive quality', 'Applied to cached on-demand derivatives.', $settings, 'number', ['min' => 1, 'max' => 100]);
-            $this->renderer->renderInput('image_adaptive_max_width', 'Largest adaptive width', 'Never upscales beyond the source dimensions.', $settings, 'number', ['min' => 1, 'max' => 12000]);
+            $this->renderer->renderConditionalGroup(['image_adaptive_delivery' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderInput('image_adaptive_quality', 'Adaptive quality', 'Applied to cached on-demand derivatives.', $settings, 'number', ['min' => 1, 'max' => 100]);
+                $this->renderer->renderInput('image_adaptive_max_width', 'Largest adaptive width', 'Never upscales beyond the source dimensions.', $settings, 'number', ['min' => 1, 'max' => 12000]);
+            }, 'all', 'Adaptive image settings');
             $this->renderer->renderToggle('image_background_optimization', 'Background-optimize existing media', 'WordPress cron processes the existing library in bounded resumable batches.', $settings);
-            $this->renderer->renderInput('image_background_batch_size', 'Background batch size', 'Attachments processed per cron worker.', $settings, 'number', ['min' => 1, 'max' => 100]);
+            $this->renderer->renderConditionalGroup(['image_background_optimization' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderInput('image_background_batch_size', 'Background batch size', 'Attachments processed per cron worker.', $settings, 'number', ['min' => 1, 'max' => 100]);
+            }, 'all', 'Background optimization settings');
         }, 'dashicons-images-alt');
         $this->formEnd();
         $this->renderer->renderCard('Bulk media library', 'Processes media in resumable browser batches. Closing the tab safely pauses the run.', function (): void {
@@ -195,12 +223,16 @@ final class FeatureSettingsManager
         $this->renderer->renderCard('Real-user metrics', 'Stores a 10% anonymous local sample; no full URLs, IPs, cookies, or user IDs are recorded.', function () use ($settings): void {
             $this->renderer->renderToggle('enable_metrics', 'Enable dashboard metrics', 'Collect local cache and environment statistics.', $settings);
             $this->renderer->renderToggle('rum_enable', 'Collect Core Web Vitals', 'LCP, CLS, INP, and TTFB are sent to this WordPress installation.', $settings);
-            $this->renderer->renderInput('metrics_retention', 'Retention (days)', 'Old real-user samples are pruned.', $settings, 'number', ['min' => 1, 'max' => 365]);
+            $this->renderer->renderConditionalGroup(['rum_enable' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderInput('metrics_retention', 'Sample retention', 'Days before old real-user samples are pruned.', $settings, 'number', ['min' => 1, 'max' => 365]);
+            }, 'all', 'Real-user monitoring settings');
         }, 'dashicons-chart-area');
         $this->renderer->renderCard('Availability', 'WordPress cron performs a local loopback health check.', function () use ($settings): void {
             $this->renderer->renderToggle('uptime_monitor', 'Enable uptime checks', 'Records HTTP status and response time locally.', $settings);
-            $this->renderer->renderRadioGroup('uptime_interval', 'Check interval', 'Cron timing depends on site traffic.', $settings, ['hourly' => 'Hourly', 'daily' => 'Daily']);
-            $this->renderer->renderInput('uptime_heartbeat_url', 'External dead-man heartbeat URL', 'Optional HTTPS endpoint. Missing pings let an external monitor detect a complete origin outage.', $settings, 'password');
+            $this->renderer->renderConditionalGroup(['uptime_monitor' => ['1']], $settings, function () use ($settings): void {
+                $this->renderer->renderRadioGroup('uptime_interval', 'Check interval', 'Cron timing depends on site traffic.', $settings, ['hourly' => 'Hourly', 'daily' => 'Daily']);
+                $this->renderer->renderInput('uptime_heartbeat_url', 'External heartbeat URL', 'Optional HTTPS endpoint for a dead-man monitor. Leave blank to keep a saved URL.', $settings, 'password');
+            }, 'all', 'Uptime monitoring settings');
         }, 'dashicons-heart');
         $this->renderer->renderCard('Lighthouse lab testing', 'Use the official PageSpeed Insights v5 API for browser-rendered Lighthouse data; without a key the tool retains its local HTTP timing fallback.', function () use ($settings): void {
             $this->renderer->renderInput('pagespeed_api_key', 'PageSpeed API key', 'Stored locally and omitted from exports.', $settings, 'password');
@@ -220,8 +252,10 @@ final class FeatureSettingsManager
         $this->formStart();
         $this->renderer->renderCard('Test mode', 'Preview risky optimizations before making them public.', function () use ($settings): void {
             $this->renderer->renderToggle('optimization_safe_mode', 'Enable optimization test mode', 'Risky HTML and asset transformations only run with a signed preview link.', $settings);
-            $preview = wp_nonce_url(home_url('/'), 'wpsc_optimization_preview', 'wpsc_preview');
-            echo '<p><a class="wpsc-btn-secondary" target="_blank" rel="noopener" href="' . esc_url($preview) . '">Open signed preview</a></p>';
+            $this->renderer->renderConditionalGroup(['optimization_safe_mode' => ['1']], $settings, function (): void {
+                $preview = wp_nonce_url(home_url('/'), 'wpsc_optimization_preview', 'wpsc_preview');
+                echo '<div class="wpsc-context-action"><p>Only you can open this signed preview. Public visitors continue to receive the current configuration.</p><a class="wpsc-btn-secondary" target="_blank" rel="noopener" href="' . esc_url($preview) . '">Open signed preview <span class="dashicons dashicons-external" aria-hidden="true"></span></a></div>';
+            }, 'all', 'Optimization preview');
         }, 'dashicons-visibility');
         $this->formEnd();
         $this->renderer->renderCard('Presets and rollback', 'Preset changes and normal saves retain the previous ten configurations.', function () use ($history): void {

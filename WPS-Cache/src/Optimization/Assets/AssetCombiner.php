@@ -68,11 +68,20 @@ final class AssetCombiner extends AbstractFilesystemModule implements Module, Pu
     {
         $handles = [];
         $files = [];
+        $exclusionKey = $type === 'css' ? 'excluded_css_minify' : 'excluded_js_minify';
+        $exclusions = array_values(array_filter(
+            (array) ($this->settings[$exclusionKey] ?? []),
+            static fn(mixed $value): bool => is_string($value) && trim($value) !== '',
+        ));
         foreach ((array) ($registry->queue ?? []) as $handle) {
             $item = $registry->registered[$handle] ?? null;
             $source = is_object($item) ? (string) ($item->src ?? '') : '';
             $extra = is_object($item) ? (array) ($item->extra ?? []) : [];
-            if ($source === '' || array_intersect(array_keys($extra), ['before', 'after', 'data', 'conditional']) !== []) {
+            if (
+                $source === '' ||
+                $this->isExcluded((string) $handle, $source, $exclusions) ||
+                array_intersect(array_keys($extra), ['before', 'after', 'data', 'conditional']) !== []
+            ) {
                 continue;
             }
             $path = $this->localPath($source);
@@ -109,6 +118,18 @@ final class AssetCombiner extends AbstractFilesystemModule implements Module, Pu
         } else {
             wp_enqueue_script('wpsc-combined-' . substr($name, 0, 12), $url, [], null, true);
         }
+    }
+
+    /** @param list<string> $exclusions */
+    private function isExcluded(string $handle, string $source, array $exclusions): bool
+    {
+        $candidate = strtolower($handle . ' ' . rawurldecode($source));
+        foreach ($exclusions as $exclusion) {
+            if (str_contains($candidate, strtolower(trim($exclusion)))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function localPath(string $url): ?string

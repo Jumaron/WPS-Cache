@@ -30,8 +30,7 @@ class NoticeManager
 
         delete_transient(self::TRANSIENT_KEY);
 
-        // Padding is now applied here, only if notices exist
-        echo '<div class="wpsc-notices-container" style="padding: 1.5rem 2.5rem 0; display: flex; flex-direction: column; gap: 10px;">';
+        echo '<div class="wpsc-notices-container">';
 
         foreach ($notices as $notice) {
 

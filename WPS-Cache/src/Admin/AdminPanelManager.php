@@ -131,42 +131,54 @@ final class AdminPanelManager
         remove_all_actions("admin_notices");
         $current_tab = $this->tabManager->getCurrentTab();
 
-        $titles = [
-            "dashboard" => "Dashboard",
-            "cache" => "Cache Rules",
-            "delivery" => "Delivery Rules",
-            "css_js" => "File Optimization",
-            "experience" => "Web Experience",
-            "media" => "Media Delivery",
-            "images" => "Image Engine & Offload",
-            "cdn" => "CDN & Edge",
-            "database" => "Database",
-            "monitoring" => "Monitoring",
-            "tweaks" => "Tweaks & Cleanup",
-            "tools" => "Tools & Diagnostics",
+        $pages = [
+            "dashboard" => ["Dashboard", "A clear view of cache health and the fastest actions."],
+            "cache" => ["Cache", "Configure page cache, object cache, and origin integrations."],
+            "delivery" => ["Cache delivery", "Control cache identity, request safety, preload, and purging."],
+            "css_js" => ["CSS & JavaScript", "Make assets smaller and change when they execute."],
+            "experience" => ["Frontend optimization", "Tune critical rendering, resource hints, and browser delivery."],
+            "media" => ["Media", "Improve loading behavior for images, embeds, and video."],
+            "images" => ["Image optimization", "Compress, convert, adapt, and offload your media library."],
+            "cdn" => ["CDN & Cloudflare", "Connect global delivery and coordinate edge-cache purges."],
+            "database" => ["Database cleanup", "Schedule safe cleanup or run a targeted optimization now."],
+            "monitoring" => ["Monitoring", "Track real-user performance, availability, and lab results."],
+            "tweaks" => ["WordPress tweaks", "Remove optional overhead and harden common WordPress surfaces."],
+            "tools" => ["Tools & diagnostics", "Preview, roll back, migrate, and inspect your configuration."],
         ];
-        $pageTitle = $titles[$current_tab] ?? "Settings";
+        [$pageTitle, $pageDescription] = $pages[$current_tab] ?? ["Settings", "Configure WPS Cache."];
         ?>
         <div class="wpsc-wrap">
+            <noscript><style>.wpsc-conditional[hidden]{display:block}</style></noscript>
             <div class="wpsc-app-container">
-                <aside class="wpsc-sidebar">
+                <aside class="wpsc-sidebar" id="wpsc-sidebar" aria-label="WPS Cache navigation">
                     <div class="wpsc-brand">
-                        <span class="dashicons dashicons-performance"></span>
-                        <h1>WPS Cache</h1>
+                        <span class="wpsc-brand-mark" aria-hidden="true"><span class="dashicons dashicons-performance"></span></span>
+                        <span class="wpsc-brand-copy">
+                            <strong>WPS Cache</strong>
+                            <small>Performance suite</small>
+                        </span>
                     </div>
                     <?php $this->tabManager->renderSidebar($current_tab); ?>
                     <div class="wpsc-sidebar-footer">
-                        <small style="color:var(--wpsc-text-muted);">Version <?php echo esc_html(
-                            WPSC_VERSION,
-                        ); ?></small>
+                        <span class="wpsc-version-dot" aria-hidden="true"></span>
+                        <span>WPS Cache <?php echo esc_html(WPSC_VERSION); ?></span>
                     </div>
                 </aside>
+                <button type="button" class="wpsc-sidebar-scrim" data-wpsc-sidebar-close aria-label="Close navigation" tabindex="-1"></button>
                 <main class="wpsc-content-area">
                     <header class="wpsc-header-bar">
-                        <h2 class="wpsc-page-title"><?php echo esc_html(
-                            $pageTitle,
-                        ); ?></h2>
+                        <div class="wpsc-header-leading">
+                            <button type="button" class="wpsc-icon-btn wpsc-menu-toggle" data-wpsc-sidebar-toggle aria-controls="wpsc-sidebar" aria-expanded="false" aria-label="Open navigation">
+                                <span class="dashicons dashicons-menu-alt3" aria-hidden="true"></span>
+                            </button>
+                            <div>
+                                <span class="wpsc-page-eyebrow">Performance workspace</span>
+                                <h2 class="wpsc-page-title"><?php echo esc_html($pageTitle); ?></h2>
+                                <p class="wpsc-page-description"><?php echo esc_html($pageDescription); ?></p>
+                            </div>
+                        </div>
                         <div class="wpsc-actions">
+                            <span class="wpsc-header-status"><span aria-hidden="true"></span>System ready</span>
                             <a href="<?php echo esc_url(
                                 wp_nonce_url(
                                     admin_url(
@@ -175,8 +187,8 @@ final class AdminPanelManager
                                     "wpsc_clear_cache",
                                 ),
                             ); ?>"
-                               class="wpsc-btn-ghost-danger wpsc-confirm-trigger">
-                               <span class="dashicons dashicons-trash"></span> Purge All
+                               class="wpsc-btn-ghost-danger wpsc-confirm-trigger" data-loading-text="Purging…">
+                               <span class="dashicons dashicons-trash" aria-hidden="true"></span> Purge cache
                             </a>
                         </div>
                     </header>
