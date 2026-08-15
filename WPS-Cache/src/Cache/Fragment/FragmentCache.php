@@ -23,4 +23,19 @@ final class FragmentCache
     {
         return wp_cache_delete($key, $group);
     }
+
+    public static function placeholder(string $key, string $fallback = ''): string
+    {
+        $key = sanitize_key($key);
+        if ($key === '') {
+            return $fallback;
+        }
+        $endpoint = add_query_arg('token', self::token($key), rest_url('wps-cache/v1/fragment/' . $key));
+        return '<span data-wpsc-fragment="' . esc_url($endpoint) . '">' . $fallback . '</span>';
+    }
+
+    public static function token(string $key): string
+    {
+        return hash_hmac('sha256', home_url('/') . '|fragment|' . sanitize_key($key), wp_salt('nonce'));
+    }
 }

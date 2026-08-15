@@ -19,9 +19,10 @@ final class DropInManager
         return $this->install('advanced-cache-template.php', 'advanced-cache.php', true);
     }
 
-    public function installObjectCache(): bool
+    public function installObjectCache(string $backend = 'redis'): bool
     {
-        return $this->install('object-cache.php', 'object-cache.php', true);
+        $template = $backend === 'memcached' ? 'object-cache-memcached.php' : 'object-cache.php';
+        return $this->install($template, 'object-cache.php', true);
     }
 
     public function removeAdvancedCache(): bool

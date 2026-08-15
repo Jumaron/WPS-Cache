@@ -6,6 +6,7 @@ namespace WPSCache\Admin\Analytics;
 
 use WPSCache\Cache\CacheManager;
 use WPSCache\Cache\Object\RedisObjectCache;
+use WPSCache\Cache\Object\MemcachedObjectCache;
 use WPSCache\Config\Settings;
 
 /**
@@ -30,7 +31,7 @@ class MetricsCollector
             return [
                 "timestamp" => current_time("mysql"),
                 "html" => ["enabled" => false, "files" => 0, "size" => "0 B"],
-                "redis" => ["enabled" => false],
+                "redis" => ["enabled" => false, "backend" => "Object"],
                 "system" => $this->getSystemStats(),
             ];
         }
@@ -119,10 +120,29 @@ class MetricsCollector
      */
     private function getRedisStats(): array
     {
+        $memcached = $this->cacheManager->getDriver('memcached');
+        if ($memcached instanceof MemcachedObjectCache) {
+            if (!$memcached->isConnected()) {
+                return ['enabled' => true, 'connected' => false, 'backend' => 'Memcached', 'error' => 'Connection could not be established.'];
+            }
+            $info = $memcached->stats();
+            $hits = (int) ($info['get_hits'] ?? 0);
+            $misses = (int) ($info['get_misses'] ?? 0);
+            return [
+                'enabled' => true,
+                'connected' => true,
+                'backend' => 'Memcached',
+                'memory_used' => size_format((int) ($info['bytes'] ?? 0)),
+                'hit_ratio' => $hits + $misses > 0 ? round($hits / ($hits + $misses) * 100, 2) : 0,
+                'hits' => $hits,
+                'misses' => $misses,
+                'uptime' => isset($info['uptime']) ? round((int) $info['uptime'] / DAY_IN_SECONDS, 1) : 0,
+            ];
+        }
         $driver = $this->cacheManager->getDriver("redis");
 
         if (!$driver instanceof RedisObjectCache) {
-            return ["enabled" => false];
+            return ["enabled" => false, "backend" => "Object"];
         }
 
         try {
@@ -130,7 +150,7 @@ class MetricsCollector
 
             if ($redis === null) {
                 $errorMsg = $driver->getConnectionError();
-                return ["enabled" => true, "connected" => false, "error" => $errorMsg ?: "Connection could not be established."];
+                return ["enabled" => true, "connected" => false, "backend" => "Redis", "error" => $errorMsg ?: "Connection could not be established."];
             }
 
             try {
@@ -153,6 +173,7 @@ class MetricsCollector
             return [
                 "enabled" => true,
                 "connected" => true,
+                "backend" => "Redis",
                 "memory_used" => $info["used_memory_human"] ?? "0B",
                 "hit_ratio" => $ratio, // THIS is the valid Hit Ratio (Redis Only)
                 "hits" => $hits,
@@ -168,6 +189,7 @@ class MetricsCollector
             return [
                 "enabled" => true,
                 "connected" => false,
+                "backend" => "Redis",
                 "error" => $msg,
             ];
         }

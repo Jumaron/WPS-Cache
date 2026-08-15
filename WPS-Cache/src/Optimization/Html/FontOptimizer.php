@@ -109,6 +109,14 @@ final class FontOptimizer implements HtmlProcessor
         $originalTag = $matches[0];
         $rawUrl = html_entity_decode($matches[1]);
 
+        // Google Fonts' text parameter produces a real glyph-subsetted WOFF2
+        // response. The configured text stays local until the administrator
+        // explicitly enables Google font localization.
+        $subsetText = trim((string) ($this->settings['font_subset_text'] ?? ''));
+        if ($subsetText !== '') {
+            $rawUrl = add_query_arg('text', substr($subsetText, 0, 512), $rawUrl);
+        }
+
         // Canonicalize URL to prevent duplicates (remove ver, sort params)
         $url = $this->canonicalizeUrl($rawUrl);
 
@@ -156,11 +164,21 @@ final class FontOptimizer implements HtmlProcessor
 
     private function formatCss(string $css, string $filename): string
     {
-        return sprintf(
+        $style = sprintf(
             '<style id="wpsc-local-font-%s">%s</style>',
             substr($filename, 0, 8),
             $css,
         );
+        if (empty($this->settings['font_auto_preload_localized'])) {
+            return $style;
+        }
+        preg_match_all('~url\((?:["\']?)([^)"\']+\.(?:woff2?|ttf|otf))(?:["\']?)\)~i', $css, $matches);
+        $preloads = '';
+        foreach (array_slice(array_values(array_unique($matches[1] ?? [])), 0, 4) as $url) {
+            $extension = strtolower(pathinfo((string) parse_url((string) $url, PHP_URL_PATH), PATHINFO_EXTENSION));
+            $preloads .= '<link rel="preload" as="font" type="font/' . esc_attr($extension) . '" href="' . esc_url((string) $url) . '" crossorigin>';
+        }
+        return $preloads . $style;
     }
 
     /**
@@ -245,10 +263,65 @@ final class FontOptimizer implements HtmlProcessor
             return $url;
         }
 
+        $processed = $this->processWithFontTools($body, $ext);
+        $processed = apply_filters('wpsc_process_local_font', $processed, $url, $this->settings);
+        if (is_array($processed) && is_string($processed['body'] ?? null) && $processed['body'] !== '') {
+            $body = $processed['body'];
+            $processedExtension = strtolower((string) ($processed['extension'] ?? $ext));
+            if (in_array($processedExtension, ['woff', 'woff2', 'ttf', 'otf', 'eot'], true) && $processedExtension !== $ext) {
+                $filename = md5($url) . '.' . $processedExtension;
+                $localPath = $this->fontCacheDir . $filename;
+                $localUrl = $this->fontCacheUrl . $filename;
+            }
+        }
         $this->ensureFontDir();
         $this->atomicWriteFile($localPath, $body);
 
         return $localUrl;
+    }
+
+    /** @return array{body: string, extension: string} */
+    private function processWithFontTools(string $body, string $extension): array
+    {
+        $text = trim((string) ($this->settings['font_subset_text'] ?? ''));
+        if ($text === '' || !defined('WPSC_PYFTSUBSET_BINARY') || !function_exists('proc_open')) {
+            return ['body' => $body, 'extension' => $extension];
+        }
+        $binary = realpath((string) WPSC_PYFTSUBSET_BINARY);
+        if ($binary === false || !is_file($binary) || !in_array(strtolower(basename($binary)), ['pyftsubset', 'pyftsubset.exe'], true)) {
+            return ['body' => $body, 'extension' => $extension];
+        }
+        $this->ensureFontDir();
+        $source = tempnam($this->fontCacheDir, 'wpsc_font_source_');
+        $target = tempnam($this->fontCacheDir, 'wpsc_font_target_');
+        if ($source === false || $target === false) {
+            @unlink((string) $source);
+            @unlink((string) $target);
+            return ['body' => $body, 'extension' => $extension];
+        }
+        file_put_contents($source, $body, LOCK_EX);
+        @unlink($target);
+        $command = [$binary, $source, '--output-file=' . $target, '--flavor=woff2', '--text=' . substr($text, 0, 512), '--layout-features=*', '--no-hinting'];
+        $process = @proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+        if (!is_resource($process)) {
+            @unlink($source);
+            return ['body' => $body, 'extension' => $extension];
+        }
+        foreach ($pipes as $index => $pipe) {
+            if (is_resource($pipe)) {
+                if ($index > 0) {
+                    stream_get_contents($pipe);
+                }
+                fclose($pipe);
+            }
+        }
+        $status = proc_close($process);
+        $converted = $status === 0 && is_file($target) ? file_get_contents($target) : false;
+        @unlink($source);
+        @unlink($target);
+        return is_string($converted) && str_starts_with($converted, 'wOF2')
+            ? ['body' => $converted, 'extension' => 'woff2']
+            : ['body' => $body, 'extension' => $extension];
     }
 
     /**

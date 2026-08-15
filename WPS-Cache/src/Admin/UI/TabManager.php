@@ -48,19 +48,19 @@ class TabManager
                 "group" => "Frontend",
             ],
             "media" => [
-                "label" => __("Media", "wps-cache"),
+                "label" => __("Media Delivery", "wps-cache"),
                 "icon" => "dashicons-images-alt",
                 "order" => 40,
                 "group" => "Frontend",
             ],
             "images" => [
-                "label" => __("Image Engine", "wps-cache"),
+                "label" => __("Image Engine & Offload", "wps-cache"),
                 "icon" => "dashicons-format-image",
                 "order" => 45,
                 "group" => "Frontend",
             ],
             "cdn" => [
-                "label" => __("CDN", "wps-cache"),
+                "label" => __("CDN & Edge", "wps-cache"),
                 "icon" => "dashicons-cloud",
                 "order" => 50,
                 "group" => "Infrastructure",

@@ -67,7 +67,7 @@ final class SettingsManager
                 <div class="wpsc-stats-grid">
                     <div class="wpsc-stat-card">
                         <div>
-                            <div class="wpsc-stat-header"><span class="dashicons dashicons-database"></span> Redis Object Cache
+                            <div class="wpsc-stat-header"><span class="dashicons dashicons-database"></span> <?php echo esc_html((string) ($redis['backend'] ?? 'Object')); ?> Object Cache
                             </div>
                             <?php if (!empty($redis["enabled"])): ?>
                                 <?php if (!empty($redis["connected"])): ?>
@@ -305,6 +305,26 @@ final class SettingsManager
                 echo "</div>";
             },
             "dashicons-database",
+        );
+
+        $this->renderer->renderCard(
+            "Object Cache (Memcached)",
+            "Selectable persistent object caching with namespace-safe invalidation. Enabling it disables Redis because WordPress supports one object-cache drop-in.",
+            function () use ($settings) {
+                $this->renderer->renderToggle(
+                    "memcached_cache",
+                    "Enable Memcached",
+                    "Requires the PHP Memcached extension and a reachable daemon.",
+                    $settings,
+                );
+                echo '<div style="margin-top:15px; padding-left:15px; border-left:2px solid var(--wpsc-border);">';
+                $this->renderer->renderInput("memcached_host", "Memcached Host", "127.0.0.1", $settings);
+                $this->renderer->renderInput("memcached_port", "Memcached Port", "11211", $settings, "number");
+                $this->renderer->renderInput("memcached_prefix", "Key Prefix", "wpsc:", $settings);
+                $this->renderer->renderInput("memcached_persistent_id", "Persistent Connection ID", "wps-cache", $settings);
+                echo "</div>";
+            },
+            "dashicons-database-view",
         );
 
         $this->renderer->renderCard(

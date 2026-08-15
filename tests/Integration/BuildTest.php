@@ -15,8 +15,8 @@ final class BuildTest extends TestCase
         exec($command, $firstOutput, $firstStatus);
         $this->assertSame(0, $firstStatus, implode("\n", $firstOutput));
 
-        $zip = $root . '/dist/wps-cache-0.2.0.zip';
-        $checksum = $root . '/dist/wps-cache-0.2.0.sha256';
+        $zip = $root . '/dist/wps-cache-0.3.0.zip';
+        $checksum = $root . '/dist/wps-cache-0.3.0.sha256';
         $this->assertFileExists($zip);
         $this->assertFileExists($checksum);
         $firstHash = hash_file('sha256', $zip);

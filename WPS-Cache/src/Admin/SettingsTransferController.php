@@ -94,6 +94,11 @@ final class SettingsTransferController
     {
         $settings['redis_password'] = '';
         $settings['cf_api_token'] = '';
+        $settings['pagespeed_api_key'] = '';
+        $settings['uptime_heartbeat_url'] = '';
+        $settings['media_offload_access_key'] = '';
+        $settings['media_offload_secret_key'] = '';
+        $settings['openai_api_key'] = '';
         return $settings;
     }
 

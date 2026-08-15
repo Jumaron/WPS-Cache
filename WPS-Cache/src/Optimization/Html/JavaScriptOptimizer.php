@@ -189,6 +189,7 @@ final class JavaScriptOptimizer implements HtmlProcessor
         $code = <<<'JS'
 (function() {
     var fired = false;
+    var strategy = 'interaction';
     var events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
 
     function boot() {
@@ -268,18 +269,23 @@ final class JavaScriptOptimizer implements HtmlProcessor
         }
     }
 
-    // Listen for first user interaction
-    events.forEach(function(e) {
-        window.addEventListener(e, boot, {passive: true});
-    });
+    if (strategy === 'idle') {
+        var idleBoot = function(){'requestIdleCallback' in window ? requestIdleCallback(boot,{timeout:2000}) : setTimeout(boot,50)};
+        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded',idleBoot,{once:true}) : idleBoot();
+    } else if (strategy === 'consent') {
+        window.addEventListener('wpsc:consent', boot, {once:true});
+    } else {
+        events.forEach(function(e) { window.addEventListener(e, boot, {passive: true}); });
+    }
 
-    // Fallback: load after 8 seconds even without interaction
     setTimeout(boot, 8000);
 })();
 JS;
 
         $timeout = max(0, min(30000, (int) ($this->settings['js_delay_timeout'] ?? 8000)));
-        $code = str_replace('setTimeout(boot, 8000);', 'setTimeout(boot, ' . $timeout . ');', $code);
+        $strategy = in_array($this->settings['js_delay_strategy'] ?? '', ['interaction', 'idle', 'consent'], true) ? (string) $this->settings['js_delay_strategy'] : 'interaction';
+        $code = str_replace("var strategy = 'interaction';", "var strategy = '" . $strategy . "';", $code);
+        $code = str_replace('setTimeout(boot, 8000);', $timeout > 0 ? 'setTimeout(boot, ' . $timeout . ');' : '', $code);
         $script->nodeValue = $code;
         $body->appendChild($script);
     }

@@ -39,7 +39,7 @@ final class LifecycleManager
         $this->settingsRepository->installDefaults();
         $settings = $this->settingsRepository->load();
         $this->applyRuntimeConfiguration($settings);
-        if ($this->dropIns->owns('object-cache.php') && !$this->dropIns->installObjectCache()) {
+        if ($this->dropIns->owns('object-cache.php') && !$this->dropIns->installObjectCache($this->objectBackend($settings))) {
             error_log('[WPS-Cache] Could not refresh the owned object-cache.php drop-in.');
         }
 
@@ -61,7 +61,7 @@ final class LifecycleManager
         $this->applyRuntimeConfiguration($settings);
 
         if ($this->dropIns->owns('object-cache.php')) {
-            $this->dropIns->installObjectCache();
+            $this->dropIns->installObjectCache($this->objectBackend($settings));
         }
 
         $this->cacheManager->clearAllCaches();
@@ -78,6 +78,8 @@ final class LifecycleManager
         $this->objectCacheConfig?->remove();
         $this->preloadScheduler->unschedule();
         $this->maintenanceScheduler->unschedule();
+        wp_clear_scheduled_hook('wpsc_uptime_check');
+        wp_clear_scheduled_hook('wpsc_image_background_optimize');
         $this->apache->removeConfiguration();
         flush_rewrite_rules();
     }
@@ -100,15 +102,15 @@ final class LifecycleManager
             error_log('[WPS-Cache] Failed to write the early-cache runtime configuration.');
         }
         if ($this->objectCacheConfig !== null) {
-            if ($settings->enabled('redis_cache') && !$this->objectCacheConfig->write($settings)) {
+            if (($settings->enabled('redis_cache') || $settings->enabled('memcached_cache')) && !$this->objectCacheConfig->write($settings)) {
                 error_log('[WPS-Cache] Failed to write object-cache runtime configuration.');
-            } elseif (!$settings->enabled('redis_cache')) {
+            } elseif (!$settings->enabled('redis_cache') && !$settings->enabled('memcached_cache')) {
                 $this->objectCacheConfig->remove();
             }
         }
-        if ($settings->enabled('redis_cache')) {
+        if ($settings->enabled('redis_cache') || $settings->enabled('memcached_cache')) {
             if (!is_file(WP_CONTENT_DIR . '/object-cache.php') || $this->dropIns->owns('object-cache.php')) {
-                $this->dropIns->installObjectCache();
+                $this->dropIns->installObjectCache($this->objectBackend($settings));
             }
         } elseif ($this->dropIns->owns('object-cache.php')) {
             $this->dropIns->removeObjectCache();
@@ -128,5 +130,10 @@ final class LifecycleManager
         if ($this->dropIns->owns('advanced-cache.php') && $this->dropIns->removeAdvancedCache()) {
             $this->wpConfig->disableCache();
         }
+    }
+
+    private function objectBackend(Settings $settings): string
+    {
+        return $settings->enabled('memcached_cache') ? 'memcached' : 'redis';
     }
 }

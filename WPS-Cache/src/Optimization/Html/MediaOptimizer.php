@@ -24,6 +24,8 @@ final class MediaOptimizer implements HtmlProcessor
     private array $checkedTransients = [];
     private ?string $lcpUrl = null;
     private ?string $detectedLcpPath = null;
+    /** @var list<string> */
+    private array $detectedAboveFoldPaths = [];
 
     public function __construct(array $settings)
     {
@@ -33,6 +35,10 @@ final class MediaOptimizer implements HtmlProcessor
         $requestPath = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
         if (is_array($lcpMap) && is_array($lcpMap[$requestPath] ?? null)) {
             $this->detectedLcpPath = (string) ($lcpMap[$requestPath]['image'] ?? '');
+        }
+        $aboveFoldMap = get_option('wpsc_above_fold_images', []);
+        if (is_array($aboveFoldMap) && is_array($aboveFoldMap[$requestPath] ?? null)) {
+            $this->detectedAboveFoldPaths = array_values(array_filter(array_map('strval', (array) ($aboveFoldMap[$requestPath]['images'] ?? []))));
         }
 
         $tags = [];
@@ -135,6 +141,9 @@ final class MediaOptimizer implements HtmlProcessor
         if (preg_match('/\bsrc=["\']([^"\']+)["\']/i', $attrs, $source) === 1) {
             $sourceUrl = html_entity_decode($source[1], ENT_QUOTES | ENT_HTML5);
             $sourcePath = (string) (parse_url($sourceUrl, PHP_URL_PATH) ?: '');
+            if (in_array($sourcePath, $this->detectedAboveFoldPaths, true)) {
+                $isAboveFold = true;
+            }
             if ($this->detectedLcpPath !== null && $sourcePath === $this->detectedLcpPath) {
                 $isAboveFold = true;
                 $this->lcpUrl = $sourceUrl;

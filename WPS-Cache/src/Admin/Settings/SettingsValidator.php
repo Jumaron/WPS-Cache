@@ -8,7 +8,7 @@ use WPSCache\Config\Settings;
 
 final class SettingsValidator
 {
-    private const PROTECTED_KEYS = ["redis_password", "cf_api_token"];
+    private const PROTECTED_KEYS = ["redis_password", "cf_api_token", "pagespeed_api_key", "uptime_heartbeat_url", "media_offload_access_key", "media_offload_secret_key", "openai_api_key"];
 
     public function sanitizeSettings(mixed $input): array
     {
@@ -47,6 +47,12 @@ final class SettingsValidator
             $history = is_array($history) ? $history : [];
             $history[] = ['created_at' => gmdate(DATE_ATOM), 'settings' => $current];
             update_option('wpsc_settings_history', array_slice($history, -10), false);
+        }
+
+        // WordPress supports one persistent object-cache drop-in. If both are
+        // submitted, the newly introduced Memcached backend wins deterministically.
+        if (!empty($clean['memcached_cache'])) {
+            $clean['redis_cache'] = false;
         }
         do_action("wpscac_settings_updated", $clean);
         return $clean;
@@ -112,6 +118,7 @@ final class SettingsValidator
                 $max = 30000;
                 break;
             case "image_quality":
+            case "image_adaptive_quality":
                 $min = 1;
                 $max = 100;
                 break;
@@ -120,12 +127,25 @@ final class SettingsValidator
                 $min = 0;
                 $max = 12000;
                 break;
+            case "image_adaptive_max_width":
+                $min = 1;
+                $max = 12000;
+                break;
+            case "image_background_batch_size":
+                $min = 1;
+                $max = 100;
+                break;
+            case "css_profile_retention":
+                $min = 1;
+                $max = 365;
+                break;
             case "image_watermark_id":
                 $max = PHP_INT_MAX;
                 break;
             case "redis_port":
             case "varnish_port":
             case "nginx_port":
+            case "memcached_port":
                 $min = 1;
                 $max = 65535;
                 break;
@@ -149,7 +169,7 @@ final class SettingsValidator
     {
         $val = (string) $value;
 
-        if ($key === "redis_host" || $key === "varnish_host" || $key === "nginx_host") {
+        if ($key === "redis_host" || $key === "varnish_host" || $key === "nginx_host" || $key === "memcached_host") {
             return $this->sanitizeHost($val);
         }
         if (in_array($key, ["cdn_url", "cdn_css_url", "cdn_js_url", "cdn_media_url"], true)) {
@@ -158,6 +178,14 @@ final class SettingsValidator
                 return "";
             }
             return $url;
+        }
+        if ($key === 'uptime_heartbeat_url') {
+            $url = esc_url_raw($val);
+            return is_string($url) && str_starts_with($url, 'https://') ? substr($url, 0, 2048) : '';
+        }
+        if (in_array($key, ['media_offload_endpoint', 'media_offload_public_url'], true)) {
+            $url = esc_url_raw($val);
+            return is_string($url) && str_starts_with($url, 'https://') ? rtrim(substr($url, 0, 2048), '/') : '';
         }
         if ($key === "cf_zone_id") {
             $val = sanitize_text_field($val);
@@ -174,15 +202,45 @@ final class SettingsValidator
                 substr($val, 0, 128),
             );
         }
+        if ($key === "pagespeed_api_key") {
+            return preg_replace('/[^a-zA-Z0-9_\-]/', '', substr(sanitize_text_field($val), 0, 128));
+        }
+        if ($key === 'openai_api_key') {
+            return preg_replace('/[^a-zA-Z0-9_\-.]/', '', substr(sanitize_text_field($val), 0, 256));
+        }
+        if ($key === 'openai_vision_model') {
+            $model = substr(sanitize_text_field($val), 0, 64);
+            return preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/', $model) === 1 ? $model : 'gpt-5.6';
+        }
         if ($key === "redis_prefix") {
             $val = sanitize_text_field($val);
             return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
+        }
+        if ($key === "memcached_prefix") {
+            $val = sanitize_text_field($val);
+            return preg_replace("/[^a-zA-Z0-9_:.-]/", "", substr($val, 0, 64));
+        }
+        if ($key === 'memcached_persistent_id') {
+            return preg_replace('/[^a-zA-Z0-9_.-]/', '', substr(sanitize_text_field($val), 0, 64));
         }
         if ($key === "redis_password") {
             // Sentinel Fix: Allow special characters in passwords (e.g. < > &)
             // sanitize_text_field strips tags, corrupting complex passwords.
             // We only trim whitespace and null bytes.
             return substr(trim(str_replace(chr(0), "", (string) $val)), 0, 1024);
+        }
+        if ($key === 'media_offload_secret_key') {
+            return substr(trim(str_replace(chr(0), '', $val)), 0, 256);
+        }
+        if ($key === 'media_offload_access_key') {
+            return preg_replace('/[^a-zA-Z0-9_\-]/', '', substr(sanitize_text_field($val), 0, 128));
+        }
+        if ($key === 'media_offload_region') {
+            return preg_replace('/[^a-z0-9-]/', '', strtolower(substr(sanitize_text_field($val), 0, 64)));
+        }
+        if ($key === 'media_offload_bucket') {
+            $bucket = strtolower(substr(sanitize_text_field($val), 0, 63));
+            return preg_match('/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/', $bucket) === 1 ? $bucket : '';
         }
         if ($key === "preload_interval") {
             return $this->sanitizeEnum(
@@ -219,6 +277,12 @@ final class SettingsValidator
                 ["disabled", "daily", "weekly", "monthly"],
                 "disabled",
             );
+        }
+        if ($key === 'pagespeed_strategy') {
+            return $this->sanitizeEnum($val, ['mobile', 'desktop'], 'mobile');
+        }
+        if ($key === 'js_delay_strategy') {
+            return $this->sanitizeEnum($val, ['interaction', 'idle', 'consent'], 'interaction');
         }
 
         return substr(sanitize_text_field($val), 0, 1024);

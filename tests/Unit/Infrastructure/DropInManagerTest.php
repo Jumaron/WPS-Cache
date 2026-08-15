@@ -18,6 +18,7 @@ final class DropInManagerTest extends TestCase
         mkdir($content);
         file_put_contents($templates . '/advanced-cache-template.php', '<?php // WPS-Cache v1');
         file_put_contents($templates . '/object-cache.php', '<?php // WPS Cache object');
+        file_put_contents($templates . '/object-cache-memcached.php', '<?php // WPS Cache memcached object');
         $manager = new DropInManager($templates, $content);
 
         $this->assertTrue($manager->installAdvancedCache());
@@ -30,6 +31,10 @@ final class DropInManagerTest extends TestCase
         $this->assertFalse($manager->installObjectCache());
         $this->assertFalse($manager->removeObjectCache());
         $this->assertFileExists($content . '/object-cache.php');
+
+        unlink($content . '/object-cache.php');
+        $this->assertTrue($manager->installObjectCache('memcached'));
+        $this->assertContains('memcached object', (string) file_get_contents($content . '/object-cache.php'));
 
         $this->assertTrue($manager->removeAdvancedCache());
         $this->assertFalse(is_file($content . '/advanced-cache.php'));

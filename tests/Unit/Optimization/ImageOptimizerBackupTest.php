@@ -28,4 +28,17 @@ final class ImageOptimizerBackupTest extends TestCase
         $this->assertSame("original-image-bytes\0\1", file_get_contents($file));
         $this->removeDirectory($directory);
     }
+
+    public function testBackgroundQueueCanBeResetAndRescheduled(): void
+    {
+        \WPTestState::$options['wpsc_image_background_cursor'] = -1;
+        $optimizer = new ImageOptimizer(new Settings(['image_background_optimization' => true]));
+        $optimizer->boot();
+        $this->assertFalse(isset(\WPTestState::$scheduled[ImageOptimizer::BACKGROUND_HOOK]));
+
+        $optimizer->updateBackgroundSchedule(['image_background_optimization' => false]);
+        $this->assertSame(0, \WPTestState::$options['wpsc_image_background_cursor']);
+        $optimizer->updateBackgroundSchedule(['image_background_optimization' => true]);
+        $this->assertTrue(isset(\WPTestState::$scheduled[ImageOptimizer::BACKGROUND_HOOK]));
+    }
 }

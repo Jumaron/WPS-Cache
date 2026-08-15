@@ -16,12 +16,17 @@ final class ObjectCacheConfig
     public function write(Settings $settings): bool
     {
         $configuration = [
+            'backend' => $settings->enabled('memcached_cache') ? 'memcached' : 'redis',
             'host' => $settings->string('redis_host'),
             'port' => max(1, min(65535, $settings->integer('redis_port'))),
             'database' => max(0, $settings->integer('redis_db')),
             'password' => $settings->string('redis_password'),
             'prefix' => $settings->string('redis_prefix'),
             'scheme' => $settings->enabled('redis_tls') ? 'tls' : 'tcp',
+            'memcached_host' => $settings->string('memcached_host'),
+            'memcached_port' => max(1, min(65535, $settings->integer('memcached_port'))),
+            'memcached_prefix' => $settings->string('memcached_prefix'),
+            'memcached_persistent_id' => $settings->string('memcached_persistent_id'),
         ];
         $content = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($configuration, true) . ";\n";
         if (is_file($this->file) && hash_equals(hash('sha256', $content), hash_file('sha256', $this->file) ?: '')) {

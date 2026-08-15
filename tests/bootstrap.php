@@ -7,7 +7,7 @@ $testRoot = __DIR__ . '/.tmp';
 
 defined('ABSPATH') || define('ABSPATH', $testRoot . '/wp/');
 defined('WP_CONTENT_DIR') || define('WP_CONTENT_DIR', ABSPATH . 'wp-content');
-defined('WPSC_VERSION') || define('WPSC_VERSION', '0.2.0');
+defined('WPSC_VERSION') || define('WPSC_VERSION', '0.3.0');
 defined('WPSC_PLUGIN_FILE') || define('WPSC_PLUGIN_FILE', dirname(__DIR__) . '/WPS-Cache/wps-cache.php');
 defined('WPSC_PLUGIN_DIR') || define('WPSC_PLUGIN_DIR', dirname(__DIR__) . '/WPS-Cache/');
 defined('WPSC_PLUGIN_URL') || define('WPSC_PLUGIN_URL', 'https://example.test/wp-content/plugins/WPS-Cache/');
@@ -39,6 +39,12 @@ final class WPTestState
     public static array $hooks = [];
     /** @var array<string, int> */
     public static array $scheduled = [];
+    /** @var array<int, string> */
+    public static array $attachmentFiles = [];
+    /** @var array<int, array<string, mixed>> */
+    public static array $postMeta = [];
+    /** @var list<array{url: string, args: array<string, mixed>}> */
+    public static array $remoteRequests = [];
     public static bool $admin = false;
     public static bool $loggedIn = false;
     public static bool $cart = false;
@@ -51,6 +57,9 @@ final class WPTestState
         self::$transients = [];
         self::$hooks = [];
         self::$scheduled = [];
+        self::$attachmentFiles = [];
+        self::$postMeta = [];
+        self::$remoteRequests = [];
         self::$admin = false;
         self::$loggedIn = false;
         self::$cart = false;
@@ -102,6 +111,7 @@ function wp_clear_scheduled_hook(string $hook): int { unset(WPTestState::$schedu
 function wp_cache_flush(): bool { return true; }
 function is_multisite(): bool { return false; }
 function is_admin(): bool { return WPTestState::$admin; }
+function current_user_can(string $capability): bool { return WPTestState::$admin; }
 function is_user_logged_in(): bool { return WPTestState::$loggedIn; }
 function is_ssl(): bool { return true; }
 function is_feed(): bool { return false; }
@@ -125,6 +135,36 @@ function sanitize_text_field(mixed $value): string { return trim(strip_tags((str
 function sanitize_key(mixed $value): string { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $value)) ?? ''; }
 function absint(mixed $value): int { return abs((int) $value); }
 function esc_url_raw(mixed $value): string { return filter_var((string) $value, FILTER_VALIDATE_URL) ? (string) $value : ''; }
+function esc_url(mixed $value): string { return (string) $value; }
+function esc_attr(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5); }
+function wp_json_encode(mixed $value, int $flags = 0): string|false { return json_encode($value, $flags); }
+function wp_salt(string $scheme = 'auth'): string { return 'test-salt-' . $scheme; }
+function wp_create_nonce(string $action = '-1'): string { return 'nonce-' . $action; }
+function admin_url(string $path = ''): string { return 'https://example.test/wp-admin/' . ltrim($path, '/'); }
+function rest_url(string $path = ''): string { return 'https://example.test/wp-json/' . ltrim($path, '/'); }
+function add_query_arg(array|string $key, mixed $value = null, ?string $url = null): string {
+    $args = is_array($key) ? $key : [(string) $key => $value];
+    $target = is_array($key) ? (string) ($value ?? '') : (string) ($url ?? '');
+    $separator = str_contains($target, '?') ? '&' : '?';
+    return $target . ($args === [] ? '' : $separator . http_build_query($args));
+}
+function wp_get_upload_dir(): array {
+    $directory = WP_CONTENT_DIR . '/uploads';
+    @mkdir($directory, 0755, true);
+    return ['basedir' => $directory, 'baseurl' => 'https://example.test/wp-content/uploads'];
+}
+function get_attached_file(int $attachmentId): string|false { return WPTestState::$attachmentFiles[$attachmentId] ?? false; }
+function get_post_meta(int $postId, string $key, bool $single = false): mixed { return WPTestState::$postMeta[$postId][$key] ?? ($single ? '' : []); }
+function update_post_meta(int $postId, string $key, mixed $value): int|bool { WPTestState::$postMeta[$postId][$key] = $value; return true; }
+function delete_post_meta(int $postId, string $key): bool { unset(WPTestState::$postMeta[$postId][$key]); return true; }
+function wp_check_filetype(string $file): array { $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION)); return ['ext' => $extension, 'type' => $extension === 'png' ? 'image/png' : 'image/jpeg']; }
+function wp_remote_request(string $url, array $args = []): array { WPTestState::$remoteRequests[] = ['url' => $url, 'args' => $args]; return ['response' => ['code' => 200], 'body' => '']; }
+function wp_safe_remote_request(string $url, array $args = []): array { return wp_remote_request($url, $args); }
+function wp_safe_remote_post(string $url, array $args = []): array { return wp_remote_request($url, array_replace($args, ['method' => 'POST'])); }
+function wp_remote_retrieve_response_code(array $response): int { return (int) ($response['response']['code'] ?? 0); }
+function wp_remote_retrieve_body(array $response): string { return (string) ($response['body'] ?? ''); }
+function is_wp_error(mixed $thing): bool { return false; }
+function get_bloginfo(string $show = ''): string { return $show === 'language' ? 'en-US' : ''; }
 function __(string $value, string $domain = 'default'): string { return $value; }
 function current_time(string $type): string { return '2026-08-14 12:00:00'; }
 function flush_rewrite_rules(): void {}

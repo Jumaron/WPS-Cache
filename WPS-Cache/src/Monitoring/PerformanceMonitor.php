@@ -62,7 +62,7 @@ final class PerformanceMonitor implements Module
     {
         $endpoint = add_query_arg('token', $this->rumToken(), rest_url('wps-cache/v1/rum'));
         ?>
-        <script id="wpsc-rum">(()=>{if(!navigator.sendBeacon||!window.PerformanceObserver||Math.random()>.1)return;let m={url:location.pathname},f=l=>l.getEntries().forEach(e=>{if(e.entryType==='largest-contentful-paint'){m.lcp=e.startTime;m.lcp_url=e.element&&(e.element.currentSrc||e.element.src)||''}if(e.entryType==='layout-shift'&&!e.hadRecentInput)m.cls=(m.cls||0)+e.value;if(e.entryType==='event')m.inp=Math.max(m.inp||0,e.duration)});['largest-contentful-paint','layout-shift','event'].forEach(t=>{try{new PerformanceObserver(f).observe({type:t,buffered:true,durationThreshold:40})}catch(e){}});addEventListener('load',()=>setTimeout(()=>{let n=performance.getEntriesByType('navigation')[0];if(n)m.ttfb=n.responseStart;navigator.sendBeacon(<?php echo wp_json_encode($endpoint); ?>,new Blob([JSON.stringify(m)],{type:'application/json'}))},0),{once:true})})();</script>
+        <script id="wpsc-rum">(()=>{if(!navigator.sendBeacon||!window.PerformanceObserver||Math.random()>.1)return;let m={url:location.pathname},f=l=>l.getEntries().forEach(e=>{if(e.entryType==='largest-contentful-paint'){m.lcp=e.startTime;m.lcp_url=e.element&&(e.element.currentSrc||e.element.src)||''}if(e.entryType==='layout-shift'&&!e.hadRecentInput)m.cls=(m.cls||0)+e.value;if(e.entryType==='event')m.inp=Math.max(m.inp||0,e.duration)});['largest-contentful-paint','layout-shift','event'].forEach(t=>{try{new PerformanceObserver(f).observe({type:t,buffered:true,durationThreshold:40})}catch(e){}});addEventListener('load',()=>setTimeout(()=>{let n=performance.getEntriesByType('navigation')[0];if(n)m.ttfb=n.responseStart;m.above_fold=[...document.images].filter(i=>{let r=i.getBoundingClientRect(),s=getComputedStyle(i);return r.bottom>=0&&r.top<=innerHeight&&r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'}).slice(0,20).map(i=>i.currentSrc||i.src);navigator.sendBeacon(<?php echo wp_json_encode($endpoint); ?>,new Blob([JSON.stringify(m)],{type:'application/json'}))},0),{once:true})})();</script>
         <?php
     }
 
@@ -87,7 +87,8 @@ final class PerformanceMonitor implements Module
         set_transient($rateKey, $rate + 1, MINUTE_IN_SECONDS);
         $payload = is_object($request) && method_exists($request, 'get_json_params') ? $request->get_json_params() : [];
         $payload = is_array($payload) ? $payload : [];
-        $entry = ['time' => time(), 'url' => substr(sanitize_text_field((string) ($payload['url'] ?? '/')), 0, 255)];
+        $submittedPath = (string) (parse_url((string) ($payload['url'] ?? '/'), PHP_URL_PATH) ?: '/');
+        $entry = ['time' => time(), 'url' => substr('/' . ltrim(sanitize_text_field($submittedPath), '/'), 0, 255)];
         foreach (['lcp', 'cls', 'inp', 'ttfb'] as $metric) {
             $entry[$metric] = max(0.0, min($metric === 'cls' ? 10.0 : 120000.0, (float) ($payload[$metric] ?? 0)));
         }
@@ -98,6 +99,19 @@ final class PerformanceMonitor implements Module
             $map = is_array($map) ? $map : [];
             $map[$entry['url']] = ['image' => $entry['lcp_url'], 'updated' => time()];
             update_option('wpsc_lcp_images', array_slice($map, -1000, null, true), false);
+        }
+        $aboveFold = [];
+        foreach (array_slice((array) ($payload['above_fold'] ?? []), 0, 20) as $imageUrl) {
+            $imageUrl = esc_url_raw((string) $imageUrl);
+            if ($imageUrl !== '' && parse_url($imageUrl, PHP_URL_HOST) === parse_url(home_url('/'), PHP_URL_HOST)) {
+                $aboveFold[] = (string) (parse_url($imageUrl, PHP_URL_PATH) ?: '');
+            }
+        }
+        if ($aboveFold !== []) {
+            $profiles = get_option('wpsc_above_fold_images', []);
+            $profiles = is_array($profiles) ? $profiles : [];
+            $profiles[$entry['url']] = ['images' => array_values(array_unique($aboveFold)), 'updated' => time()];
+            update_option('wpsc_above_fold_images', array_slice($profiles, -1000, null, true), false);
         }
         $entries = get_option('wpsc_rum_metrics', []);
         $entries = is_array($entries) ? $entries : [];
@@ -116,14 +130,27 @@ final class PerformanceMonitor implements Module
         $start = microtime(true);
         $response = wp_safe_remote_get(home_url('/'), ['timeout' => 15, 'redirection' => 2, 'headers' => ['User-Agent' => 'WPS-Cache-Uptime/' . WPSC_VERSION]]);
         $status = is_wp_error($response) ? 0 : wp_remote_retrieve_response_code($response);
+        $duration = (int) round((microtime(true) - $start) * 1000);
         $history = get_option('wpsc_uptime_history', []);
         $history = is_array($history) ? $history : [];
-        $history[] = ['time' => time(), 'status' => $status, 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
+        $history[] = ['time' => time(), 'status' => $status, 'duration_ms' => $duration];
         update_option('wpsc_uptime_history', array_slice($history, -1000), false);
+        $heartbeat = $this->settings->string('uptime_heartbeat_url');
+        if ($heartbeat !== '') {
+            wp_safe_remote_post($heartbeat, [
+                'timeout' => 5,
+                'blocking' => false,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => wp_json_encode(['status' => $status, 'duration_ms' => $duration, 'checked_at' => gmdate(DATE_ATOM)]),
+            ]);
+        }
     }
 
     public function runLabTest(): mixed
     {
+        if ($this->settings->string('pagespeed_api_key') !== '') {
+            return $this->runPageSpeedInsights();
+        }
         $start = microtime(true);
         $response = wp_safe_remote_get(home_url('/'), ['timeout' => 20, 'redirection' => 2, 'headers' => ['Cache-Control' => 'no-cache', 'User-Agent' => 'WPS-Cache-Lab/' . WPSC_VERSION]]);
         if (is_wp_error($response)) {
@@ -138,8 +165,60 @@ final class PerformanceMonitor implements Module
         ]);
     }
 
+    private function runPageSpeedInsights(): mixed
+    {
+        $endpoint = add_query_arg([
+            'url' => home_url('/'),
+            'strategy' => $this->settings->string('pagespeed_strategy') === 'desktop' ? 'desktop' : 'mobile',
+            'category' => 'performance',
+            'key' => $this->settings->string('pagespeed_api_key'),
+        ], 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
+        $response = wp_safe_remote_get($endpoint, ['timeout' => 120, 'redirection' => 0, 'headers' => ['Accept' => 'application/json']]);
+        if (is_wp_error($response)) {
+            return new \WP_Error('pagespeed_failed', $response->get_error_message(), ['status' => 502]);
+        }
+        $status = wp_remote_retrieve_response_code($response);
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if ($status < 200 || $status >= 300 || !is_array($payload)) {
+            $message = is_array($payload) ? (string) ($payload['error']['message'] ?? 'PageSpeed Insights request failed.') : 'PageSpeed Insights returned invalid JSON.';
+            return new \WP_Error('pagespeed_failed', $message, ['status' => 502]);
+        }
+        return rest_ensure_response(self::parsePageSpeedResult($payload, $this->settings->string('pagespeed_strategy')));
+    }
+
+    /** @param array<string, mixed> $payload @return array<string, mixed> */
+    public static function parsePageSpeedResult(array $payload, string $strategy): array
+    {
+        $lighthouse = is_array($payload['lighthouseResult'] ?? null) ? $payload['lighthouseResult'] : [];
+        $audits = is_array($lighthouse['audits'] ?? null) ? $lighthouse['audits'] : [];
+        $metric = static fn(string $key): mixed => $audits[$key]['numericValue'] ?? null;
+        $opportunities = [];
+        foreach ($audits as $id => $audit) {
+            $savings = is_array($audit) ? (float) ($audit['details']['overallSavingsMs'] ?? 0) : 0.0;
+            if (!is_array($audit) || ($audit['details']['type'] ?? '') !== 'opportunity' || $savings <= 0) {
+                continue;
+            }
+            $opportunities[] = ['id' => (string) $id, 'title' => (string) ($audit['title'] ?? $id), 'savings_ms' => (int) round($savings)];
+        }
+        usort($opportunities, static fn(array $left, array $right): int => $right['savings_ms'] <=> $left['savings_ms']);
+        return [
+            'provider' => 'Google PageSpeed Insights v5 / Lighthouse',
+            'strategy' => $strategy === 'desktop' ? 'desktop' : 'mobile',
+            'performance_score' => (int) round(100 * (float) ($lighthouse['categories']['performance']['score'] ?? 0)),
+            'metrics' => [
+                'fcp_ms' => $metric('first-contentful-paint'),
+                'lcp_ms' => $metric('largest-contentful-paint'),
+                'speed_index_ms' => $metric('speed-index'),
+                'tbt_ms' => $metric('total-blocking-time'),
+                'cls' => $metric('cumulative-layout-shift'),
+            ],
+            'opportunities' => array_slice($opportunities, 0, 10),
+            'fetched_at' => (string) ($lighthouse['fetchTime'] ?? ''),
+        ];
+    }
+
     private function rumToken(): string
     {
-        return hash_hmac('sha256', gmdate('Y-m-d') . '|' . home_url('/'), wp_salt('nonce'));
+        return hash_hmac('sha256', 'rum|' . home_url('/'), wp_salt('nonce'));
     }
 }

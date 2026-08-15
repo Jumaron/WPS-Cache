@@ -18,9 +18,11 @@ WPS-Cache/
 │   ├── Bootstrap/                  Composition root
 │   ├── Cli/                        WP-CLI command boundary
 │   ├── Cache/                      Cache registry and concrete cache layers
-│   │   ├── Object/                 Redis integration
+│   │   ├── Fragment/               PHP fragments and signed hole-punch endpoint
+│   │   ├── Object/                 Redis and Memcached integrations
 │   │   ├── Page/                   Static HTML page cache
-│   │   └── ReverseProxy/           Varnish integration
+│   │   ├── Rest/                   Anonymous REST response caching
+│   │   └── ReverseProxy/           Varnish and Nginx integrations
 │   ├── Config/                     Immutable settings and repository
 │   ├── Contracts/                  Small module/processor contracts
 │   ├── Infrastructure/             Filesystem, server headers, drop-in, wp-config I/O
@@ -56,8 +58,9 @@ dist/       Versioned ZIP archives and SHA-256 checksums
    inner buffer during `template_redirect`; its output is cached when page cache
    is enabled and still works when page cache is disabled.
 5. Activation and settings updates generate `runtime.php` for the standalone
-   page-cache drop-in. Redis uses a separate mode-0600 PHP configuration because
-   its object-cache drop-in loads before plugins and cannot read options safely.
+   page-cache drop-in. Redis and Memcached share a selectable, mode-restricted
+   early configuration boundary because `object-cache.php` loads before plugins
+   and cannot read normal options safely. Only one persistent backend is active.
 6. Filesystem, drop-in, and `wp-config.php` mutations are isolated in
    infrastructure services and guarded by ownership checks. The plugin does not
    write web-server configuration; upgrades only remove legacy owned blocks.
@@ -65,9 +68,20 @@ dist/       Versioned ZIP archives and SHA-256 checksums
    and removes early page-cache serving when that layer is disabled.
 8. Query canonicalization and device classification are shared policy objects;
    the standalone drop-in receives their validated scalar/list configuration.
-9. Image work is local-first and provider-extensible. Encoder diagnostics report
-   actual Imagick/GD format support rather than assuming server codecs.
-10. Admin rendering is split between core settings and capability-focused
+9. Rendered-CSS and adaptive-image endpoints use same-origin paths, bounded
+   payloads, daily HMAC signatures, immutable generated assets, and cache-owned
+   directories. Browser profiles are split by page and device class.
+10. Image work is local-first and provider-extensible. Encoder diagnostics report
+   actual Imagick/GD/jpegtran/Ghostscript support rather than assuming codecs.
+   Background work is bounded and resumable; the source-preserving mode creates
+   delivery variants without rewriting originals.
+11. External integrations are explicit adapters. S3-compatible media offload and
+   OpenAI missing-alt generation are disabled by default, retain secrets on blank
+   saves, omit credentials from exports, and permit wp-config.php constants.
+12. Local RUM feeds learned above-fold media into delivery. PageSpeed provides
+   optional Lighthouse lab data, while the local uptime job can emit a dead-man
+   heartbeat so complete origin failure is externally observable.
+13. Admin rendering is split between core settings and capability-focused
     feature screens. Runtime modules do not depend on either renderer.
 
 ## Architectural rules

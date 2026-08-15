@@ -13,6 +13,8 @@ use WPSCache\Contracts\Module;
 final class ImageOptimizer implements Module
 {
     private const STATS_OPTION = 'wpsc_image_stats';
+    private const BACKGROUND_CURSOR_OPTION = 'wpsc_image_background_cursor';
+    public const BACKGROUND_HOOK = 'wpsc_image_background_optimize';
     private const BACKUP_HEADER = "<?php exit; __halt_compiler(); ?>\n";
 
     public function __construct(private readonly Settings $settings)
@@ -30,6 +32,68 @@ final class ImageOptimizer implements Module
             add_filter('wp_generate_attachment_metadata', [$this, 'optimizeAttachment'], 30, 2);
         }
         add_filter('wpsc_image_optimizer_capabilities', [$this, 'capabilities']);
+        add_action(self::BACKGROUND_HOOK, [$this, 'optimizeBackgroundBatch']);
+        add_action('wpscac_settings_updated', [$this, 'updateBackgroundSchedule'], 35, 1);
+        if ($this->settings->enabled('image_background_optimization')) {
+            if (get_option(self::BACKGROUND_CURSOR_OPTION, null) === null) {
+                update_option(self::BACKGROUND_CURSOR_OPTION, 0, false);
+            }
+            if ((int) get_option(self::BACKGROUND_CURSOR_OPTION, 0) >= 0 && !wp_next_scheduled(self::BACKGROUND_HOOK)) {
+                wp_schedule_event(time() + 300, 'hourly', self::BACKGROUND_HOOK);
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $settings */
+    public function updateBackgroundSchedule(array $settings): void
+    {
+        wp_clear_scheduled_hook(self::BACKGROUND_HOOK);
+        if (!empty($settings['image_background_optimization'])) {
+            if (get_option(self::BACKGROUND_CURSOR_OPTION, null) === null) {
+                update_option(self::BACKGROUND_CURSOR_OPTION, 0, false);
+            }
+            if ((int) get_option(self::BACKGROUND_CURSOR_OPTION, 0) >= 0) {
+                wp_schedule_event(time() + 300, 'hourly', self::BACKGROUND_HOOK);
+            }
+        } else {
+            update_option(self::BACKGROUND_CURSOR_OPTION, 0, false);
+        }
+    }
+
+    public function optimizeBackgroundBatch(): void
+    {
+        if (!$this->settings->enabled('image_background_optimization')) {
+            return;
+        }
+        $offset = (int) get_option(self::BACKGROUND_CURSOR_OPTION, 0);
+        if ($offset < 0 || !class_exists('WP_Query')) {
+            return;
+        }
+        $batchSize = max(1, min(100, $this->settings->integer('image_background_batch_size')));
+        $query = new \WP_Query([
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf'],
+            'posts_per_page' => $batchSize,
+            'offset' => $offset,
+            'fields' => 'ids',
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'no_found_rows' => true,
+        ]);
+        foreach (array_map('intval', (array) $query->posts) as $attachmentId) {
+            $metadata = wp_get_attachment_metadata($attachmentId);
+            if (is_array($metadata)) {
+                wp_update_attachment_metadata($attachmentId, $this->optimizeAttachment($metadata, $attachmentId));
+            }
+        }
+        $count = count((array) $query->posts);
+        if ($count < $batchSize) {
+            update_option(self::BACKGROUND_CURSOR_OPTION, -1, false);
+            wp_clear_scheduled_hook(self::BACKGROUND_HOOK);
+        } else {
+            update_option(self::BACKGROUND_CURSOR_OPTION, $offset + $count, false);
+        }
     }
 
     /** @param array<string, mixed> $metadata @return array<string, mixed> */
@@ -70,24 +134,31 @@ final class ImageOptimizer implements Module
         if (!in_array($extension, $supported, true)) {
             return ['success' => false, 'saved' => 0, 'variants' => [], 'message' => 'Unsupported local format.'];
         }
-        if ($backup && $this->settings->enabled('image_backup_originals')) {
+        if ($this->settings->enabled('image_preserve_original_file') && !in_array($extension, ['jpg', 'jpeg', 'png'], true)) {
+            return ['success' => false, 'saved' => 0, 'variants' => [], 'message' => 'Variant-only mode supports JPEG and PNG sources.'];
+        }
+        if ($backup && $this->settings->enabled('image_backup_originals') && !$this->settings->enabled('image_preserve_original_file')) {
             $this->backup($file);
         }
 
-        $result = apply_filters('wpsc_optimize_image_file', null, $file, $this->settings, $attachmentId);
+        $result = $this->settings->enabled('image_preserve_original_file')
+            ? ['success' => true, 'message' => 'Original preserved; only delivery variants were generated.']
+            : apply_filters('wpsc_optimize_image_file', null, $file, $this->settings, $attachmentId);
         if (!is_array($result)) {
-            $result = $extension === 'pdf'
-                ? ['success' => false, 'message' => 'PDF optimization requires a provider that preserves document vectors/text.']
+            $result = $this->settings->enabled('image_lossless') && in_array($extension, ['jpg', 'jpeg'], true)
+                ? $this->optimizeLosslessJpeg($file)
+                : ($extension === 'pdf'
+                ? $this->optimizePdf($file)
                 : ($this->imagickAvailable()
                 ? $this->optimizeWithImagick($file, $extension)
-                : $this->optimizeWithGd($file, $extension));
+                : $this->optimizeWithGd($file, $extension)));
         }
         $variants = $this->createVariants($file, $extension);
         clearstatcache(true, $file);
         $after = is_file($file) ? (int) filesize($file) : $before;
         $saved = max(0, $before - $after);
         $success = !empty($result['success']);
-        if ($success) {
+        if ($success && ($saved > 0 || $variants !== [] || !$this->settings->enabled('image_preserve_original_file'))) {
             $this->recordStats($saved, count($variants));
             do_action('wpsc_image_optimized', $file, $saved, $variants, $attachmentId);
         }
@@ -142,7 +213,112 @@ final class ImageOptimizer implements Module
             'avif' => in_array('AVIF', $formats, true) || function_exists('imageavif'),
             'animated_gif' => $this->imagickAvailable(),
             'exif' => extension_loaded('exif'),
+            'pdf' => $this->ghostscriptBinary() !== null,
+            'lossless_jpeg' => $this->jpegtranBinary() !== null,
         ];
+    }
+
+    /** @return array{success: bool, message: string} */
+    private function optimizeLosslessJpeg(string $file): array
+    {
+        $binary = $this->jpegtranBinary();
+        if ($binary === null || !function_exists('proc_open')) {
+            return ['success' => false, 'message' => 'A trusted jpegtran executable is required for mathematically lossless JPEG optimization.'];
+        }
+        $temporary = $file . '.wpsc-jpeg-' . bin2hex(random_bytes(4)) . '.jpg';
+        $copy = $this->settings->enabled('image_preserve_exif') ? 'all' : 'none';
+        $process = @proc_open([$binary, '-copy', $copy, '-optimize', '-progressive', '-outfile', $temporary, $file], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+        if (!is_resource($process)) {
+            return ['success' => false, 'message' => 'jpegtran could not start.'];
+        }
+        foreach ($pipes as $index => $pipe) {
+            if (is_resource($pipe)) {
+                if ($index > 0) {
+                    stream_get_contents($pipe);
+                }
+                fclose($pipe);
+            }
+        }
+        $status = proc_close($process);
+        if ($status !== 0 || !is_file($temporary) || filesize($temporary) < 2 || (string) file_get_contents($temporary, false, null, 0, 2) !== "\xFF\xD8") {
+            @unlink($temporary);
+            return ['success' => false, 'message' => 'jpegtran did not produce a valid JPEG.'];
+        }
+        if ((int) filesize($temporary) >= (int) filesize($file)) {
+            @unlink($temporary);
+            return ['success' => true, 'message' => 'The JPEG was already losslessly optimized.'];
+        }
+        @chmod($temporary, 0644);
+        if (!@rename($temporary, $file)) {
+            @unlink($temporary);
+            return ['success' => false, 'message' => 'The optimized JPEG could not replace the source.'];
+        }
+        return ['success' => true, 'message' => 'Optimized losslessly with trusted jpegtran.'];
+    }
+
+    /** @return array{success: bool, message: string} */
+    private function optimizePdf(string $file): array
+    {
+        $binary = $this->ghostscriptBinary();
+        if ($binary === null || !function_exists('proc_open')) {
+            return ['success' => false, 'message' => 'Define WPSC_GHOSTSCRIPT_BINARY to a trusted Ghostscript executable for vector-preserving PDF optimization.'];
+        }
+        $temporary = $file . '.wpsc-pdf-' . bin2hex(random_bytes(4)) . '.pdf';
+        $command = [$binary, '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.6', '-dPDFSETTINGS=/ebook', '-dNOPAUSE', '-dQUIET', '-dBATCH', '-dSAFER', '-sOutputFile=' . $temporary, $file];
+        $pipes = [];
+        $process = @proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+        if (!is_resource($process)) {
+            return ['success' => false, 'message' => 'Ghostscript could not start.'];
+        }
+        foreach ($pipes as $index => $pipe) {
+            if (is_resource($pipe)) {
+                if ($index > 0) {
+                    stream_get_contents($pipe);
+                }
+                fclose($pipe);
+            }
+        }
+        $status = proc_close($process);
+        $valid = $status === 0 && is_file($temporary) && filesize($temporary) > 8 && str_starts_with((string) file_get_contents($temporary, false, null, 0, 5), '%PDF-');
+        if (!$valid) {
+            @unlink($temporary);
+            return ['success' => false, 'message' => 'Ghostscript did not produce a valid PDF.'];
+        }
+        if ((int) filesize($temporary) >= (int) filesize($file)) {
+            @unlink($temporary);
+            return ['success' => true, 'message' => 'The PDF was already smaller than the optimized output.'];
+        }
+        @chmod($temporary, 0644);
+        if (!@rename($temporary, $file)) {
+            @unlink($temporary);
+            return ['success' => false, 'message' => 'The optimized PDF could not replace the source.'];
+        }
+        return ['success' => true, 'message' => 'Optimized with trusted Ghostscript while preserving vector/text content.'];
+    }
+
+    private function ghostscriptBinary(): ?string
+    {
+        if (!defined('WPSC_GHOSTSCRIPT_BINARY')) {
+            return null;
+        }
+        $binary = realpath((string) WPSC_GHOSTSCRIPT_BINARY);
+        if ($binary === false || !is_file($binary)) {
+            return null;
+        }
+        $name = strtolower(basename($binary));
+        return in_array($name, ['gs', 'gs.exe', 'gswin32c.exe', 'gswin64c.exe'], true) ? $binary : null;
+    }
+
+    private function jpegtranBinary(): ?string
+    {
+        if (!defined('WPSC_JPEGTRAN_BINARY')) {
+            return null;
+        }
+        $binary = realpath((string) WPSC_JPEGTRAN_BINARY);
+        if ($binary === false || !is_file($binary)) {
+            return null;
+        }
+        return in_array(strtolower(basename($binary)), ['jpegtran', 'jpegtran.exe'], true) ? $binary : null;
     }
 
     /** @return array{success: bool, message: string} */
@@ -178,13 +354,16 @@ final class ImageOptimizer implements Module
         if (!$this->settings->enabled('image_preserve_exif')) {
             $image->stripImage();
         }
-        $quality = $this->settings->enabled('image_lossless') ? 100 : $this->smartQuality($image->getImageWidth(), $image->getImageHeight());
+        $quality = $this->settings->enabled('image_lossless') ? 100 : $this->smartImagickQuality($image);
         $image->setImageCompressionQuality($quality);
-        if ($image->getImageFormat() === 'PNG') {
+        $format = strtoupper($image->getImageFormat());
+        if ($format === 'PNG') {
             $image->setOption('png:compression-level', $this->settings->enabled('image_lossless') ? '9' : '7');
-        } else {
+        } elseif (in_array($format, ['JPEG', 'JPG'], true)) {
             $image->setImageCompression(Imagick::COMPRESSION_JPEG);
             $image->setInterlaceScheme(Imagick::INTERLACE_PLANE);
+        } elseif ($format === 'GIF') {
+            $image->setImageCompression(Imagick::COMPRESSION_LZW);
         }
         $this->applyWatermark($image);
     }
@@ -195,7 +374,7 @@ final class ImageOptimizer implements Module
         $maxHeight = $this->settings->integer('image_max_height');
         if ($maxWidth > 0 && $maxHeight > 0 && ($image->getImageWidth() > $maxWidth || $image->getImageHeight() > $maxHeight)) {
             if ($this->settings->enabled('image_smart_crop')) {
-                $focus = apply_filters('wpsc_image_crop_focus', ['x' => 0.5, 'y' => 0.5], $image->getImageWidth(), $image->getImageHeight());
+                $focus = apply_filters('wpsc_image_crop_focus', $this->detectFocus($image), $image->getImageWidth(), $image->getImageHeight());
                 $focus = is_array($focus) ? $focus : ['x' => 0.5, 'y' => 0.5];
                 $x = max(0.0, min(1.0, (float) ($focus['x'] ?? 0.5)));
                 $y = max(0.0, min(1.0, (float) ($focus['y'] ?? 0.5)));
@@ -232,7 +411,7 @@ final class ImageOptimizer implements Module
         if ($source === false) {
             return ['success' => false, 'message' => 'The image could not be decoded.'];
         }
-        $source = $this->resizeGd($source);
+        $source = $this->resizeGd($source, $extension);
         $success = match ($extension) {
             'jpg', 'jpeg' => imagejpeg($source, $file, $this->settings->enabled('image_lossless') ? 100 : $this->smartQuality(imagesx($source), imagesy($source))),
             'png' => imagepng($source, $file, $this->settings->enabled('image_lossless') ? 9 : 7),
@@ -243,7 +422,7 @@ final class ImageOptimizer implements Module
         return ['success' => $success, 'message' => $success ? 'Optimized with GD.' : 'GD could not write the image.'];
     }
 
-    private function resizeGd(\GdImage $source): \GdImage
+    private function resizeGd(\GdImage $source, string $extension): \GdImage
     {
         $width = imagesx($source);
         $height = imagesy($source);
@@ -256,6 +435,10 @@ final class ImageOptimizer implements Module
         $target = imagecreatetruecolor(max(1, (int) round($width * $ratio)), max(1, (int) round($height * $ratio)));
         imagealphablending($target, false);
         imagesavealpha($target, true);
+        $background = in_array($extension, ['png', 'webp'], true)
+            ? imagecolorallocatealpha($target, 0, 0, 0, 127)
+            : imagecolorallocate($target, 255, 255, 255);
+        imagefilledrectangle($target, 0, 0, imagesx($target) - 1, imagesy($target) - 1, $background);
         imagecopyresampled($target, $source, 0, 0, 0, 0, imagesx($target), imagesy($target), $width, $height);
         imagedestroy($source);
         return $target;
@@ -419,6 +602,59 @@ final class ImageOptimizer implements Module
     {
         $quality = max(1, min(100, $this->settings->integer('image_quality')));
         return $width * $height > 4000000 ? max(65, $quality - 5) : $quality;
+    }
+
+    private function smartImagickQuality(Imagick $image): int
+    {
+        $quality = $this->smartQuality($image->getImageWidth(), $image->getImageHeight());
+        try {
+            $sample = clone $image;
+            $sample->setIteratorIndex(0);
+            $sample->thumbnailImage(64, 64, true, true);
+            $colors = $sample->getImageColors();
+            $sample->clear();
+            if ($colors < 256) {
+                return max(60, $quality - 4);
+            }
+            if ($colors > 2000) {
+                return min(95, $quality + 2);
+            }
+        } catch (Throwable) {
+        }
+        return $quality;
+    }
+
+    /** @return array{x: float, y: float} */
+    private function detectFocus(Imagick $image): array
+    {
+        try {
+            $probe = clone $image;
+            $probe->setIteratorIndex(0);
+            $probe->thumbnailImage(12, 12, true, true);
+            $probe->setImageColorspace(Imagick::COLORSPACE_GRAY);
+            $probe->edgeImage(1.0);
+            $width = max(1, $probe->getImageWidth());
+            $height = max(1, $probe->getImageHeight());
+            $best = -1.0;
+            $bestX = 0.5;
+            $bestY = 0.5;
+            foreach ($probe->getPixelIterator() as $y => $row) {
+                foreach ($row as $x => $pixel) {
+                    $edge = (float) $pixel->getColorValue(Imagick::COLOR_GRAY);
+                    $centerWeight = 1.0 - 0.2 * (abs(($x / max(1, $width - 1)) - 0.5) + abs(($y / max(1, $height - 1)) - 0.5));
+                    $score = $edge * $centerWeight;
+                    if ($score > $best) {
+                        $best = $score;
+                        $bestX = $x / max(1, $width - 1);
+                        $bestY = $y / max(1, $height - 1);
+                    }
+                }
+            }
+            $probe->clear();
+            return ['x' => max(0.0, min(1.0, $bestX)), 'y' => max(0.0, min(1.0, $bestY))];
+        } catch (Throwable) {
+            return ['x' => 0.5, 'y' => 0.5];
+        }
     }
 
     private function imagickAvailable(): bool

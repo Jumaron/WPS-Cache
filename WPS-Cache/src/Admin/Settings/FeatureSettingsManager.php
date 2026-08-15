@@ -49,6 +49,7 @@ final class FeatureSettingsManager
             $this->renderer->renderToggle('rest_cache', 'Enable REST response cache', 'Mutation and authenticated requests always bypass.', $settings);
             $this->renderer->renderInput('rest_cache_ttl', 'REST TTL (seconds)', 'Independent of page-cache lifetime.', $settings, 'number', ['min' => 10, 'max' => 86400]);
             $this->renderer->renderTextarea('rest_cache_routes', 'Route allowlist', 'Route patterns such as /wp/v2/posts/*. Empty caches all public routes except users.', $settings);
+            $this->renderer->renderToggle('fragment_hole_punch', 'Dynamic fragment hole punching', 'Signed no-store REST fragments update personalized regions inside otherwise static pages.', $settings);
         }, 'dashicons-rest-api');
         $this->formEnd();
 
@@ -78,10 +79,15 @@ final class FeatureSettingsManager
         $this->renderer->renderCard('CSS delivery', 'Aggregation and async delivery are opt-in because theme compatibility varies.', function () use ($settings): void {
             $this->renderer->renderToggle('css_combine', 'Combine simple local CSS', 'Complex handles and inline data are kept separate.', $settings);
             $this->renderer->renderToggle('css_async', 'Load non-critical CSS asynchronously', 'Styles tagged data-wpsc-critical and media styles remain blocking.', $settings);
+            $this->renderer->renderToggle('css_rendered_profiles', 'Collect rendered CSS profiles', 'A same-origin browser audit records selectors used by each URL and desktop/mobile/tablet viewport.', $settings);
+            $this->renderer->renderToggle('css_critical_rendered', 'Inline rendered critical CSS', 'Uses the collected above-the-fold profile and keeps a browser-generated fallback path.', $settings);
+            $this->renderer->renderToggle('css_linked_prune', 'Remove unused linked CSS', 'Replaces profiled same-origin stylesheets with a generated per-page used-CSS file. Requires rendered profiles.', $settings);
+            $this->renderer->renderInput('css_profile_retention', 'Profile retention (days)', 'Expired profiles are recollected automatically.', $settings, 'number', ['min' => 1, 'max' => 365]);
         }, 'dashicons-art');
         $this->renderer->renderCard('JavaScript delivery', 'Tune parsing and interaction delay behavior.', function () use ($settings): void {
             $this->renderer->renderToggle('js_combine', 'Combine simple local JavaScript', 'Scripts with inline data or conditionals remain separate.', $settings);
             $this->renderer->renderToggle('js_defer_inline', 'Defer inline JavaScript', 'Eligible blocks run after DOMContentLoaded.', $settings);
+            $this->renderer->renderRadioGroup('js_delay_strategy', 'Delay strategy', 'Interaction, browser idle time, or the custom wpsc:consent event.', $settings, ['interaction' => 'First interaction', 'idle' => 'Browser idle', 'consent' => 'Consent event']);
             $this->renderer->renderInput('js_delay_timeout', 'Interaction delay timeout (ms)', 'Fallback before delayed scripts execute.', $settings, 'number', ['min' => 0, 'max' => 30000]);
         }, 'dashicons-editor-code');
         $this->renderer->renderCard('HTML and rendering', 'Optimize markup and below-fold rendering without coupling to page caching.', function () use ($settings): void {
@@ -94,8 +100,10 @@ final class FeatureSettingsManager
             $this->renderer->renderTextarea('preconnect_urls', 'Preconnect origins', 'Absolute origins, one per line.', $settings);
             $this->renderer->renderTextarea('resource_preload_urls', 'Resource preloads', 'Images, CSS, JS, fonts, or fetch URLs.', $settings);
             $this->renderer->renderTextarea('font_preload_urls', 'Font preloads', 'Font URLs receive the correct as and crossorigin attributes.', $settings);
+            $this->renderer->renderToggle('font_auto_preload_localized', 'Auto-preload localized fonts', 'Preloads up to four locally cached font files discovered in localized CSS.', $settings);
             $this->renderer->renderTextarea('self_host_asset_urls', 'Self-host external CSS/JS', 'Exact administrator-approved stylesheet or script URLs, cached locally for seven days.', $settings);
             $this->renderer->renderToggle('font_system_stack', 'System-font-first mode', 'Opt-in global system stack for fastest text rendering.', $settings);
+            $this->renderer->renderInput('font_subset_text', 'Google Fonts subset text', 'Optional glyph set such as your brand alphabet; Google returns a smaller subsetted WOFF2 file.', $settings);
             $this->renderer->renderToggle('gravatar_local_cache', 'Cache Gravatars locally', 'Downloads trusted Gravatar responses for seven days.', $settings);
         }, 'dashicons-networking');
         $this->renderer->renderCard('Expanded media delivery', 'Responsive and below-fold delivery controls.', function () use ($settings): void {
@@ -118,7 +126,7 @@ final class FeatureSettingsManager
         $stats = is_array($stats) ? $stats : [];
         $this->renderer->renderCard('Local encoder status', 'Features activate automatically when the server supplies the needed encoder.', function () use ($capabilities, $stats): void {
             echo '<div class="wpsc-capability-grid">';
-            foreach (['imagick' => 'Imagick', 'gd' => 'GD', 'webp' => 'WebP', 'avif' => 'AVIF', 'animated_gif' => 'Animated GIF', 'exif' => 'EXIF'] as $key => $label) {
+            foreach (['imagick' => 'Imagick', 'gd' => 'GD', 'webp' => 'WebP', 'avif' => 'AVIF', 'animated_gif' => 'Animated GIF', 'exif' => 'EXIF', 'lossless_jpeg' => 'jpegtran', 'pdf' => 'Ghostscript PDF'] as $key => $label) {
                 $available = !empty($capabilities[$key]);
                 echo '<div class="wpsc-capability"><strong>' . esc_html($label) . '</strong><span class="wpsc-status-pill ' . ($available ? 'success' : 'warning') . '">' . ($available ? 'Available' : 'Unavailable') . '</span></div>';
             }
@@ -128,7 +136,8 @@ final class FeatureSettingsManager
         $this->renderer->renderCard('Automation and safety', 'Originals are preserved before destructive operations.', function () use ($settings): void {
             $this->renderer->renderToggle('image_optimize_upload', 'Optimize new uploads', 'Processes originals and selected thumbnails after WordPress creates metadata.', $settings);
             $this->renderer->renderToggle('image_backup_originals', 'Back up originals', 'Creates a PHP-guarded sidecar for exact restore without exposing original bytes.', $settings);
-            $this->renderer->renderToggle('image_lossless', 'Lossless/high-fidelity mode', 'Uses maximum quality and lossless-oriented encoder settings.', $settings);
+            $this->renderer->renderToggle('image_preserve_original_file', 'Variant-only mode', 'Leaves source files byte-for-byte unchanged and generates only WebP/AVIF/LQIP delivery variants.', $settings);
+            $this->renderer->renderToggle('image_lossless', 'Lossless/high-fidelity mode', 'PNG remains lossless; exact progressive JPEG optimization requires the diagnosed jpegtran binary.', $settings);
             $this->renderer->renderInput('image_quality', 'Lossy quality', 'Smart mode lowers quality slightly for very large images.', $settings, 'number', ['min' => 1, 'max' => 100]);
             $this->renderer->renderInput('image_max_width', 'Maximum width', 'Zero disables resizing.', $settings, 'number', ['min' => 0, 'max' => 12000]);
             $this->renderer->renderInput('image_max_height', 'Maximum height', 'Zero disables resizing.', $settings, 'number', ['min' => 0, 'max' => 12000]);
@@ -142,8 +151,31 @@ final class FeatureSettingsManager
             $this->renderer->renderTextarea('image_exclusions', 'Image exclusions', 'Path fragments that must never be processed.', $settings);
             $this->renderer->renderTextarea('image_custom_folders', 'Custom folders', 'Absolute folders below wp-content; used by the public API/provider integrations.', $settings);
             $this->renderer->renderInput('image_watermark_id', 'Watermark attachment ID', 'Imagick only. Zero disables watermarking.', $settings, 'number', ['min' => 0]);
-            $this->renderer->renderToggle('image_ai_alt_provider', 'Generate missing alt text via provider', 'Calls the wpsc_generate_image_alt_text filter; no AI service or data transfer is enabled by default.', $settings);
         }, 'dashicons-format-image');
+        $this->renderer->renderCard('Accessible image text', 'Generate alt text only when the WordPress attachment field is empty.', function () use ($settings): void {
+            $this->renderer->renderToggle('image_ai_alt_provider', 'Generate missing alt text', 'Runs only for attachments whose alt text is empty. Custom providers can use the wpsc_generate_image_alt_text filter.', $settings);
+            $this->renderer->renderToggle('image_ai_alt_openai', 'Use built-in OpenAI vision provider', 'Explicit opt-in: supported image bytes are sent to the OpenAI Responses API and API usage may incur cost.', $settings);
+            $this->renderer->renderInput('openai_api_key', 'OpenAI API key', 'Retained when left blank and omitted from exports. WPSC_OPENAI_API_KEY can supply it from wp-config.php.', $settings, 'password');
+            $this->renderer->renderInput('openai_vision_model', 'OpenAI vision model', 'Default: gpt-5.6. Choose a model that accepts image input.', $settings);
+        }, 'dashicons-universal-access-alt');
+        $this->renderer->renderCard('Media offload', 'Upload attachment objects through a custom provider or the built-in S3-compatible adapter.', function () use ($settings): void {
+            $this->renderer->renderToggle('media_offload_provider', 'Enable media-offload provider', 'Calls the documented wpsc_offload_media_file lifecycle and rewrites attachment/srcset URLs after verified HTTPS responses.', $settings);
+            $this->renderer->renderToggle('media_offload_delete_local', 'Delete verified offloaded thumbnails', 'Never deletes originals; providers must explicitly return verified=true. Keep disabled until restore behavior is tested.', $settings);
+            $this->renderer->renderToggle('media_offload_s3', 'Built-in S3-compatible adapter', 'Signs direct HTTPS PUT/DELETE requests with AWS Signature Version 4. Works with S3-compatible path-style endpoints.', $settings);
+            $this->renderer->renderInput('media_offload_endpoint', 'S3 endpoint', 'https://s3.amazonaws.com', $settings, 'url');
+            $this->renderer->renderInput('media_offload_region', 'S3 region', 'us-east-1', $settings);
+            $this->renderer->renderInput('media_offload_bucket', 'S3 bucket', 'media-bucket', $settings);
+            $this->renderer->renderInput('media_offload_access_key', 'S3 access key', 'Retained when left blank and omitted from exports.', $settings, 'password');
+            $this->renderer->renderInput('media_offload_secret_key', 'S3 secret key', 'Retained when left blank and omitted from exports.', $settings, 'password');
+            $this->renderer->renderInput('media_offload_public_url', 'Public media origin', 'Optional CDN/custom-domain base URL.', $settings, 'url');
+        }, 'dashicons-cloud-upload');
+        $this->renderer->renderCard('Adaptive delivery', 'Generate signed, cached, browser-selected responsive derivatives without exposing arbitrary filesystem paths.', function () use ($settings): void {
+            $this->renderer->renderToggle('image_adaptive_delivery', 'Enable adaptive image service', 'Same-origin uploads receive width-descriptor srcsets; AVIF/WebP is negotiated when the encoder and browser support it.', $settings);
+            $this->renderer->renderInput('image_adaptive_quality', 'Adaptive quality', 'Applied to cached on-demand derivatives.', $settings, 'number', ['min' => 1, 'max' => 100]);
+            $this->renderer->renderInput('image_adaptive_max_width', 'Largest adaptive width', 'Never upscales beyond the source dimensions.', $settings, 'number', ['min' => 1, 'max' => 12000]);
+            $this->renderer->renderToggle('image_background_optimization', 'Background-optimize existing media', 'WordPress cron processes the existing library in bounded resumable batches.', $settings);
+            $this->renderer->renderInput('image_background_batch_size', 'Background batch size', 'Attachments processed per cron worker.', $settings, 'number', ['min' => 1, 'max' => 100]);
+        }, 'dashicons-images-alt');
         $this->formEnd();
         $this->renderer->renderCard('Bulk media library', 'Processes media in resumable browser batches. Closing the tab safely pauses the run.', function (): void {
             ?>
@@ -168,11 +200,16 @@ final class FeatureSettingsManager
         $this->renderer->renderCard('Availability', 'WordPress cron performs a local loopback health check.', function () use ($settings): void {
             $this->renderer->renderToggle('uptime_monitor', 'Enable uptime checks', 'Records HTTP status and response time locally.', $settings);
             $this->renderer->renderRadioGroup('uptime_interval', 'Check interval', 'Cron timing depends on site traffic.', $settings, ['hourly' => 'Hourly', 'daily' => 'Daily']);
+            $this->renderer->renderInput('uptime_heartbeat_url', 'External dead-man heartbeat URL', 'Optional HTTPS endpoint. Missing pings let an external monitor detect a complete origin outage.', $settings, 'password');
         }, 'dashicons-heart');
+        $this->renderer->renderCard('Lighthouse lab testing', 'Use the official PageSpeed Insights v5 API for browser-rendered Lighthouse data; without a key the tool retains its local HTTP timing fallback.', function () use ($settings): void {
+            $this->renderer->renderInput('pagespeed_api_key', 'PageSpeed API key', 'Stored locally and omitted from exports.', $settings, 'password');
+            $this->renderer->renderRadioGroup('pagespeed_strategy', 'Lab strategy', 'Choose the Lighthouse device profile.', $settings, ['mobile' => 'Mobile', 'desktop' => 'Desktop']);
+        }, 'dashicons-performance');
         $this->formEnd();
         $this->renderer->renderCard('Current samples', 'Use the HTTP lab check for server timing; browser Core Web Vitals come from RUM.', function () use ($rum, $uptime): void {
             echo '<p>RUM samples: <strong>' . esc_html((string) (is_array($rum) ? count($rum) : 0)) . '</strong> · Uptime checks: <strong>' . esc_html((string) (is_array($uptime) ? count($uptime) : 0)) . '</strong></p>';
-            echo '<button type="button" id="wpsc-run-lab" class="wpsc-btn-primary">Run HTTP lab check</button><pre id="wpsc-lab-result" class="wpsc-code-box" aria-live="polite"></pre>';
+            echo '<button type="button" id="wpsc-run-lab" class="wpsc-btn-primary">Run lab check</button><pre id="wpsc-lab-result" class="wpsc-code-box" aria-live="polite"></pre>';
         }, 'dashicons-performance');
     }
 
@@ -217,6 +254,7 @@ final class FeatureSettingsManager
                 'PHP Memcached' => extension_loaded('memcached'),
                 'Imagick or GD' => extension_loaded('imagick') || extension_loaded('gd'),
                 'Brotli encoder' => function_exists('brotli_compress'),
+                'FontTools pyftsubset' => defined('WPSC_PYFTSUBSET_BINARY') && is_file((string) WPSC_PYFTSUBSET_BINARY),
                 'WP-CLI loaded' => defined('WP_CLI') && WP_CLI,
                 'Multisite' => is_multisite(),
             ];
@@ -227,7 +265,7 @@ final class FeatureSettingsManager
             echo '</div>';
         }, 'dashicons-info-outline');
         $this->renderer->renderCard('Developer interfaces', 'Stable entry points for themes, hosts, and optional providers.', function (): void {
-            echo '<p><code>FragmentCache::remember()</code>, <code>FragmentCache::forget()</code>, REST cache controls, <code>wp wps-cache</code>, and documented <code>wpsc_*</code> actions/filters are available. Provider-only features remain disabled until an integration attaches to their filter.</p>';
+            echo '<p><code>FragmentCache::remember()</code>, <code>FragmentCache::placeholder()</code>, REST cache controls, <code>wp wps-cache</code>, and documented <code>wpsc_*</code> actions/filters are available. Built-in external adapters remain explicitly disabled until an administrator configures and enables them.</p>';
         }, 'dashicons-editor-code');
     }
 

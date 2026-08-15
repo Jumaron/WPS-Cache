@@ -57,8 +57,8 @@ final class CdnRewriter implements HtmlProcessor
         }
 
         $extensions = implode('|', self::EXTENSIONS);
-        $pattern = '~\b(src|href|srcset|data-src|data-srcset)=([\'"])'
-            . '(?:https?:\/\/' . preg_quote($siteHost, '~') . ')?\/'
+        $pattern = '~\b(src|href|data-src)=([\'"])'
+            . '(?:(?:https?:)?\/\/' . preg_quote($siteHost, '~') . ')?\/'
             . '([^"\']+\.(' . $extensions . '))([?#][^"\']*)?\2~i';
 
         $rewritten = preg_replace_callback(
@@ -84,7 +84,24 @@ final class CdnRewriter implements HtmlProcessor
             },
             $html,
         );
+        if (!is_string($rewritten)) {
+            return $html;
+        }
 
-        return is_string($rewritten) ? $rewritten : $html;
+        $srcsetPattern = '~\b(srcset|data-srcset)=([\'"])(.*?)\2~is';
+        $assetPattern = '~(?:(?:https?:)?\/\/' . preg_quote($siteHost, '~') . ')?\/([^,\s"\']+\.(' . $extensions . '))([?#][^,\s"\']*)?~i';
+        return preg_replace_callback($srcsetPattern, function (array $attribute) use ($assetPattern): string {
+            $value = preg_replace_callback($assetPattern, function (array $asset): string {
+                $path = $asset[1];
+                if (str_contains($path, 'wp-admin') || str_contains($path, 'preview=true')) {
+                    return $asset[0];
+                }
+                $extension = strtolower((string) ($asset[2] ?? ''));
+                $type = $extension === 'css' ? 'css' : ($extension === 'js' ? 'js' : 'media');
+                $origin = $this->origins[$type] ?: $this->cdnUrl;
+                return $origin . '/' . $path . ($asset[3] ?? '');
+            }, $attribute[3]);
+            return $attribute[1] . '=' . $attribute[2] . (is_string($value) ? $value : $attribute[3]) . $attribute[2];
+        }, $rewritten) ?? $rewritten;
     }
 }

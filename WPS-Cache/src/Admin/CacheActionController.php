@@ -48,7 +48,9 @@ final class CacheActionController
             $this->redirectBack();
         }
 
-        $success = $this->dropIns->installObjectCache();
+        $stored = get_option('wpsc_settings', []);
+        $backend = is_array($stored) && !empty($stored['memcached_cache']) ? 'memcached' : 'redis';
+        $success = $this->dropIns->installObjectCache($backend);
         $this->notices->add(
             $success ? 'Object-cache drop-in installed or refreshed.' : 'Object-cache drop-in could not be installed.',
             $success ? 'success' : 'error',

@@ -15,10 +15,12 @@ use WPSCache\Admin\Settings\SettingsValidator;
 use WPSCache\Admin\UI\NoticeManager;
 use WPSCache\Cache\CacheManager;
 use WPSCache\Cache\Object\RedisObjectCache;
+use WPSCache\Cache\Object\MemcachedObjectCache;
 use WPSCache\Cache\Page\PageCache;
 use WPSCache\Cache\ReverseProxy\VarnishCache;
 use WPSCache\Cache\ReverseProxy\NginxCache;
 use WPSCache\Cache\Rest\RestResponseCache;
+use WPSCache\Cache\Fragment\FragmentEndpoint;
 use WPSCache\Cli\Commands;
 use WPSCache\Config\Settings;
 use WPSCache\Config\SettingsRepository;
@@ -32,6 +34,7 @@ use WPSCache\Infrastructure\WordPress\ObjectCacheConfig;
 use WPSCache\Integration\Cloudflare\CloudflarePurger;
 use WPSCache\Integration\WooCommerce\CacheBypass;
 use WPSCache\Integration\Media\AltTextProvider;
+use WPSCache\Integration\Media\MediaOffloadProvider;
 use WPSCache\Lifecycle\LifecycleManager;
 use WPSCache\Maintenance\DatabaseOptimizer;
 use WPSCache\Monitoring\PerformanceMonitor;
@@ -51,7 +54,9 @@ use WPSCache\Optimization\Html\LazyRenderOptimizer;
 use WPSCache\Optimization\Html\MediaOptimizer;
 use WPSCache\Optimization\Html\NextGenImageDelivery;
 use WPSCache\Optimization\Html\ResourceHintOptimizer;
+use WPSCache\Optimization\Html\RenderedCssOptimizer;
 use WPSCache\Optimization\Media\ImageOptimizer;
+use WPSCache\Optimization\Media\AdaptiveImageService;
 use WPSCache\Optimization\Media\GravatarCache;
 use WPSCache\Optimization\Navigation\SpeculativeLoader;
 use WPSCache\Optimization\WordPress\BloatOptimizer;
@@ -121,6 +126,7 @@ final class Application
             $settings,
         ))->boot();
         (new PerformanceMonitor($settings))->boot();
+        (new FragmentEndpoint($settings))->boot();
 
         if (is_admin()) {
             $notices = new NoticeManager();
@@ -149,7 +155,9 @@ final class Application
         if ($settings->enabled('html_cache')) {
             $manager->register(new PageCache($settings, $commerce));
         }
-        if ($settings->enabled('redis_cache')) {
+        if ($settings->enabled('memcached_cache')) {
+            $manager->register(new MemcachedObjectCache($settings));
+        } elseif ($settings->enabled('redis_cache')) {
             $manager->register(new RedisObjectCache(
                 $settings,
                 defined('WP_REDIS_HOST') ? (string) WP_REDIS_HOST : ($settings->enabled('redis_tls') ? 'tls://' : '') . $settings->string('redis_host'),
@@ -193,17 +201,23 @@ final class Application
         ImageOptimizer $imageOptimizer,
     ): void {
         $cdn = new CdnRewriter($settings);
+        $renderedCss = new RenderedCssOptimizer($settings);
+        $renderedCss->boot();
+        $adaptiveImages = new AdaptiveImageService($settings);
+        $adaptiveImages->boot();
         (new CloudflarePurger($settings))->boot();
 
         (new FrontendOptimizer([
             new InlineCssPruner($settings->all()),
+            $renderedCss,
             new CssDeliveryOptimizer($settings->all()),
             new JavaScriptOptimizer($settings->all()),
             new ExternalAssetLocalizer($settings->all()),
-            $cdn,
             new FontOptimizer($settings->all()),
             new MediaOptimizer($settings->all()),
             new NextGenImageDelivery($settings->all()),
+            $adaptiveImages,
+            $cdn,
             new LazyRenderOptimizer($settings->all()),
             new ResourceHintOptimizer($settings->all()),
             new HtmlMinifier($settings->all()),
@@ -214,6 +228,7 @@ final class Application
         (new GravatarCache($settings))->boot();
         (new ScriptManager($settings))->boot();
         (new AltTextProvider($settings))->boot();
+        (new MediaOffloadProvider($settings))->boot();
         (new BloatOptimizer($settings->all()))->boot();
         (new Intervals())->boot();
         $preloadScheduler->boot();

@@ -19,11 +19,13 @@ final class CdnRewriterTest extends TestCase
 
         $html = '<link href="https://www.example.test/wp-content/app.css?ver=1">'
             . '<img src="/wp-content/image.webp">'
+            . '<img srcset="/wp-content/small.jpg 320w, https://www.example.test/wp-content/large.jpg?ver=2 1280w">'
             . '<a href="https://www.example.test/page/">Page</a>';
 
         $this->assertSame(
             '<link href="https://cdn.example.test/wp-content/app.css?ver=1">'
                 . '<img src="https://cdn.example.test/wp-content/image.webp">'
+                . '<img srcset="https://cdn.example.test/wp-content/small.jpg 320w, https://cdn.example.test/wp-content/large.jpg?ver=2 1280w">'
                 . '<a href="https://www.example.test/page/">Page</a>',
             $rewriter->process($html),
         );

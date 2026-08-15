@@ -1,11 +1,12 @@
 # WPS-Cache
 
 WPS-Cache is an experimental, dependency-free WordPress performance plugin with
-canonical static HTML caching, Redis object-cache integration, Varnish/Nginx/
-Cloudflare purging, asset and frontend delivery, local image optimization,
-database maintenance, monitoring, and WordPress bloat controls.
+canonical static HTML caching, selectable Redis/Memcached object caching,
+Varnish/Nginx/Cloudflare purging, browser-measured frontend optimization,
+adaptive/local image processing, optional S3/OpenAI integrations, database
+maintenance, monitoring, and WordPress bloat controls.
 
-The 0.2 architecture separates WordPress bootstrap, configuration, cache layers,
+The 0.3 architecture separates WordPress bootstrap, configuration, cache layers,
 HTML processing, infrastructure mutations, integrations, schedules, maintenance,
 and admin code. See [the architecture guide](docs/ARCHITECTURE.md) for the object
 graph and contribution boundaries.
@@ -22,7 +23,10 @@ and [the developer API](docs/DEVELOPER_API.md) for hooks, fragments, and WP-CLI.
 - WordPress 6.3 or newer
 - PHP 8.3 or newer
 - Optional: phpredis for persistent Redis caching
+- Optional: php-memcached for persistent Memcached caching
 - Optional: Varnish for reverse-proxy caching
+- Optional: Imagick/GD plus server codecs; jpegtran, Ghostscript, and pyftsubset
+  unlock exact lossless JPEG, vector-preserving PDF, and WOFF2 subsetting paths
 - Any web server supported by WordPress; page-cache hits are served by the
   dependency-free PHP drop-in without changing server configuration
 
