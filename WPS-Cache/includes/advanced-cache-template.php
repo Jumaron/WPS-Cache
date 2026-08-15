@@ -32,6 +32,16 @@ $runtimeConfig = [
         'wp_woocommerce_session_',
     ],
     'excluded_urls' => [],
+    'bypass_user_agents' => [],
+    'query_mode' => 'variants',
+    'query_allowlist' => [],
+    'query_denylist' => ['add-to-cart', 'wp_nonce', 'preview', 's'],
+    'ignored_query_params' => ['utm_*', 'fbclid', 'gclid', 'dclid', 'msclkid', '_ga'],
+    'device_mode' => 'mobile',
+    'stale_ttl' => 300,
+    'regeneration_lock' => 30,
+    'cache_feeds' => false,
+    'metrics_enabled' => false,
 ];
 $runtimeFile = WP_CONTENT_DIR . '/cache/wps-cache/runtime.php';
 $loadedConfig = is_file($runtimeFile) ? @include $runtimeFile : null;
@@ -74,12 +84,66 @@ foreach ((array) ($runtimeConfig['excluded_urls'] ?? []) as $excludedUrl) {
     }
 }
 
+$userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+foreach ((array) ($runtimeConfig['bypass_user_agents'] ?? []) as $blockedAgent) {
+    if (is_string($blockedAgent) && $blockedAgent !== '' && stripos($userAgent, $blockedAgent) !== false) {
+        return;
+    }
+}
+
 // ─── 1. RESOLVE CACHE FILE PATH ────────────────────────────────────────────
 
 // Parse URI once — extract both path and query in a single call.
 $parsed = parse_url($requestUri);
 $path   = $parsed['path'] ?? '/';
 $query  = $parsed['query'] ?? '';
+
+$matchesQueryPattern = static function (string $value, array $patterns): bool {
+    foreach ($patterns as $pattern) {
+        if (!is_string($pattern) || $pattern === '') {
+            continue;
+        }
+        $regex = '/^' . str_replace('\\*', '.*', preg_quote($pattern, '/')) . '$/i';
+        if (preg_match($regex, $value) === 1) {
+            return true;
+        }
+    }
+    return false;
+};
+
+$queryParameters = [];
+if ($query !== '') {
+    if (strlen($query) > 2048) {
+        return;
+    }
+    parse_str($query, $queryParameters);
+    if (count($queryParameters) > 25) {
+        return;
+    }
+    foreach (array_keys($queryParameters) as $queryKey) {
+        if ($matchesQueryPattern((string) $queryKey, (array) ($runtimeConfig['query_denylist'] ?? []))) {
+            return;
+        }
+        if (
+            ($runtimeConfig['query_mode'] ?? 'variants') === 'allowlist' &&
+            !$matchesQueryPattern((string) $queryKey, (array) ($runtimeConfig['query_allowlist'] ?? [])) &&
+            !$matchesQueryPattern((string) $queryKey, (array) ($runtimeConfig['ignored_query_params'] ?? []))
+        ) {
+            return;
+        }
+    }
+    if (($runtimeConfig['query_mode'] ?? 'variants') === 'ignore') {
+        $queryParameters = [];
+    } else {
+        foreach (array_keys($queryParameters) as $queryKey) {
+            if ($matchesQueryPattern((string) $queryKey, (array) ($runtimeConfig['ignored_query_params'] ?? []))) {
+                unset($queryParameters[$queryKey]);
+            }
+        }
+        ksort($queryParameters);
+    }
+    $query = http_build_query($queryParameters, '', '&', PHP_QUERY_RFC3986);
+}
 
 // Lightweight path sanitization — the web server already normalizes most of this.
 // We only defend against directory traversal (null bytes + ".." segments).
@@ -114,24 +178,19 @@ if ($host === '') {
 
 // Determine device suffix — fast strpos checks before regex fallback
 $mobileSuffix = '';
-$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-if ($ua !== '' && (
-    str_contains($ua, 'Mobile') ||
-    str_contains($ua, 'Android') ||
-    str_contains($ua, 'Kindle') ||
-    str_contains($ua, 'BlackBerry') ||
-    str_contains($ua, 'Opera Mini') ||
-    str_contains($ua, 'Opera Mobi') ||
-    str_contains($ua, 'Silk/')
-)) {
-    $mobileSuffix = '-mobile';
+$deviceMode = (string) ($runtimeConfig['device_mode'] ?? 'mobile');
+if ($deviceMode !== 'shared' && $userAgent !== '') {
+    $isTablet = preg_match('/(iPad|Tablet|Nexus (?:7|9|10)|Kindle|Silk\/)(?!.*Mobile)/i', $userAgent) === 1;
+    if ($deviceMode === 'tablet' && $isTablet) {
+        $mobileSuffix = '-tablet';
+    } elseif ($isTablet || preg_match('/(Mobile|Android|iPhone|iPod|BlackBerry|Opera Mini|Opera Mobi)/i', $userAgent) === 1) {
+        $mobileSuffix = '-mobile';
+    }
 }
 
 // Build filename
 if ($query !== '') {
-    parse_str($query, $qp);
-    ksort($qp);
-    $filename = 'index' . $mobileSuffix . '-' . md5(http_build_query($qp)) . '.html';
+    $filename = 'index' . $mobileSuffix . '-' . md5($query) . '.html';
 } else {
     $filename = 'index' . $mobileSuffix . '.html';
 }
@@ -149,8 +208,28 @@ if ($mtime === false) {
 }
 
 // TTL is generated from the validated WordPress setting.
-if (time() - $mtime > $cacheTtl) {
-    return; // Expired — fall through to WordPress for regeneration
+$age = time() - $mtime;
+$isStale = false;
+if ($age > $cacheTtl) {
+    $staleTtl = max(0, min(86400, (int) ($runtimeConfig['stale_ttl'] ?? 0)));
+    $lockTtl = max(1, min(300, (int) ($runtimeConfig['regeneration_lock'] ?? 30)));
+    $lockFile = $cacheFile . '.lock';
+    $lockMtime = @filemtime($lockFile);
+    if ($lockMtime !== false && time() - $lockMtime > $lockTtl) {
+        @unlink($lockFile);
+        $lockMtime = false;
+    }
+    if ($lockMtime === false) {
+        $lock = @fopen($lockFile, 'x');
+        if (is_resource($lock)) {
+            fclose($lock);
+            return; // This request owns regeneration; WordPress will refresh the file.
+        }
+    }
+    if ($staleTtl === 0 || $age > $cacheTtl + $staleTtl) {
+        return;
+    }
+    $isStale = true;
 }
 
 // Cache hits exit before WordPress's send_headers hook, so preserve the same
@@ -183,7 +262,7 @@ if (
     $sendSecurityHeaders();
     header('ETag: ' . $etag);
     header('Cache-Control: public, max-age=' . $cacheTtl);
-    header('X-WPS-Cache: HIT');
+    header('X-WPS-Cache: ' . ($isStale ? 'STALE' : 'HIT'));
     exit;
 }
 
@@ -217,6 +296,28 @@ if ($encoding === '' && str_contains($acceptEncoding, 'gzip')) {
 
 // ─── 5. SEND RESPONSE ──────────────────────────────────────────────────────
 
+if (!empty($runtimeConfig['metrics_enabled'])) {
+    $metricsFile = WP_CONTENT_DIR . '/cache/wps-cache/page-metrics.json';
+    $metricsHandle = @fopen($metricsFile, 'c+');
+    if (is_resource($metricsHandle) && flock($metricsHandle, LOCK_EX)) {
+        $metricsRaw = stream_get_contents($metricsHandle);
+        $metrics = is_string($metricsRaw) ? json_decode($metricsRaw, true) : [];
+        $metrics = is_array($metrics) ? $metrics : [];
+        $metrics['hits'] = (int) ($metrics['hits'] ?? 0) + 1;
+        $metrics['stale_hits'] = (int) ($metrics['stale_hits'] ?? 0) + ($isStale ? 1 : 0);
+        $metrics['bytes_served'] = (int) ($metrics['bytes_served'] ?? 0) + (int) ($serveSize ?: 0);
+        $metrics['last_hit'] = time();
+        rewind($metricsHandle);
+        ftruncate($metricsHandle, 0);
+        fwrite($metricsHandle, json_encode($metrics));
+        fflush($metricsHandle);
+        flock($metricsHandle, LOCK_UN);
+    }
+    if (is_resource($metricsHandle)) {
+        fclose($metricsHandle);
+    }
+}
+
 // Clean any output buffers that WordPress or plugins may have started
 // to avoid double-encoding or buffer overhead.
 while (ob_get_level() > 0) {
@@ -226,11 +327,12 @@ while (ob_get_level() > 0) {
 // Status + core headers
 http_response_code(200);
 $sendSecurityHeaders();
-header('Content-Type: text/html; charset=UTF-8');
+$isFeedCache = !empty($runtimeConfig['cache_feeds']) && (str_contains($path, '/feed') || isset($queryParameters['feed']));
+header('Content-Type: ' . ($isFeedCache ? 'application/rss+xml' : 'text/html') . '; charset=UTF-8');
 header('Cache-Control: public, max-age=' . $cacheTtl);
 header('ETag: ' . $etag);
 header('Vary: Accept-Encoding, Cookie');
-header('X-WPS-Cache: HIT');
+header('X-WPS-Cache: ' . ($isStale ? 'STALE' : 'HIT'));
 
 // Compression header (only if serving precompressed file)
 if ($encoding !== '') {

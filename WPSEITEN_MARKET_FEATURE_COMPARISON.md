@@ -1,23 +1,23 @@
 # WPSeiten / WPS-Cache — complete market feature comparison
 
 Research date: **2026-08-14**  
-Local version audited: **WPS-Cache 0.0.4 (experimental)**  
+Local implementation reconciled: **WPS-Cache 0.2.0 (2026-08-15)**
 Comparison basis: shipped local PHP code plus current official vendor documentation.
 
 ## Executive conclusion
 
-WPSeiten is already a broad **local caching and WordPress-tuning plugin**, but it is not yet a full image-optimization product. Its strongest differentiators are the unusual combination of static HTML caching, Redis object caching, tag-aware Varnish purge, precomputed Gzip/Brotli page variants, ETag/304 handling, local Google Fonts, WordPress bloat controls, database maintenance, and modern Speculation Rules navigation.
+WPS-Cache 0.2.0 closes the locally implementable correctness and table-stakes gaps in the original audit. It now combines canonical static page caching, Redis TLS configuration, Varnish/Nginx/Cloudflare invalidation, sitemap warmup, REST/fragment caching, frontend delivery controls, a local Imagick/GD image engine, operations tooling, multisite controls, WP-CLI, local RUM/uptime data, and an expanded automated test/build workflow.
 
-Its largest market gaps are:
+Of the 167 audited rows, **137 are now materially complete (✅), 21 are explicitly conditional or provider/environment-dependent (◐), and 9 are deliberately not claimed (—)**. Every non-green row states the missing boundary in Section A; none is presented as finished behind a toggle.
 
-1. **No actual image compression or conversion:** no lossy/lossless compression, bulk optimizer, upload-time optimizer, original backup/restore, WebP generation, AVIF generation, or adaptive image CDN.
-2. **The UI cache lifetime is not effective:** both early-serving paths hard-code 3,600 seconds.
-3. **Frontend transformations depend on page caching:** delay/defer JS, inline unused-CSS pruning, lazy loading, image dimensions, YouTube facade, Google Font localization, and CDN rewriting run inside the HTML-cache output pipeline. Turning page caching off also turns these features off in practice.
-4. **WooCommerce protection is incomplete at the earliest cache layers:** the runtime cache writer checks WooCommerce pages and cookies, but the `advanced-cache.php` drop-in and Apache/LiteSpeed rewrite rules do not check WooCommerce cart/session cookies before serving an existing cached page.
-5. **“Remove unused CSS” is much narrower than market usage:** it prunes only inline `<style>` blocks from the current DOM. It does not analyze linked stylesheets, generate per-page used CSS through a browser, or generate true critical CSS.
-6. **Operational maturity trails leaders:** no WP-CLI, no demonstrated multisite support, no settings import/export despite the README claim, no safe/test mode, no real-user/Core Web Vitals monitoring, and no automated test suite found.
+The remaining non-green rows are explicit boundaries rather than hidden placeholders:
 
-The best product direction is therefore not to copy every competitor. Preserve the strong local multi-layer cache core, then close the five table-stakes gaps: image pipeline, cache correctness, decoupled optimizations, true used/critical CSS, and production-grade operations.
+1. **External infrastructure cannot be shipped in a local plugin:** a global CDN, on-the-fly adaptive image service, Cloudflare account, Redis Sentinel/cluster, Memcached daemon, or uptime observer outside the origin must be supplied by a host/provider.
+2. **Browser-rendered analysis needs a browser execution service:** true linked used-CSS/critical-CSS generation and a full Lighthouse lab run cannot be reproduced accurately by PHP string/DOM analysis. The local plugin provides inline pruning, async CSS, safe preview, HTTP lab timing, and RUM instead.
+3. **Some codecs are environment-dependent:** Brotli, WebP, AVIF, PDF, animated media, watermarking, and exact lossless JPEG tooling depend on server extensions/delegates. The admin reports actual capabilities.
+4. **Cloud/AI features remain opt-in provider boundaries:** media offload, transforming CDN delivery, font subsetting/conversion, and vision-based alt text would require binaries, infrastructure, or third-party data transfer. WPS-Cache does not silently add those dependencies.
+
+Section A is the authoritative 0.2.0 implementation record. The broader product matrices remain the original market-research snapshot; their WPS cells should be read together with Section A where a capability changed during implementation.
 
 ## Scope and interpretation
 
@@ -50,43 +50,43 @@ This is the authoritative inventory for the local plugin. “Market reference”
 |---:|---|:---:|---|---|
 | 1 | Static HTML full-page cache | ✅ | Writes page HTML to disk by host/path | Nearly every cache suite |
 | 2 | WordPress `advanced-cache.php` drop-in | ✅ | Can serve cache before normal WordPress bootstrap | WP Rocket, W3TC, Super Page Cache |
-| 3 | Direct web-server cache serving | ◐ | Apache/LiteSpeed rewrite rules; no generated Nginx config | LiteSpeed Cache, W3TC, host caches |
-| 4 | Configurable cache lifetime | ⚠ | UI accepts TTL, but drop-in, response headers, and rewrite rules hard-code 3,600 seconds | WP Rocket, FlyingPress, Hummingbird |
-| 5 | Automatic cache purge on post save | ✅ | Clears every registered local driver, not only affected URLs | LiteSpeed tag purge, FlyingPress related-page purge |
+| 3 | Direct web-server cache serving | ◐ | Portable PHP early drop-in plus generated Nginx FastCGI/static-asset recipe; activating host-owned server configuration remains an administrator/host step | LiteSpeed Cache, W3TC, host caches |
+| 4 | Configurable cache lifetime | ✅ | Validated TTL is propagated to runtime config, early responses, Varnish, Cloudflare rules, and generated server recipes | WP Rocket, FlyingPress, Hummingbird |
+| 5 | Automatic cache purge on post save | ✅ | Purges the post, home, archive, and related taxonomy URLs plus Varnish tags instead of flushing every page | LiteSpeed tag purge, FlyingPress related-page purge |
 | 6 | Automatic purge on comments | ✅ | Full local driver flush | WP Rocket, Hummingbird |
 | 7 | Automatic purge on theme/plugin changes | ✅ | Full purge plus selected OpCache invalidation | Most full suites |
 | 8 | Manual purge all | ✅ | Admin toolbar/action | Universal |
 | 9 | Manual purge by cache layer | ✅ | HTML, Redis, and Varnish handlers exist | W3TC, LiteSpeed Cache |
-| 10 | Per-URL local page-cache purge | — | No targeted HTML-file purge API/UI | FlyingPress, WP Rocket, Super Page Cache |
+| 10 | Per-URL local page-cache purge | ✅ | Same-origin admin tool and public cache API invalidate URL variants and notify configured edge/reverse-proxy integrations | FlyingPress, WP Rocket, Super Page Cache |
 | 11 | Tag-aware Varnish purge | ✅ | Post, archive, and term cache tags via PURGE headers | LiteSpeed tags/ESI, W3TC Varnish |
 | 12 | Varnish full purge | ✅ | Regex/tag purge request | WP Rocket, Hummingbird, W3TC |
-| 13 | Cache preload/warmup | ◐ | Manual queue up to 200 posts/pages/products; scheduled queue only homepage plus 50 recent entries | WP Rocket, FlyingPress, sitemap crawlers |
+| 13 | Cache preload/warmup | ✅ | Manual concurrent queue and resumable scheduled batches cover up to 10,000 discovered URLs and all configured device variants | WP Rocket, FlyingPress, sitemap crawlers |
 | 14 | Scheduled preload | ✅ | Hourly/daily/weekly setting; desktop and mobile requests | LiteSpeed crawler, WP Super Cache preload |
-| 15 | Sitemap-driven complete preload | — | Uses WP queries rather than sitemaps; hard limits omit large-site long tail | WP Rocket, W3TC, Super Page Cache |
+| 15 | Sitemap-driven complete preload | ✅ | Recursively follows same-origin WordPress sitemap indexes with a database fallback and bounded 10,000-URL safety ceiling | WP Rocket, W3TC, Super Page Cache |
 | 16 | Separate mobile cache | ✅ | `-mobile` variant selected by user-agent regex | WP Rocket, FlyingPress, Cloudflare APO device cache |
-| 17 | Tablet-specific cache | — | Mobile/desktop only | Cloudflare APO, Hummingbird APO |
-| 18 | Query-string cache variants | ◐ | PHP drop-in hashes sorted parameters; Apache/LiteSpeed rewrite path bypasses all query strings | W3TC, FlyingPress |
-| 19 | Ignore tracking query parameters | — | No canonical ignore list for UTM, `fbclid`, etc. | WP Rocket, FlyingPress, Cloudflare |
-| 20 | Query-string denial/allow list | — | Only four hard-coded bypass parameter names | Hummingbird, Super Page Cache |
+| 17 | Tablet-specific cache | ✅ | Shared, desktop/mobile, and desktop/mobile/tablet policies use matching runtime/drop-in cache keys | Cloudflare APO, Hummingbird APO |
+| 18 | Query-string cache variants | ✅ | Runtime and early serving use the same sorted RFC3986 canonicalization policy | W3TC, FlyingPress |
+| 19 | Ignore tracking query parameters | ✅ | Wildcard-capable canonical ignore list includes UTM and common ad/click IDs | WP Rocket, FlyingPress, Cloudflare |
+| 20 | Query-string denial/allow list | ✅ | Admin-configurable wildcard allow and deny lists are enforced before file lookup/write | Hummingbird, Super Page Cache |
 | 21 | URL cache exclusions | ✅ | User-entered values compiled into a regex | Universal |
-| 22 | Cookie-based bypass | ◐ | WordPress login/comment/password cookies at early layer; Woo cookies only at runtime | FlyingPress, Super Page Cache |
-| 23 | Custom cookie bypass list | — | No UI/filter-driven list | FlyingPress, LiteSpeed Cache, Super Page Cache |
-| 24 | User-agent exclusions | — | Static-extension guard and mobile detection only | W3TC, SpeedyCache |
+| 22 | Cookie-based bypass | ✅ | WordPress, WooCommerce, and custom cookie fragments are compiled into the early runtime policy | FlyingPress, Super Page Cache |
+| 23 | Custom cookie bypass list | ✅ | Admin-configurable fragments are enforced by both early and runtime layers | FlyingPress, LiteSpeed Cache, Super Page Cache |
+| 24 | User-agent exclusions | ✅ | Admin-configurable literal user-agent exclusions run before cache lookup/write | W3TC, SpeedyCache |
 | 25 | Logged-in-user bypass | ✅ | Logged-in users bypass runtime and early cache | Universal safe default |
-| 26 | Cache for logged-in users/roles | — | No private/user-role cache | LiteSpeed Cache, FlyingPress, WP Rocket User Cache |
-| 27 | WooCommerce sensitive-page bypass | ◐ | Runtime excludes cart, checkout, account, and WC API; early cache is not Woo-cookie aware | Most commercial suites |
-| 28 | WooCommerce session/cart-cookie bypass | ⚠ | Runtime checks `woocommerce_items_in_cart` and `wp_woocommerce_session_*`; drop-in and rewrite rules can serve an existing cache before this check | FlyingPress, LiteSpeed Cache |
-| 29 | Fragment cache / ESI | — | No dynamic-hole-punching layer | LiteSpeed ESI, W3TC Pro fragment cache |
-| 30 | REST API response cache | — | No REST cache | W3TC Pro |
-| 31 | Feed/search cache | ◐ | Page cache can write eligible GET HTML, but static extensions and special request behavior are not exposed as explicit controls | W3TC |
-| 32 | Stale-while-revalidate / cache rebuild | — | Expired cache falls through synchronously | WP Super Cache rebuild, managed edge products |
-| 33 | Cache stampede protection | — | Atomic writes prevent corruption but there is no request coalescing/lock around regeneration | Managed cache/CDN products |
+| 26 | Cache for logged-in users/roles | ◐ | Opt-in allowed roles use per-user-and-role runtime variants only when `WPSC_PRIVATE_CACHE_DIR` points outside the web root; the public early drop-in never serves them | LiteSpeed Cache, FlyingPress, WP Rocket User Cache |
+| 27 | WooCommerce sensitive-page bypass | ✅ | Runtime route checks and early WooCommerce cookies cover cart, checkout, account, WC API, and active sessions | Most commercial suites |
+| 28 | WooCommerce session/cart-cookie bypass | ✅ | Cart/session/hash cookies are present in every early and runtime bypass policy | FlyingPress, LiteSpeed Cache |
+| 29 | Fragment cache / ESI | ◐ | Documented `FragmentCache::remember/forget` API uses persistent object cache; server-level ESI/hole punching is not possible without a cooperating proxy | LiteSpeed ESI, W3TC Pro fragment cache |
+| 30 | REST API response cache | ✅ | Anonymous successful GET responses support route allowlists, independent TTL, headers, index-based purge, and user-route safety | W3TC Pro |
+| 31 | Feed/search cache | ✅ | Explicit feed and search toggles, canonical query behavior, and early feed content type are implemented | W3TC |
+| 32 | Stale-while-revalidate / cache rebuild | ✅ | Configurable stale window serves existing content while one request owns regeneration | WP Super Cache rebuild, managed edge products |
+| 33 | Cache stampede protection | ✅ | Atomic exclusive lock files coalesce expired-cache regeneration with automatic dead-lock expiry | Managed cache/CDN products |
 | 34 | Precomputed Gzip page files | ✅ | `.html.gz` generated on cache write and negotiated at serve time | Cache Enabler, NitroPack/CDNs |
 | 35 | Precomputed Brotli page files | ◐ | Generated only when PHP exposes `brotli_compress`; otherwise unavailable | Cache Enabler, FlyingCDN, LiteSpeed server |
 | 36 | ETag and 304 responses | ✅ | File mtime/size-based ETag in drop-in | W3TC, Cache Enabler |
 | 37 | `Content-Length` on cached response | ✅ | Set by early-serving drop-in | Advanced server caches |
 | 38 | Browser cache policy for HTML | ✅ | `public, max-age=3600` | Most cache suites |
-| 39 | Browser caching for static assets | — | No general CSS/JS/image expiry rules | W3TC, Hummingbird, SpeedyCache |
+| 39 | Browser caching for static assets | ◐ | Generated Nginx and Apache recipes set one-year immutable policies; applying server-owned configuration remains host-dependent | W3TC, Hummingbird, SpeedyCache |
 | 40 | Cache-status response header | ✅ | `X-WPS-Cache: HIT` on early/direct serves | Most mature cache products |
 
 ### A2. Object, server, CDN, and edge caching
@@ -98,19 +98,19 @@ This is the authoritative inventory for the local plugin. “Market reference”
 | 43 | Redis key signing / safe serialization | ✅ | Values are serialized and signed | Security-oriented differentiator |
 | 44 | Redis compression | ✅ | Uses supported phpredis compression options | W3TC/Redis specialists |
 | 45 | Redis group flush/multiple operations | ✅ | Modern WordPress cache capability functions exist | Redis Object Cache |
-| 46 | Redis TLS/sentinel/cluster/replication | — | Single host/port model | Redis Object Cache Pro, enterprise stacks |
+| 46 | Redis TLS/sentinel/cluster/replication | ◐ | TLS is wired through the UI, mode-0600 early config, runtime client, and drop-in; Sentinel/cluster/replication need an enterprise topology/client and remain unimplemented | Redis Object Cache Pro, enterprise stacks |
 | 47 | Memcached object cache | — | Redis only | LiteSpeed Cache, W3TC, SiteGround |
-| 48 | Separate database-query cache | — | Persistent object cache can reduce queries; no W3TC-style DB cache engine | W3TC |
+| 48 | Separate database-query cache | ◐ | Redis-backed WordPress object cache, fragment API, and REST response cache cover safe application queries; raw SQL interception is deliberately not attempted | W3TC |
 | 49 | Varnish integration | ✅ | Adds cache tags/control headers and sends async PURGE | W3TC, WP Rocket |
-| 50 | Nginx FastCGI-cache integration | — | No Nginx config/purge integration | Nginx Helper, host plugins |
+| 50 | Nginx FastCGI-cache integration | ✅ | Generated FastCGI/static recipe plus configurable targeted/full PURGE endpoint integration | Nginx Helper, host plugins |
 | 51 | Static CDN URL rewriting | ✅ | Rewrites `src`, `href`, `srcset`, and lazy-load attributes for selected extensions | WP Rocket, Perfmatters, Autoptimize |
-| 52 | Multiple CDN hostnames by asset type | — | One CDN base URL | WP Rocket, W3TC |
+| 52 | Multiple CDN hostnames by asset type | ✅ | Optional CSS, JavaScript, and media origins fall back to the common CDN URL | WP Rocket, W3TC |
 | 53 | Built-in CDN | — | User supplies CDN URL | NitroPack, FlyingCDN, QUIC.cloud |
 | 54 | Cloudflare API authentication | ✅ | Zone ID plus API token | WP Rocket, Hummingbird, Super Page Cache |
 | 55 | Cloudflare purge on local clear | ✅ | Purges the entire Cloudflare zone cache | Many Cloudflare integrations |
-| 56 | Granular Cloudflare URL purge | — | Always `purge_everything` | FlyingPress, Super Page Cache |
-| 57 | Configure Cloudflare full-page edge cache | — | Purge only; no Cache Rules/APO/Worker configuration | FlyingPress, Super Page Cache, APO |
-| 58 | Full-page edge CDN | — | No edge HTML service | NitroPack, FlyingCDN, QUIC.cloud, APO |
+| 56 | Granular Cloudflare URL purge | ✅ | Targeted invalidation uses Cloudflare's file URL purge payload; full purge remains available | FlyingPress, Super Page Cache |
+| 57 | Configure Cloudflare full-page edge cache | ✅ | Explicit opt-in synchronizes one identified anonymous HTML Cache Rule without replacing unrelated rules | FlyingPress, Super Page Cache, APO |
+| 58 | Full-page edge CDN | ◐ | Cloudflare full-page rule integration is complete, but the global network/account is external infrastructure and cannot be bundled in a local plugin | NitroPack, FlyingCDN, QUIC.cloud, APO |
 | 59 | CDN cache metrics | — | No edge hit/miss/bandwidth reporting | NitroPack, Cloudflare, CDN services |
 
 ### A3. CSS, JavaScript, HTML, and navigation
@@ -119,77 +119,77 @@ This is the authoritative inventory for the local plugin. “Market reference”
 |---:|---|:---:|---|---|
 | 60 | CSS minification | ✅ | Local enqueued files up to 1 MB; skips already-minified/external files | Most optimizer suites |
 | 61 | CSS minification exclusions | ✅ | Handles/filename/path patterns | Most optimizer suites |
-| 62 | CSS combination | — | No aggregation | LiteSpeed Cache, W3TC, Autoptimize |
+| 62 | CSS combination | ✅ | Opt-in local aggregation combines simple enqueued handles while leaving inline/conditional/complex handles untouched for compatibility | LiteSpeed Cache, W3TC, Autoptimize |
 | 63 | Remove unused CSS from linked stylesheets | — | Linked `.css` files are not analyzed | WP Rocket, FlyingPress, Perfmatters |
 | 64 | Remove unused CSS from inline styles | ◐ | Server-side selector pruning of `<style>` blocks against current DOM | Rare local/no-SaaS differentiator, but risky/narrow |
 | 65 | CSS safelist | ✅ | Built-in and user wildcard safelist | WP Rocket, Perfmatters, LiteSpeed Cache |
 | 66 | True per-page critical CSS generation | — | Class name says CriticalCSS, but implementation is inline tree-shaking, not above-the-fold rendering analysis | WP Rocket, LiteSpeed/QUIC.cloud, NitroPack |
-| 67 | Async/deferred non-critical CSS | — | No stylesheet-loading strategy | LiteSpeed Cache, Autoptimize, W3TC Pro |
-| 68 | CSS delivery test/safe mode | — | No unpublished preview/rollback flow | Hummingbird Safe Mode, NitroPack Test Mode |
+| 67 | Async/deferred non-critical CSS | ✅ | Opt-in preload/onload delivery preserves critical/media styles and adds a noscript fallback | LiteSpeed Cache, Autoptimize, W3TC Pro |
+| 68 | CSS delivery test/safe mode | ✅ | Signed preview-only safe mode, presets, ten-version configuration history, and rollback are implemented | Hummingbird Safe Mode, NitroPack Test Mode |
 | 69 | JavaScript minification | ✅ | Local enqueued files up to 1 MB; conservative tokenizer | Most optimizer suites |
 | 70 | JS minification exclusions | ✅ | Handle/path/filename patterns | Most optimizer suites |
-| 71 | JavaScript combination | — | No aggregation | W3TC, LiteSpeed Cache, Autoptimize |
+| 71 | JavaScript combination | ✅ | Opt-in local aggregation skips scripts with inline data, conditionals, or external sources | W3TC, LiteSpeed Cache, Autoptimize |
 | 72 | Defer external JavaScript | ✅ | Adds `defer`; excludes critical scripts; lowers fetch priority | WP Rocket, Perfmatters |
-| 73 | Defer inline JavaScript | — | Inline scripts are not handled by defer mode | Perfmatters, Autoptimize |
+| 73 | Defer inline JavaScript | ✅ | Eligible inline blocks can execute in order after DOMContentLoaded | Perfmatters, Autoptimize |
 | 74 | Delay external JavaScript until interaction | ✅ | Replaces type/source and restores sequentially | WP Rocket, FlyingPress, Perfmatters |
 | 75 | Delay inline JavaScript until interaction | ✅ | Inline blocks of 100+ bytes; 8-second fallback | WP Rocket, Perfmatters |
 | 76 | Delay/defer exclusions | ✅ | Built-in critical list plus user patterns | Most commercial optimizers |
-| 77 | Delay execution timeout | ◐ | Fixed eight seconds; no UI control | Perfmatters |
-| 78 | Remove unused JavaScript/assets per page | — | No script manager or per-page dequeue UI | Perfmatters, Hummingbird, Super Page Cache |
-| 79 | HTML minification | — | Cached HTML is not minified | NitroPack, W3TC, Autoptimize, Breeze |
-| 80 | Self-host external CSS/JS | — | Google Fonts only | FlyingPress |
-| 81 | Lazy-render below-fold HTML/elements | — | No `content-visibility`/selector feature | FlyingPress, Perfmatters, SpeedyCache |
+| 77 | Delay execution timeout | ✅ | 0–30,000 ms admin control is injected into the interaction bootloader | Perfmatters |
+| 78 | Remove unused JavaScript/assets per page | ✅ | Rule-based Script Manager dequeues script/style handles by URL wildcard and visitor role; WooCommerce rules have dedicated toggles | Perfmatters, Hummingbird, Super Page Cache |
+| 79 | HTML minification | ✅ | Conservative processor removes comments/inter-tag whitespace while preserving raw-text and preformatted nodes | NitroPack, W3TC, Autoptimize, Breeze |
+| 80 | Self-host external CSS/JS | ✅ | Exact administrator-approved CSS/JS URLs are downloaded, CSS-relative paths normalized, and cached locally for seven days | FlyingPress |
+| 81 | Lazy-render below-fold HTML/elements | ✅ | Validated selectors receive `content-visibility:auto` and intrinsic-size containment | FlyingPress, Perfmatters, SpeedyCache |
 | 82 | Speculation Rules prerender | ✅ | Same-origin moderate prerender with sensitive-path exclusions | Perfmatters, newer performance plugins |
 | 83 | Hover/intersection prefetch fallback | ✅ | Legacy-browser fallback uses prefetch | WP Rocket Preload Links, FlyingPress |
-| 84 | DNS prefetch UI | — | No user-defined domains | W3TC, SpeedyCache, SiteGround |
-| 85 | Preconnect UI | — | No general user-defined domains | Perfmatters, SpeedyCache |
-| 86 | Generic resource preload UI | — | No font/image/file URL list | Perfmatters, Hummingbird, SpeedyCache |
+| 84 | DNS prefetch UI | ✅ | Capability-focused Web Experience screen emits validated absolute origins | W3TC, SpeedyCache, SiteGround |
+| 85 | Preconnect UI | ✅ | User-defined origins receive crossorigin preconnect hints | Perfmatters, SpeedyCache |
+| 86 | Generic resource preload UI | ✅ | Images, CSS, JS, fonts, and fetch resources receive inferred `as` attributes | Perfmatters, Hummingbird, SpeedyCache |
 
 ### A4. Images, iframes, video, and fonts
 
 | # | Feature | WPSeiten | Actual implementation / limitation | Market reference |
 |---:|---|:---:|---|---|
-| 87 | Image lossy compression | — | No image encoder or cloud API | ShortPixel, Imagify, EWWW, Smush |
-| 88 | Image lossless compression | — | No image encoder or cloud API | ShortPixel, Imagify, EWWW, TinyPNG |
-| 89 | Smart/content-aware compression | — | None | Optimole, Imagify, TinyPNG |
-| 90 | Automatic optimization on upload | — | None | All dedicated image optimizers |
-| 91 | Bulk optimization of existing library | — | None | All dedicated image optimizers |
-| 92 | Original-image backup and restore | — | None | ShortPixel, Imagify, EWWW, reSmush.it |
-| 93 | Resize oversized uploads | — | Does not resize files | ShortPixel, Imagify, TinyPNG, SiteGround |
-| 94 | Optimize thumbnails/image sizes selectively | — | None | ShortPixel, LiteSpeed Cache, TinyPNG |
-| 95 | Optimize custom folders | — | None | ShortPixel, EWWW, Converter for Media |
-| 96 | PDF optimization | — | None | ShortPixel, Imagify, EWWW Pro |
-| 97 | Animated GIF optimization | — | None | ShortPixel, EWWW, NitroPack |
-| 98 | EXIF preserve/strip control | — | None | ShortPixel, WP-Optimize, TinyPNG, reSmush.it |
-| 99 | Generate WebP files | — | Recognizes/rewrites existing `.webp`, but never creates one | Most image optimizers |
-| 100 | Generate AVIF files | — | Recognizes/rewrites existing `.avif`, but never creates one | LiteSpeed, Imagify, EWWW, Smush, Optimole |
-| 101 | Browser-aware next-gen fallback | — | No format negotiation for images | Dedicated image optimizers/CDNs |
+| 87 | Image lossy compression | ✅ | Local Imagick/GD pipeline provides quality control and size-aware quality adjustment | ShortPixel, Imagify, EWWW, Smush |
+| 88 | Image lossless compression | ◐ | Lossless-oriented PNG/high-fidelity mode is local; truly lossless JPEG recompression still needs a server jpegtran-style codec | ShortPixel, Imagify, EWWW, TinyPNG |
+| 89 | Smart/content-aware compression | ◐ | Pixel-count-aware quality and focal-coordinate provider exist; ML/vision-aware quality requires an optional provider | Optimole, Imagify, TinyPNG |
+| 90 | Automatic optimization on upload | ✅ | Runs after WordPress metadata generation and updates resized full-image dimensions | All dedicated image optimizers |
+| 91 | Bulk optimization of existing library | ✅ | Resumable 100-item media-library batches expose progress and safely pause when the tab closes | All dedicated image optimizers |
+| 92 | Original-image backup and restore | ✅ | Sidecar originals are created once; per-attachment restore updates metadata dimensions | ShortPixel, Imagify, EWWW, reSmush.it |
+| 93 | Resize oversized uploads | ✅ | Configurable width/height bounds use proportional resize or opt-in focal crop | ShortPixel, Imagify, TinyPNG, SiteGround |
+| 94 | Optimize thumbnails/image sizes selectively | ✅ | Empty means all sizes; explicit WordPress size-name allowlist narrows processing | ShortPixel, LiteSpeed Cache, TinyPNG |
+| 95 | Optimize custom folders | ✅ | Validated custom roots are available to the public API and recursive WP-CLI `--path` processing | ShortPixel, EWWW, Converter for Media |
+| 96 | PDF optimization | ◐ | PDF files enter the backup/provider pipeline, but built-in raster rewrite is refused because it would destroy vector text; a preserving provider must implement `wpsc_optimize_image_file` | ShortPixel, Imagify, EWWW Pro |
+| 97 | Animated GIF optimization | ◐ | Imagick coalesces, optimizes, and reconstructs multi-frame GIF/APNG files; unavailable without Imagick | ShortPixel, EWWW, NitroPack |
+| 98 | EXIF preserve/strip control | ✅ | Metadata preservation is explicit; default strips profiles/metadata for size | ShortPixel, WP-Optimize, TinyPNG, reSmush.it |
+| 99 | Generate WebP files | ◐ | Generates sidecar files with Imagick or GD and reports real codec availability in admin | Most image optimizers |
+| 100 | Generate AVIF files | ◐ | Generates sidecar files when Imagick/GD provides AVIF; unavailable codec is reported instead of hidden | LiteSpeed, Imagify, EWWW, Smush, Optimole |
+| 101 | Browser-aware next-gen fallback | ✅ | Local variants are wrapped in ordered AVIF/WebP `<picture>` sources with original fallback | Dedicated image optimizers/CDNs |
 | 102 | Image CDN | ◐ | Generic CDN rewrite can deliver images, but does not transform/optimize them | Optimole, EWWW Easy IO, Smush CDN |
-| 103 | On-the-fly adaptive resize | — | None | Optimole, NitroPack, Cloudinary, Cloudflare Images |
-| 104 | Generate responsive `srcset`/`sizes` | — | Preserves/rewrites existing `srcset`; does not create it | FlyingPress, Optimole, Smush |
+| 103 | On-the-fly adaptive resize | — | Intentionally not provided: secure transform-at-request scale requires a dedicated image service/cache and cannot be equivalent inside a normal WordPress request | Optimole, NitroPack, Cloudinary, Cloudflare Images |
+| 104 | Generate responsive `srcset`/`sizes` | ✅ | Missing attributes are generated from WordPress attachment metadata and work with CDN/next-gen delivery | FlyingPress, Optimole, Smush |
 | 105 | Image lazy loading | ✅ | Native `loading="lazy"` plus `decoding="async"` | Nearly all frontend optimizers |
-| 106 | CSS background-image lazy loading | — | `<img>` only | WP Rocket, Perfmatters, Optimole |
+| 106 | CSS background-image lazy loading | ◐ | Inline background URLs use IntersectionObserver; linked-stylesheet background discovery remains a browser/CSS-analysis task | WP Rocket, Perfmatters, Optimole |
 | 107 | Iframe lazy loading | ✅ | Native `loading="lazy"` | WP Rocket, FlyingPress, Smush |
-| 108 | Video lazy loading | ◐ | Generic iframe lazy load; no native `<video>` handling | FlyingPress, Cloudinary |
+| 108 | Video lazy loading | ✅ | Native video/source URLs move to data attributes until an observer approaches the viewport | FlyingPress, Cloudinary |
 | 109 | YouTube facade | ✅ | Replaces iframe with thumbnail/player bootloader | WP Rocket, FlyingPress, Perfmatters |
-| 110 | Vimeo/Google Maps facade | — | YouTube only | Perfmatters, W3TC Pro |
-| 111 | Missing image dimensions | ◐ | Local physical images only; runs only through HTML-cache pipeline | WP Rocket, FlyingPress, Perfmatters |
-| 112 | Automatically detect above-fold/LCP image | — | First N images are assumed above-fold; no rendered viewport analysis | FlyingPress, NitroPack, WP Rocket |
+| 110 | Vimeo/Google Maps facade | ✅ | Both use a lightweight click-to-load surface; YouTube retains its thumbnail-specific facade | Perfmatters, W3TC Pro |
+| 111 | Missing image dimensions | ✅ | Local physical images use cached dimensions in the independent frontend pipeline, regardless of page caching | WP Rocket, FlyingPress, Perfmatters |
+| 112 | Automatically detect above-fold/LCP image | ✅ | Anonymous sampled browser LCP observations teach a per-path image map; leading-image fallback covers unsampled/new pages | FlyingPress, NitroPack, WP Rocket |
 | 113 | Configurable leading-image lazy-load exclusion | ✅ | Numeric first-image count, default three | Perfmatters |
-| 114 | LCP image preload | ◐ | Marks leading images eager/high priority but does not emit `<link rel="preload">` | FlyingPress, NitroPack, Smush |
-| 115 | LQIP/blur placeholder | — | None | LiteSpeed/QUIC.cloud, Optimole, Smush |
-| 116 | Smart crop/focal subject | — | None | ShortPixel, Optimole, Cloudinary |
-| 117 | Retina/DPR-aware delivery | — | None | Optimole, EWWW, Cloudinary |
-| 118 | Watermarking | — | None | Optimole, EWWW Pro |
+| 114 | LCP image preload | ✅ | Emits a real high-priority image preload for learned or leading LCP candidates | FlyingPress, NitroPack, Smush |
+| 115 | LQIP/blur placeholder | ✅ | Image jobs create tiny low-quality JPEG previews and lazy markup uses them as background placeholders, with a neutral fallback | LiteSpeed/QUIC.cloud, Optimole, Smush |
+| 116 | Smart crop/focal subject | ◐ | Opt-in focal crop plus `wpsc_image_crop_focus` provider filter; automatic vision subject detection needs a provider | ShortPixel, Optimole, Cloudinary |
+| 117 | Retina/DPR-aware delivery | ✅ | WordPress responsive candidates and generated `srcset/sizes` provide DPR-aware browser selection | Optimole, EWWW, Cloudinary |
+| 118 | Watermarking | ◐ | Attachment-ID watermark compositing is implemented when Imagick is available | Optimole, EWWW Pro |
 | 119 | Media offload/cloud library | — | None | Optimole, Cloudinary |
-| 120 | AI alt text/captioning | — | None | ShortPixel (beta), media/DAM products |
+| 120 | AI alt text/captioning | ◐ | Safe opt-in provider filter writes only missing alt text; no third-party AI service or data transfer is bundled | ShortPixel (beta), media/DAM products |
 | 121 | Localize Google Fonts | ✅ | Downloads Google CSS and font files to local cache | Perfmatters, FlyingPress, WP Rocket |
 | 122 | `font-display: swap` | ✅ | Rewrites inline/downloaded `@font-face` rules | Most frontend optimizers |
-| 123 | Font preload | — | No automatic or manual font preloads | WP Rocket, FlyingPress, Perfmatters |
+| 123 | Font preload | ✅ | Manual font URLs receive preload, inferred font type, and crossorigin attributes | WP Rocket, FlyingPress, Perfmatters |
 | 124 | Font subsetting | — | None | NitroPack |
 | 125 | Font conversion/compression to WOFF2 | — | None | NitroPack |
-| 126 | System-font-first strategy | — | None | FlyingPress |
-| 127 | Local Gravatar cache | — | None | FlyingPress, LiteSpeed Cache, SpeedyCache |
+| 126 | System-font-first strategy | ✅ | Opt-in system stack is injected through a dedicated CSS variable/style | FlyingPress |
+| 127 | Local Gravatar cache | ✅ | Official-host avatar responses are validated and cached locally for seven days | FlyingPress, LiteSpeed Cache, SpeedyCache |
 
 ### A5. Database, WordPress bloat, security, and operations
 
@@ -202,7 +202,7 @@ This is the authoritative inventory for the local plugin. “Market reference”
 | 132 | Clean expired transients | ✅ | Manual and scheduled | Most DB optimizers |
 | 133 | Clean all transients | ✅ | Optional, manual/scheduled | WP-Optimize |
 | 134 | Optimize database tables | ✅ | Only site-prefix tables with overhead; batched | WP-Optimize, SiteGround |
-| 135 | Orphan metadata/table analysis | — | No orphan relationship cleanup/report | WP-Optimize Premium |
+| 135 | Orphan metadata/table analysis | ✅ | Reports and selectively removes orphan post, comment, term, and user metadata with join-based queries | WP-Optimize Premium |
 | 136 | Scheduled database cleanup | ✅ | Disabled/hourly/daily/weekly controls | WP-Optimize, WP Rocket |
 | 137 | Disable emojis | ✅ | Frontend/admin/feed/mail hooks | Perfmatters, LiteSpeed Cache |
 | 138 | Disable embeds | ✅ | Discovery, host JS, TinyMCE, rewrite rules | Perfmatters, SpeedyCache |
@@ -211,29 +211,29 @@ This is the authoritative inventory for the local plugin. “Market reference”
 | 141 | Hide WordPress version | ✅ | Generator removal | Perfmatters/security plugins |
 | 142 | Remove WLW/RSD links | ✅ | Head-link removal | Perfmatters |
 | 143 | Remove shortlink | ✅ | Head-link removal | Perfmatters |
-| 144 | Disable RSS feeds | ✅ | Setting exists but is not exposed in the visible settings UI | Perfmatters, SpeedyCache |
+| 144 | Disable RSS feeds | ✅ | Visible Tweaks toggle removes discovery links and disables feed behavior | Perfmatters, SpeedyCache |
 | 145 | Disable self-pingbacks | ✅ | Removes same-site URLs before ping | Perfmatters |
 | 146 | Remove jQuery Migrate | ✅ | Removes dependency for frontend jQuery | Perfmatters, SpeedyCache |
 | 147 | Remove Dashicons for visitors | ✅ | Keeps them for logged-in admin-bar users | Perfmatters, SpeedyCache |
 | 148 | Remove version query strings | ✅ | Removes `ver` from CSS/JS URLs | Breeze, SiteGround |
 | 149 | Granular Heartbeat frequency | ✅ | 15–120 seconds | WP Rocket, Perfmatters, Breeze |
 | 150 | Disable Heartbeat by area | ✅ | Admin, dashboard, editor, frontend | Perfmatters, SiteGround |
-| 151 | Disable WooCommerce cart fragments | — | No frontend bloat control | Hummingbird, Perfmatters, SpeedyCache |
-| 152 | Disable WooCommerce scripts/styles by page | — | No script manager/asset unloading | Perfmatters, SpeedyCache |
+| 151 | Disable WooCommerce cart fragments | ✅ | Dedicated toggle dequeues `wc-cart-fragments` | Hummingbird, Perfmatters, SpeedyCache |
+| 152 | Disable WooCommerce scripts/styles by page | ✅ | Dedicated non-commerce unload plus general URL/role Script Manager rules | Perfmatters, SpeedyCache |
 | 153 | Security response headers | ✅ | HSTS on HTTPS, nosniff, frame policy, referrer and permissions policies | Unusual for cache plugins |
-| 154 | Cache/Redis dashboard | ◐ | Cached-page file count/size and Redis connection/hit ratio; no page-hit data | W3TC stats, NitroPack dashboard |
-| 155 | Configurable metrics retention | ⚠ | Setting exists but retention is not used by the collector | Monitoring suites |
-| 156 | Lab performance tests | — | No PageSpeed/Lighthouse test | Hummingbird, SiteGround |
-| 157 | Real-user Core Web Vitals | — | No RUM | FlyingPress, NitroPack/Rocket add-ons |
-| 158 | Uptime monitoring | — | None | Hummingbird Pro |
-| 159 | Settings import/export | ⚠ | README claims it; no implementation found in source | WP Rocket, Breeze, LiteSpeed Cache |
-| 160 | Presets | — | No optimization presets | LiteSpeed Cache, NitroPack |
-| 161 | Safe/test mode | — | No preview-only optimization mode | Hummingbird, NitroPack |
-| 162 | Version/config rollback | — | None | WP Rocket, preset/config products |
-| 163 | WP-CLI | — | No commands | W3TC, LiteSpeed Cache, image leaders |
-| 164 | Multisite/network controls | — | No explicit network activation/settings implementation found | W3TC, Autoptimize, image leaders |
-| 165 | Public developer API/hooks | ◐ | A few actions exist; no documented API surface | W3TC, LiteSpeed Cache, ShortPixel |
-| 166 | Automated tests | — | No test directory/configuration found; all 31 PHP files do pass `php -l` | Mature commercial products |
+| 154 | Cache/Redis dashboard | ✅ | Page hits/misses/stale hits/hit ratio/bytes, cache files/size, and Redis health/hit data are recorded | W3TC stats, NitroPack dashboard |
+| 155 | Configurable metrics retention | ✅ | RUM samples are age-pruned and bounded; cache traffic uses constant-size cumulative counters | Monitoring suites |
+| 156 | Lab performance tests | ◐ | Authenticated HTTP loopback test reports status, total time, bytes, and cache status; full Lighthouse rendering needs a browser service/CLI | Hummingbird, SiteGround |
+| 157 | Real-user Core Web Vitals | ✅ | Privacy-conscious 10% local sampling stores LCP, CLS, INP, TTFB and p75 summaries, and trains LCP image detection | FlyingPress, NitroPack/Rocket add-ons |
+| 158 | Uptime monitoring | ✅ | Hourly/daily same-origin cron check records status, latency, and availability locally | Hummingbird Pro |
+| 159 | Settings import/export | ✅ | Versioned JSON omits secrets on export and validates/retains secrets on import | WP Rocket, Breeze, LiteSpeed Cache |
+| 160 | Presets | ✅ | Safe, balanced, and aggressive presets are explicit admin actions | LiteSpeed Cache, NitroPack |
+| 161 | Safe/test mode | ✅ | Risky transformations are disabled publicly and enabled through signed preview URLs | Hummingbird, NitroPack |
+| 162 | Version/config rollback | ✅ | Last ten changed configurations are timestamped and one-click restorable | WP Rocket, preset/config products |
+| 163 | WP-CLI | ✅ | Purge, targeted purge, sitemap preload, image optimize/restore/custom folders, database cleanup, and status commands | W3TC, LiteSpeed Cache, image leaders |
+| 164 | Multisite/network controls | ✅ | Network settings page can enable and populate a centralized profile while cache paths remain site/host isolated | W3TC, Autoptimize, image leaders |
+| 165 | Public developer API/hooks | ✅ | Fragment API, lifecycle/image/provider hooks, REST controls, CLI surface, and `docs/DEVELOPER_API.md` are documented | W3TC, LiteSpeed Cache, ShortPixel |
+| 166 | Automated tests | ✅ | Zero-dependency suite covers unit, integration, lifecycle, drop-in subprocess, and deterministic build behavior | Mature commercial products |
 | 167 | Uninstall cleanup | ✅ | Dedicated `uninstall.php` exists | Standard expectation |
 
 ## B. Market matrix — caching and delivery
@@ -572,6 +572,8 @@ These are not one-for-one cache plugins, but they define expectations that WPSei
 
 ## I. Recommended WPSeiten roadmap
 
+> **0.2.0 reconciliation:** Items 1–3 and 5–16 have been implemented locally or through explicit provider/server boundaries. Item 4 is implemented as a local Imagick/GD engine with honest codec diagnostics. The only intentionally incomplete portions are browser/SaaS/infrastructure capabilities listed in the executive conclusion and in the limitation register below.
+
 ### P0 — correctness and table stakes
 
 1. **Wire `cache_lifetime` end-to-end** into drop-in TTL checks, generated rewrite headers, and cleanup; regenerate configs safely on save.
@@ -596,6 +598,20 @@ These are not one-for-one cache plugins, but they define expectations that WPSei
 14. Core Web Vitals/RUM dashboard and cache/preload/optimization job telemetry.
 15. Redis TLS/Sentinel/cluster support, optional Memcached, and documented public hooks.
 16. Preserve the local-first advantage: make any SaaS image/CSS service optional and expose a provider interface.
+
+### 0.2.0 limitation register
+
+| Capability | Why it is not marked native-complete | Extension point / safe alternative |
+|---|---|---|
+| Memcached object-cache drop-in | WordPress permits one object-cache drop-in and this release preserves the signed/compressed Redis implementation; a daemon/client cannot be bundled | PHP Memcached is diagnosed; a future selectable drop-in backend can implement the same lifecycle |
+| Redis Sentinel/cluster/replication | Requires a topology-aware client and operator endpoints/credentials | Redis TLS is complete; constants and provider boundaries remain available for managed Redis |
+| Bundled/global CDN and transforming image CDN | Requires global infrastructure, billing, origin controls, and abuse protection | Multi-origin static CDN plus Cloudflare full-page rule/purge integration |
+| Linked used CSS and true critical CSS | Accurate output requires running the final page in a browser at multiple viewport/state combinations | Inline pruning is accurately labeled; async CSS, safelist, signed test mode, and rollback reduce risk |
+| Media offload/cloud library | Needs remote storage credentials, lifecycle policy, and URL ownership | `wpsc_*` provider hooks and multi-CDN origins |
+| Font subsetting/conversion | Safe subsetting requires shaping/font binaries and script/language coverage | Local Google fonts, font-display, manual preloads, system stack, and provider-ready architecture |
+| Bundled AI alt text | Would transmit media to a third party and require a model/account/privacy agreement | Opt-in `wpsc_generate_image_alt_text` filter writes only missing alt text |
+| Full Lighthouse/PageSpeed lab | Needs Chromium or a remote lab service | Authenticated origin HTTP lab plus local Core Web Vitals RUM/p75 |
+| External uptime observer | Origin cron cannot detect a total origin outage while it is down | Local scheduled availability history; external monitors can consume the public site independently |
 
 ## J. Source register
 

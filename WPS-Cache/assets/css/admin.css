@@ -30,6 +30,71 @@
     --wpsc-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.wpsc-nav-group {
+  display: block;
+  padding: 18px 18px 6px;
+  color: var(--wpsc-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.wpsc-inline-tool,
+.wpsc-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.wpsc-inline-tool .wpsc-input {
+  flex: 1 1 360px;
+}
+
+.wpsc-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.wpsc-capability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--wpsc-border);
+  border-radius: 10px;
+  background: var(--wpsc-bg-subtle, #f8fafc);
+}
+
+.wpsc-code-wrap {
+  position: relative;
+  margin: 8px 0 20px;
+}
+
+.wpsc-code-box {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--wpsc-border);
+  border-radius: 10px;
+  background: #101827;
+  color: #dbeafe;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+}
+
+.wpsc-code-wrap .wpsc-copy-trigger {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 /* Reset */
 .wpsc-wrap {
     font-family:

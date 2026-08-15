@@ -4,7 +4,7 @@ Tags: caching, performance, HTML, Redis, Varnish
 Requires at least: 6.3
 Tested up to: 6.7
 Requires PHP: 8.3
-Stable tag: 0.1.1
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,17 @@ This plugin connects to external caching services to optimize performance:
 
 - **Varnish Cache:**
   The plugin sends HTTP requests (such as purge requests and connection checks) to a specified Varnish caching server. No personal or sensitive data is transmitted. For additional details, please review the [Varnish Cache documentation](https://varnish-cache.org/), its [Terms of Service](https://varnish-cache.org/TOS), and [Privacy Policy](https://varnish-cache.org/privacy).
+
+- **Cloudflare (optional):**
+  When explicitly enabled with an API token and zone ID, the plugin sends cache-purge requests and can synchronize one identified full-page Cache Rule. Requests go to `api.cloudflare.com`; review Cloudflare's terms and privacy policy before enabling it.
+
+- **Google Fonts and approved external assets (optional):**
+  Localization downloads only Google Fonts styles/files and exact CSS/JavaScript URLs entered by an administrator. Cached copies are served from this WordPress installation.
+
+- **Gravatar (optional):**
+  Local Gravatar caching downloads avatar images from official Gravatar hosts and stores them for seven days.
+
+Real-user performance monitoring, image statistics, and uptime history stay inside the WordPress database. The RUM beacon samples anonymous paths and timing values; it does not intentionally store IP addresses, cookies, user IDs, or full query strings.
 
 == Installation ==
 1. Upload the `WPS-Cache` folder to the `/wp-content/plugins/` directory.
@@ -39,6 +50,11 @@ This plugin is currently experimental. We recommend testing in a staging environ
 2. Front-end cache status indicator.
 
 == Changelog ==
+= 0.2.0 =
+* Added canonical query/device cache policies, per-URL purge, sitemap preload batches, stale rebuild locking, REST caching, and Nginx/Cloudflare integrations.
+* Added HTML/resource delivery, responsive media, local image processing with backup/restore and WebP/AVIF, Script Manager rules, monitoring, WP-CLI, and multisite controls.
+* Reorganized the admin application into capability-focused navigation with diagnostics, presets, safe preview mode, import/export, and rollback.
+
 = 0.1.1 =
 * Stopped writing Apache/LiteSpeed directives to `.htaccess` on activation.
 * Added ownership-scoped cleanup for server rules created by older releases.

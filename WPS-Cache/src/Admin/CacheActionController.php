@@ -8,6 +8,7 @@ use WPSCache\Admin\UI\NoticeManager;
 use WPSCache\Cache\CacheManager;
 use WPSCache\Infrastructure\Http\SameOriginUrlGuard;
 use WPSCache\Infrastructure\WordPress\DropInManager;
+use WPSCache\Scheduling\PreloadUrlProvider;
 
 final class CacheActionController
 {
@@ -16,6 +17,7 @@ final class CacheActionController
         private readonly DropInManager $dropIns,
         private readonly NoticeManager $notices,
         private readonly SameOriginUrlGuard $urlGuard,
+        private readonly ?PreloadUrlProvider $preloadUrls = null,
     ) {
     }
 
@@ -24,6 +26,7 @@ final class CacheActionController
         add_action('admin_post_wpsc_clear_cache', [$this, 'clear']);
         add_action('admin_post_wpsc_install_object_cache', [$this, 'installObjectCache']);
         add_action('admin_post_wpsc_remove_object_cache', [$this, 'removeObjectCache']);
+        add_action('admin_post_wpsc_purge_url', [$this, 'purgeUrl']);
         add_action('wp_ajax_wpsc_get_preload_urls', [$this, 'getPreloadUrls']);
         add_action('wp_ajax_wpsc_process_preload_url', [$this, 'preloadUrl']);
     }
@@ -69,9 +72,25 @@ final class CacheActionController
         $this->redirectBack();
     }
 
+    public function purgeUrl(): void
+    {
+        $this->authorize('wpsc_purge_url');
+        $submitted = isset($_POST['url']) && is_string($_POST['url']) ? esc_url_raw(wp_unslash($_POST['url'])) : '';
+        if (!$this->urlGuard->allows($submitted)) {
+            $this->notices->add('Only URLs on this WordPress site can be purged.', 'error');
+            $this->redirectBack();
+        }
+        $success = $this->cacheManager->clearUrl($submitted);
+        $this->notices->add($success ? 'URL cache purged.' : 'The page-cache layer is unavailable.', $success ? 'success' : 'error');
+        $this->redirectBack();
+    }
+
     public function getPreloadUrls(): void
     {
         $this->authorizeAjax();
+        if ($this->preloadUrls instanceof PreloadUrlProvider) {
+            wp_send_json_success($this->preloadUrls->discover(10000));
+        }
         $postTypes = ['page', 'post'];
         if (class_exists('WooCommerce')) {
             $postTypes[] = 'product';
@@ -111,11 +130,19 @@ final class CacheActionController
         $mobile = wp_safe_remote_get($url, $common + [
             'headers' => ['User-Agent' => 'Mozilla/5.0 Mobile WPS-Cache-Preloader/' . WPSC_VERSION],
         ]);
+        $stored = get_option('wpsc_settings', []);
+        $tablet = null;
+        if (is_array($stored) && ($stored['cache_device_mode'] ?? 'mobile') === 'tablet') {
+            $tablet = wp_safe_remote_get($url, $common + [
+                'headers' => ['User-Agent' => 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) WPS-Cache-Preloader/' . WPSC_VERSION],
+            ]);
+        }
         $desktopCode = is_wp_error($desktop) ? 0 : wp_remote_retrieve_response_code($desktop);
         $mobileCode = is_wp_error($mobile) ? 0 : wp_remote_retrieve_response_code($mobile);
+        $tabletCode = $tablet === null || is_wp_error($tablet) ? 0 : wp_remote_retrieve_response_code($tablet);
 
         if (($desktopCode >= 200 && $desktopCode < 300) || ($mobileCode >= 200 && $mobileCode < 300)) {
-            wp_send_json_success("Cached (D:{$desktopCode}, M:{$mobileCode})");
+            wp_send_json_success("Cached (D:{$desktopCode}, M:{$mobileCode}, T:{$tabletCode})");
         }
         wp_send_json_error("Error D:{$desktopCode} M:{$mobileCode}");
     }

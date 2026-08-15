@@ -19,6 +19,9 @@ final class EarlyCacheConfigTest extends TestCase
             'cache_lifetime' => 7200,
             'woo_support' => true,
             'excluded_urls' => ['/checkout', '/private'],
+            'cache_bypass_cookies' => ['member_session'],
+            'cache_device_mode' => 'tablet',
+            'cache_search' => true,
         ]);
 
         $this->assertTrue($writer->write($settings));
@@ -26,6 +29,9 @@ final class EarlyCacheConfigTest extends TestCase
         $this->assertSame(7200, $configuration['ttl']);
         $this->assertSame(['/checkout', '/private'], $configuration['excluded_urls']);
         $this->assertTrue(in_array('wp_woocommerce_session_', $configuration['bypass_cookies'], true));
+        $this->assertTrue(in_array('member_session', $configuration['bypass_cookies'], true));
+        $this->assertFalse(in_array('s', $configuration['query_denylist'], true));
+        $this->assertSame('tablet', $configuration['device_mode']);
 
         $mtime = filemtime($file);
         $this->assertTrue($writer->write($settings));

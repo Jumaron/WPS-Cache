@@ -16,6 +16,7 @@ WPS-Cache/
 ├── src/
 │   ├── Admin/                      Admin page, actions, settings, metrics
 │   ├── Bootstrap/                  Composition root
+│   ├── Cli/                        WP-CLI command boundary
 │   ├── Cache/                      Cache registry and concrete cache layers
 │   │   ├── Object/                 Redis integration
 │   │   ├── Page/                   Static HTML page cache
@@ -26,6 +27,7 @@ WPS-Cache/
 │   ├── Integration/                Third-party compatibility boundaries
 │   ├── Lifecycle/                  Activation, settings changes, deactivation
 │   ├── Maintenance/                Database maintenance
+│   ├── Monitoring/                 Local RUM, lab timing, and uptime checks
 │   ├── Optimization/               Asset, HTML, navigation, and WP optimizers
 │   ├── Scheduling/                 Preload and maintenance schedules
 │   └── Support/                    Shared low-level implementation helpers
@@ -54,13 +56,19 @@ dist/       Versioned ZIP archives and SHA-256 checksums
    inner buffer during `template_redirect`; its output is cached when page cache
    is enabled and still works when page cache is disabled.
 5. Activation and settings updates generate `runtime.php` for the standalone
-   early cache drop-in. The file contains only validated TTL and bypass data—no
-   secrets.
+   page-cache drop-in. Redis uses a separate mode-0600 PHP configuration because
+   its object-cache drop-in loads before plugins and cannot read options safely.
 6. Filesystem, drop-in, and `wp-config.php` mutations are isolated in
    infrastructure services and guarded by ownership checks. The plugin does not
    write web-server configuration; upgrades only remove legacy owned blocks.
 7. The lifecycle reconciler refreshes owned drop-ins once per version upgrade
    and removes early page-cache serving when that layer is disabled.
+8. Query canonicalization and device classification are shared policy objects;
+   the standalone drop-in receives their validated scalar/list configuration.
+9. Image work is local-first and provider-extensible. Encoder diagnostics report
+   actual Imagick/GD format support rather than assuming server codecs.
+10. Admin rendering is split between core settings and capability-focused
+    feature screens. Runtime modules do not depend on either renderer.
 
 ## Architectural rules
 

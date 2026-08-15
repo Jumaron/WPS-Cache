@@ -45,6 +45,23 @@ final class AdvancedCacheTemplateTest extends TestCase
         $this->removeDirectory($directory);
     }
 
+    public function testCanonicalizesTrackingQueriesAndRejectsDeniedQueries(): void
+    {
+        $directory = $this->temporaryDirectory('advanced-cache-query');
+        $content = $directory . '/wp-content';
+        $cache = $content . '/cache/wps-cache/html/example.test';
+        mkdir($cache, 0755, true);
+        file_put_contents($cache . '/index.html', '<html>canonical</html>');
+        file_put_contents(
+            $content . '/cache/wps-cache/runtime.php',
+            "<?php return ['ttl' => 3600, 'query_mode' => 'variants', 'query_denylist' => ['preview'], 'ignored_query_params' => ['utm_*'], 'bypass_cookies' => []];",
+        );
+
+        $this->assertSame('<html>canonical</html>', $this->runDropIn($directory, '', '/?utm_source=newsletter'));
+        $this->assertSame('FALLTHROUGH', $this->runDropIn($directory, '', '/?preview=1'));
+        $this->removeDirectory($directory);
+    }
+
     private function runDropIn(string $directory, string $cookie, string $uri = '/'): string
     {
         $wrapper = $directory . '/run.php';

@@ -13,9 +13,11 @@ use WPSCache\Support\AbstractFilesystemModule;
 final class PageCache extends AbstractFilesystemModule implements Module, Purgeable
 {
     private string $cacheDir;
+    private ?string $privateCacheDir;
     private ?string $exclusionRegex = null;
     private ?string $mobileSuffix = null;
     private ?string $sanitizedHost = null;
+    private QueryPolicy $queryPolicy;
 
     /** Gzip compression level — 6 is the best speed/ratio trade-off */
     private const GZIP_LEVEL = 6;
@@ -24,18 +26,6 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
 
     private bool $booted = false;
     private ?CacheBypass $cacheBypass;
-
-    // Optimization: Use hash map for O(1) lookups
-    private const BYPASS_PARAMS = [
-        "add-to-cart" => true,
-        "wp_nonce" => true,
-        "preview" => true,
-        "s" => true,
-    ];
-
-    // Sentinel: Limits to prevent Cache DoS (Disk Exhaustion)
-    private const MAX_QUERY_LEN = 512;
-    private const MAX_QUERY_PARAMS = 10;
 
     // SOTA: Explicitly ignore static extensions to prevent "Soft 404" caching
     // Optimization: Use hash map for O(1) lookups
@@ -67,9 +57,13 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
     {
         parent::__construct($settings);
         $this->cacheBypass = $cacheBypass;
+        $this->queryPolicy = new QueryPolicy($this->settings);
         $this->cacheDir = defined("WPSC_CACHE_DIR")
             ? WPSC_CACHE_DIR . "html/"
             : WP_CONTENT_DIR . "/cache/wps-cache/html/";
+        $this->privateCacheDir = defined('WPSC_PRIVATE_CACHE_DIR')
+            ? rtrim((string) WPSC_PRIVATE_CACHE_DIR, '/\\') . DIRECTORY_SEPARATOR
+            : null;
         // Optimization: Removed ensureDirectory here. It's handled lazily in atomicWrite.
 
         $excluded = $this->settings["excluded_urls"] ?? [];
@@ -95,6 +89,7 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
         if ($this->booted || !$this->shouldCacheRequest()) {
             return;
         }
+        add_action('send_headers', [$this, 'sendMissHeaders']);
         ob_start([$this, "processOutput"]);
         $this->booted = true;
     }
@@ -107,7 +102,20 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
         if (($_SERVER["REQUEST_METHOD"] ?? "GET") !== "GET") {
             return false;
         }
-        if (is_user_logged_in() || is_admin()) {
+        if (is_admin()) {
+            return false;
+        }
+
+        if (is_user_logged_in() && !$this->allowsCurrentRole()) {
+            return false;
+        }
+
+        $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        $looksLikeFeed = str_contains((string) parse_url($requestUri, PHP_URL_PATH), '/feed') || isset($_GET['feed']);
+        if ($looksLikeFeed && empty($this->settings['cache_feeds'])) {
+            return false;
+        }
+        if (isset($_GET['s']) && empty($this->settings['cache_search'])) {
             return false;
         }
 
@@ -136,22 +144,23 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
             return false;
         }
 
-        if (!empty($_GET)) {
-            // Sentinel Fix: Prevent Cache DoS (Disk Exhaustion)
-            // Limit complexity of query strings to prevent infinite cache file generation
-            if (count($_GET) > self::MAX_QUERY_PARAMS) {
+        $cookieHeader = (string) ($_SERVER['HTTP_COOKIE'] ?? '');
+        foreach ($this->stringSetting('cache_bypass_cookies') as $fragment) {
+            if ($fragment !== '' && str_contains($cookieHeader, $fragment)) {
                 return false;
             }
-            $qs = $_SERVER["QUERY_STRING"] ?? http_build_query($_GET);
-            if (strlen($qs) > self::MAX_QUERY_LEN) {
+        }
+        $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        foreach ($this->stringSetting('cache_bypass_user_agents') as $pattern) {
+            if ($pattern !== '' && @preg_match('/' . preg_quote($pattern, '/') . '/i', $userAgent) === 1) {
                 return false;
             }
+        }
 
-            $keys = array_keys($_GET);
-            foreach ($keys as $key) {
-                if (isset(self::BYPASS_PARAMS[$key])) {
-                    return false;
-                }
+        if (!empty($_GET)) {
+            $qs = $_SERVER["QUERY_STRING"] ?? http_build_query($_GET);
+            if ($this->queryPolicy->shouldBypass($_GET, $qs)) {
+                return false;
             }
         }
 
@@ -170,7 +179,8 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
         if (
             empty($buffer) ||
             http_response_code() !== 200 ||
-            stripos($buffer, '</html>') === false
+            stripos($buffer, '</html>') === false &&
+            (empty($this->settings['cache_feeds']) || (stripos($buffer, '</rss>') === false && stripos($buffer, '</feed>') === false))
         ) {
             return $buffer;
         }
@@ -184,6 +194,7 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
         );
 
         $this->writeCacheFile($content);
+        $this->recordMiss();
 
         return $content;
     }
@@ -208,13 +219,16 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
 
         if ($query !== '') {
             parse_str($query, $queryParams);
-            ksort($queryParams);
-            $filename = 'index' . $suffix . '-' . md5(http_build_query($queryParams)) . '.html';
+            $query = $this->queryPolicy->canonical($queryParams);
+            $filename = $query === ''
+                ? 'index' . $suffix . '.html'
+                : 'index' . $suffix . '-' . md5($query) . '.html';
         } else {
             $filename = 'index' . $suffix . '.html';
         }
 
-        $fullPath = $this->cacheDir . $host . $path;
+        $baseDirectory = is_user_logged_in() && $this->privateCacheDir !== null ? $this->privateCacheDir : $this->cacheDir;
+        $fullPath = $baseDirectory . $host . $path;
         if ($fullPath[-1] !== '/') {
             $fullPath .= '/';
         }
@@ -223,6 +237,7 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
 
         // 1. Write plain HTML
         $this->atomicWrite($filepath, $content);
+        @unlink($filepath . '.lock');
 
         // 2. Write precomputed gzip (moves compression from serve-time to write-time)
         $gzContent = gzencode($content, self::GZIP_LEVEL);
@@ -267,19 +282,14 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
             return $this->mobileSuffix;
         }
 
-        $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
-        if (empty($ua)) {
-            return $this->mobileSuffix = "";
+        $suffix = DeviceClassifier::suffix(
+            (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+            (string) ($this->settings['cache_device_mode'] ?? 'mobile'),
+        );
+        if (is_user_logged_in()) {
+            $suffix .= '-user-' . $this->currentUserId() . '-role-' . $this->currentRole();
         }
-        if (
-            preg_match(
-                "/(Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi)/i",
-                $ua,
-            )
-        ) {
-            return $this->mobileSuffix = "-mobile";
-        }
-        return $this->mobileSuffix = "";
+        return $this->mobileSuffix = $suffix;
     }
 
     private function sanitizePath(string $path): string
@@ -308,5 +318,90 @@ final class PageCache extends AbstractFilesystemModule implements Module, Purgea
     public function purge(): void
     {
         $this->recursiveDelete($this->cacheDir);
+        if ($this->privateCacheDir !== null) {
+            $this->recursiveDelete($this->privateCacheDir);
+        }
+    }
+
+    private function recordMiss(): void
+    {
+        if (empty($this->settings['enable_metrics'])) {
+            return;
+        }
+        $file = dirname($this->cacheDir) . '/page-metrics.json';
+        $handle = @fopen($file, 'c+');
+        if (!is_resource($handle) || !flock($handle, LOCK_EX)) {
+            is_resource($handle) && fclose($handle);
+            return;
+        }
+        $raw = stream_get_contents($handle);
+        $metrics = is_string($raw) ? json_decode($raw, true) : [];
+        $metrics = is_array($metrics) ? $metrics : [];
+        $metrics['misses'] = (int) ($metrics['misses'] ?? 0) + 1;
+        $metrics['last_miss'] = time();
+        rewind($handle);
+        ftruncate($handle, 0);
+        fwrite($handle, json_encode($metrics));
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+
+    public function sendMissHeaders(): void
+    {
+        if (!headers_sent()) {
+            header('Cache-Control: public, max-age=' . max(60, min(31536000, (int) ($this->settings['cache_lifetime'] ?? 3600))));
+            header('X-WPS-Cache: MISS');
+            header('Vary: Accept-Encoding, Cookie');
+        }
+    }
+
+    public function purgeUrl(string $url): bool
+    {
+        $host = (string) (parse_url($url, PHP_URL_HOST) ?: parse_url(home_url('/'), PHP_URL_HOST));
+        $host = preg_replace('/[^a-zA-Z0-9\-.]/', '', $host) ?: 'unknown';
+        $path = $this->sanitizePath((string) (parse_url($url, PHP_URL_PATH) ?: '/'));
+        if ($path[-1] !== '/' && !str_contains(basename($path), '.')) {
+            $path .= '/';
+        }
+        $targets = [$this->cacheDir . $host . $path];
+        if ($this->privateCacheDir !== null) {
+            $targets[] = $this->privateCacheDir . $host . $path;
+        }
+        foreach ($targets as $target) {
+            $this->recursiveDelete($target);
+        }
+        do_action('wpsc_url_purged', $url);
+        return count(array_filter($targets, 'is_dir')) === 0;
+    }
+
+    /** @return list<string> */
+    private function stringSetting(string $key): array
+    {
+        $value = $this->settings[$key] ?? [];
+        return is_array($value) ? array_values(array_filter($value, 'is_string')) : [];
+    }
+
+    private function allowsCurrentRole(): bool
+    {
+        $role = $this->currentRole();
+        return $this->privateCacheDir !== null && $role !== '' && in_array($role, $this->stringSetting('cache_logged_in_roles'), true);
+    }
+
+    private function currentRole(): string
+    {
+        if (!function_exists('wp_get_current_user')) {
+            return '';
+        }
+        $roles = wp_get_current_user()->roles ?? [];
+        return sanitize_key(is_array($roles) ? (string) ($roles[0] ?? '') : '');
+    }
+
+    private function currentUserId(): int
+    {
+        if (!function_exists('get_current_user_id')) {
+            return 0;
+        }
+        return max(0, (int) get_current_user_id());
     }
 }

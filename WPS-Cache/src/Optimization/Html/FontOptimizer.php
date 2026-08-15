@@ -93,6 +93,11 @@ final class FontOptimizer implements HtmlProcessor
             }
         }
 
+        if (!empty($this->settings['font_system_stack'])) {
+            $style = '<style id="wpsc-system-font">:root{--wpsc-system-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}body{font-family:var(--wpsc-system-font)}</style>';
+            $html = str_replace('</head>', $style . '</head>', $html);
+        }
+
         return $html;
     }
 

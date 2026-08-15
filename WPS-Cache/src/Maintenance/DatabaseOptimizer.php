@@ -26,6 +26,10 @@ final class DatabaseOptimizer
         "expired_transients" => "Expired Transients",
         "all_transients" => "All Transients",
         "optimize_tables" => "Optimize Tables",
+        "orphan_postmeta" => "Orphaned Post Metadata",
+        "orphan_commentmeta" => "Orphaned Comment Metadata",
+        "orphan_termmeta" => "Orphaned Term Metadata",
+        "orphan_usermeta" => "Orphaned User Metadata",
     ];
 
     public function __construct(array $settings)
@@ -98,6 +102,12 @@ final class DatabaseOptimizer
 
         // Overhead
         $stats["optimize_tables"] = $this->getTableOverhead($wpdb);
+        $stats['orphan_postmeta'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM $wpdb->postmeta m LEFT JOIN $wpdb->posts p ON m.post_id=p.ID WHERE p.ID IS NULL");
+        $stats['orphan_commentmeta'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM $wpdb->commentmeta m LEFT JOIN $wpdb->comments c ON m.comment_id=c.comment_ID WHERE c.comment_ID IS NULL");
+        $stats['orphan_termmeta'] = isset($wpdb->termmeta, $wpdb->terms)
+            ? (int) $wpdb->get_var("SELECT COUNT(*) FROM $wpdb->termmeta m LEFT JOIN $wpdb->terms t ON m.term_id=t.term_id WHERE t.term_id IS NULL") : 0;
+        $stats['orphan_usermeta'] = isset($wpdb->usermeta, $wpdb->users)
+            ? (int) $wpdb->get_var("SELECT COUNT(*) FROM $wpdb->usermeta m LEFT JOIN $wpdb->users u ON m.user_id=u.ID WHERE u.ID IS NULL") : 0;
 
         return $stats;
     }
@@ -254,6 +264,23 @@ final class DatabaseOptimizer
                 }
             }
             $count++;
+        }
+
+        $orphanQueries = [
+            'orphan_postmeta' => "DELETE m FROM $wpdb->postmeta m LEFT JOIN $wpdb->posts p ON m.post_id=p.ID WHERE p.ID IS NULL",
+            'orphan_commentmeta' => "DELETE m FROM $wpdb->commentmeta m LEFT JOIN $wpdb->comments c ON m.comment_id=c.comment_ID WHERE c.comment_ID IS NULL",
+        ];
+        if (isset($wpdb->termmeta, $wpdb->terms)) {
+            $orphanQueries['orphan_termmeta'] = "DELETE m FROM $wpdb->termmeta m LEFT JOIN $wpdb->terms t ON m.term_id=t.term_id WHERE t.term_id IS NULL";
+        }
+        if (isset($wpdb->usermeta, $wpdb->users)) {
+            $orphanQueries['orphan_usermeta'] = "DELETE m FROM $wpdb->usermeta m LEFT JOIN $wpdb->users u ON m.user_id=u.ID WHERE u.ID IS NULL";
+        }
+        foreach ($orphanQueries as $key => $query) {
+            if (isset($lookup[$key])) {
+                $wpdb->query($query);
+                $count++;
+            }
         }
 
         return $count;

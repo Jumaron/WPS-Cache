@@ -45,6 +45,8 @@ class MetricsCollector
             "html" => $this->getHtmlStats(),
             "redis" => $this->getRedisStats(),
             "system" => $this->getSystemStats(),
+            "rum" => $this->getRumStats(),
+            "uptime" => $this->getUptimeStats(),
         ];
 
         set_transient("wpsc_stats_cache", $stats, 5 * MINUTE_IN_SECONDS);
@@ -91,6 +93,24 @@ class MetricsCollector
             "enabled" => $this->settings->enabled('html_cache'),
             "files" => $count,
             "size" => size_format($size),
+            "traffic" => $this->pageTraffic(),
+        ];
+    }
+
+    /** @return array<string, int|float> */
+    private function pageTraffic(): array
+    {
+        $file = WPSC_CACHE_DIR . 'page-metrics.json';
+        $metrics = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
+        $metrics = is_array($metrics) ? $metrics : [];
+        $hits = (int) ($metrics['hits'] ?? 0);
+        $misses = (int) ($metrics['misses'] ?? 0);
+        return [
+            'hits' => $hits,
+            'misses' => $misses,
+            'stale_hits' => (int) ($metrics['stale_hits'] ?? 0),
+            'hit_ratio' => $hits + $misses > 0 ? round($hits / ($hits + $misses) * 100, 2) : 0.0,
+            'bytes_served' => (int) ($metrics['bytes_served'] ?? 0),
         ];
     }
 
@@ -160,6 +180,40 @@ class MetricsCollector
             "server" => $_SERVER["SERVER_SOFTWARE"] ?? "Unknown",
             "memory_limit" => ini_get("memory_limit"),
             "max_exec" => ini_get("max_execution_time"),
+        ];
+    }
+
+    /** @return array<string, int|float> */
+    private function getRumStats(): array
+    {
+        $entries = get_option('wpsc_rum_metrics', []);
+        $entries = is_array($entries) ? $entries : [];
+        $result = ['samples' => count($entries)];
+        foreach (['lcp', 'cls', 'inp', 'ttfb'] as $metric) {
+            $values = [];
+            foreach ($entries as $entry) {
+                if (is_array($entry) && isset($entry[$metric]) && (float) $entry[$metric] > 0) {
+                    $values[] = (float) $entry[$metric];
+                }
+            }
+            sort($values, SORT_NUMERIC);
+            $index = $values === [] ? 0 : (int) ceil(count($values) * 0.75) - 1;
+            $result[$metric . '_p75'] = $values === [] ? 0 : round($values[max(0, $index)], 3);
+        }
+        return $result;
+    }
+
+    /** @return array{checks: int, availability: float, last_status: int} */
+    private function getUptimeStats(): array
+    {
+        $history = get_option('wpsc_uptime_history', []);
+        $history = is_array($history) ? $history : [];
+        $success = count(array_filter($history, static fn(mixed $item): bool => is_array($item) && (int) ($item['status'] ?? 0) >= 200 && (int) ($item['status'] ?? 0) < 400));
+        $last = $history === [] ? [] : end($history);
+        return [
+            'checks' => count($history),
+            'availability' => $history === [] ? 0.0 : round($success / count($history) * 100, 3),
+            'last_status' => is_array($last) ? (int) ($last['status'] ?? 0) : 0,
         ];
     }
 }

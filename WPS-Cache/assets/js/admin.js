@@ -7,6 +7,8 @@ document.addEventListener("DOMContentLoaded", function () {
   initDismissButtons();
   initSwitches();
   initTabsResponsive();
+  initImageBulk();
+  initLabTest();
 });
 
 function initTabsResponsive() {
@@ -146,7 +148,7 @@ function initPreloader() {
   const percentSpan = document.getElementById("wpsc-preload-percent");
   const progressBar = document.getElementById("wpsc-preload-bar");
 
-  const CONCURRENCY_LIMIT = 3;
+  const CONCURRENCY_LIMIT = Number(wpsc_admin.preload_concurrency || 2);
   let queue = [];
   let total = 0;
   let processed = 0;
@@ -326,4 +328,104 @@ function initCopyTriggers() {
       btn.style.width = "";
     }, 2000);
   }
+}
+
+function initImageBulk() {
+  const button = document.getElementById("wpsc-start-image-bulk");
+  if (!button) return;
+  const container = document.getElementById("wpsc-image-progress");
+  const bar = document.getElementById("wpsc-image-bar");
+  const status = document.getElementById("wpsc-image-status");
+  const restoreButton = document.getElementById("wpsc-restore-image");
+  const restoreId = document.getElementById("wpsc-restore-image-id");
+
+  if (restoreButton && restoreId) {
+    restoreButton.addEventListener("click", async () => {
+      if (!restoreId.value) return;
+      restoreButton.disabled = true;
+      try {
+        await wpscAjax("wpsc_image_restore", { id: restoreId.value });
+        status.textContent = "Original restored.";
+        container.hidden = false;
+      } catch (error) {
+        status.textContent = `Restore error: ${error.message}`;
+        container.hidden = false;
+      } finally {
+        restoreButton.disabled = false;
+      }
+    });
+  }
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    container.hidden = false;
+    bar.value = 0;
+    let page = 1;
+    let processed = 0;
+    let total = 0;
+    try {
+      do {
+        const batch = await wpscAjax("wpsc_image_batch", { page });
+        const data = batch.data;
+        total = data.total;
+        for (const id of data.ids) {
+          await wpscAjax("wpsc_image_optimize", { id }).catch(() => null);
+          processed++;
+          bar.value = total ? Math.round((processed / total) * 100) : 100;
+          status.textContent = `${processed}/${total}`;
+        }
+        if (page >= data.pages) break;
+        page++;
+      } while (true);
+      status.textContent = wpsc_admin.strings.image_complete;
+      bar.value = 100;
+    } catch (error) {
+      status.textContent = `Error: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function initLabTest() {
+  const button = document.getElementById("wpsc-run-lab");
+  const result = document.getElementById("wpsc-lab-result");
+  if (!button || !result) return;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    result.textContent = "Running…";
+    try {
+      const response = await fetch(wpsc_admin.rest_url, {
+        headers: { "X-WP-Nonce": wpsc_admin.rest_nonce },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+      result.textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+      result.textContent = `Error: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+async function wpscAjax(action, values = {}) {
+  const response = await fetch(wpsc_admin.ajax_url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      action,
+      _ajax_nonce: wpsc_admin.nonce,
+      ...values,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(
+      typeof data.data === "string"
+        ? data.data
+        : data.data?.message || `HTTP ${response.status}`,
+    );
+  }
+  return data;
 }

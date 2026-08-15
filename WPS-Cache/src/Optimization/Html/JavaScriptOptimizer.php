@@ -50,11 +50,14 @@ final class JavaScriptOptimizer implements HtmlProcessor
     {
         $scripts = $dom->getElementsByTagName('script');
         $hasDelayed = false;
+        $hasDeferredInline = false;
 
         foreach (iterator_to_array($scripts) as $script) {
             $result = $this->processScriptNode($script);
             if ($result === 'delayed') {
                 $hasDelayed = true;
+            } elseif ($result === 'inline-deferred') {
+                $hasDeferredInline = true;
             }
         }
 
@@ -62,13 +65,17 @@ final class JavaScriptOptimizer implements HtmlProcessor
         if ($hasDelayed && !empty($this->settings['js_delay'])) {
             $this->injectBootloader($dom);
         }
+        if ($hasDeferredInline && empty($this->settings['js_delay'])) {
+            $this->injectInlineDeferBootloader($dom);
+        }
     }
 
     public function process(string $html): string
     {
         if (
             empty($this->settings['js_delay']) &&
-            empty($this->settings['js_defer'])
+            empty($this->settings['js_defer']) &&
+            empty($this->settings['js_defer_inline'])
         ) {
             return $html;
         }
@@ -130,8 +137,9 @@ final class JavaScriptOptimizer implements HtmlProcessor
         }
 
         // ─── DEFER MODE ─────────────────────────────────────────
-        if (!empty($this->settings['js_defer'])) {
+        if (!empty($this->settings['js_defer']) || !empty($this->settings['js_defer_inline'])) {
             if (
+                !empty($this->settings['js_defer']) &&
                 $src !== '' &&
                 !$script->hasAttribute('defer') &&
                 !$script->hasAttribute('async')
@@ -145,6 +153,11 @@ final class JavaScriptOptimizer implements HtmlProcessor
                 }
 
                 return 'deferred';
+            }
+            if ($src === '' && !empty($this->settings['js_defer_inline']) && strlen($content) >= self::MIN_DELAY_SIZE) {
+                $script->setAttribute('type', 'wpsc-inline-deferred');
+                $script->setAttribute('data-wpsc-type', $type === 'module' ? 'module' : 'text/javascript');
+                return 'inline-deferred';
             }
         }
 
@@ -265,7 +278,23 @@ final class JavaScriptOptimizer implements HtmlProcessor
 })();
 JS;
 
+        $timeout = max(0, min(30000, (int) ($this->settings['js_delay_timeout'] ?? 8000)));
+        $code = str_replace('setTimeout(boot, 8000);', 'setTimeout(boot, ' . $timeout . ');', $code);
         $script->nodeValue = $code;
+        $body->appendChild($script);
+    }
+
+    private function injectInlineDeferBootloader(DOMDocument $dom): void
+    {
+        $body = $dom->getElementsByTagName('body')->item(0);
+        if (!$body) {
+            return;
+        }
+        $script = $dom->createElement('script');
+        $script->setAttribute('id', 'wpsc-inline-defer');
+        $script->nodeValue = <<<'JS'
+document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('script[type="wpsc-inline-deferred"]').forEach(function(old){var el=document.createElement('script');el.type=old.dataset.wpscType||'text/javascript';el.text=old.text;old.replaceWith(el);});},{once:true});
+JS;
         $body->appendChild($script);
     }
 

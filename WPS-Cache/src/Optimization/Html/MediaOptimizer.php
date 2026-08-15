@@ -22,15 +22,23 @@ final class MediaOptimizer implements HtmlProcessor
     private array $dimensionCache = [];
     private ?string $regexPattern = null;
     private array $checkedTransients = [];
+    private ?string $lcpUrl = null;
+    private ?string $detectedLcpPath = null;
 
     public function __construct(array $settings)
     {
         $this->settings = $settings;
         $this->siteUrl = site_url();
+        $lcpMap = get_option('wpsc_lcp_images', []);
+        $requestPath = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+        if (is_array($lcpMap) && is_array($lcpMap[$requestPath] ?? null)) {
+            $this->detectedLcpPath = (string) ($lcpMap[$requestPath]['image'] ?? '');
+        }
 
         $tags = [];
         $processImages = !empty($this->settings["media_lazy_load"]) || !empty($this->settings["media_add_dimensions"]);
         $processIframes = !empty($this->settings["media_lazy_load_iframes"]) || !empty($this->settings["media_youtube_facade"]);
+        $processIframes = $processIframes || !empty($this->settings['media_vimeo_facade']) || !empty($this->settings['media_maps_facade']);
 
         if ($processImages) {
             $tags[] = "img";
@@ -80,6 +88,13 @@ final class MediaOptimizer implements HtmlProcessor
             $html,
         );
 
+        if (!empty($this->settings['media_lazy_load_video'])) {
+            $html = $this->lazyLoadVideos($html);
+        }
+        if (!empty($this->settings['media_lazy_backgrounds'])) {
+            $html = $this->lazyLoadBackgrounds($html);
+        }
+
         // 3. Inject YouTube Facade CSS/JS if needed
         if (
             !empty($this->settings["media_youtube_facade"]) &&
@@ -90,6 +105,14 @@ final class MediaOptimizer implements HtmlProcessor
                 $this->getFacadeAssets() . "</body>",
                 $html,
             );
+        }
+
+        if (str_contains($html, 'wpsc-embed-facade')) {
+            $html = str_replace('</body>', $this->getGenericFacadeAssets() . '</body>', $html);
+        }
+        if (!empty($this->settings['media_lcp_preload']) && $this->lcpUrl !== null) {
+            $preload = '<link rel="preload" as="image" href="' . esc_url($this->lcpUrl) . '" fetchpriority="high">';
+            $html = str_replace('</head>', $preload . '</head>', $html);
         }
 
         return $html;
@@ -107,6 +130,20 @@ final class MediaOptimizer implements HtmlProcessor
         $skipCount =
             (int) ($this->settings["media_lazy_load_exclude_count"] ?? 3);
         $isAboveFold = $this->imageCount <= $skipCount;
+
+        $sourceUrl = null;
+        if (preg_match('/\bsrc=["\']([^"\']+)["\']/i', $attrs, $source) === 1) {
+            $sourceUrl = html_entity_decode($source[1], ENT_QUOTES | ENT_HTML5);
+            $sourcePath = (string) (parse_url($sourceUrl, PHP_URL_PATH) ?: '');
+            if ($this->detectedLcpPath !== null && $sourcePath === $this->detectedLcpPath) {
+                $isAboveFold = true;
+                $this->lcpUrl = $sourceUrl;
+            }
+        }
+
+        if ($isAboveFold && $this->lcpUrl === null && $sourceUrl !== null) {
+            $this->lcpUrl = $sourceUrl;
+        }
 
         // 1. Add Missing Dimensions
         if (!empty($this->settings["media_add_dimensions"])) {
@@ -134,6 +171,18 @@ final class MediaOptimizer implements HtmlProcessor
                 '<img loading="lazy" decoding="async" ',
                 $tag,
             );
+            if (!empty($this->settings['media_lqip']) && stripos($tag, 'style=') === false) {
+                $placeholder = 'background:#f0f2f5;background-size:cover;background-position:center;';
+                if ($sourceUrl !== null) {
+                    $sourcePath = $this->urlToPath($sourceUrl);
+                    $lqipPath = preg_replace('/\.[^.]+$/', '.wps-lqip.jpg', $sourcePath);
+                    $lqipUrl = preg_replace('/\.[^.]+(?=\?.*|$)/', '.wps-lqip.jpg', $sourceUrl);
+                    if (is_string($lqipPath) && is_file($lqipPath) && is_string($lqipUrl)) {
+                        $placeholder = 'background-image:url(&quot;' . esc_url($lqipUrl) . '&quot;);background-size:cover;background-position:center;';
+                    }
+                }
+                $tag = str_replace('<img ', '<img style="' . $placeholder . '" ', $tag);
+            }
         } elseif ($isAboveFold) {
             // SOTA: Explicitly mark LCP candidates as eager
             $tag = str_replace(
@@ -141,6 +190,24 @@ final class MediaOptimizer implements HtmlProcessor
                 '<img loading="eager" fetchpriority="high" ',
                 $tag,
             );
+        }
+
+
+        if (!empty($this->settings['media_responsive_images']) && stripos($tag, 'srcset=') === false && function_exists('attachment_url_to_postid')) {
+            if (preg_match('/\bsrc=["\']([^"\']+)["\']/i', $tag, $source) === 1) {
+                $attachmentId = attachment_url_to_postid(html_entity_decode($source[1], ENT_QUOTES | ENT_HTML5));
+                if ($attachmentId > 0) {
+                    $srcset = wp_get_attachment_image_srcset($attachmentId, 'full');
+                    $sizes = wp_get_attachment_image_sizes($attachmentId, 'full');
+                    if (is_string($srcset) && $srcset !== '') {
+                        $attributes = ' srcset="' . esc_attr($srcset) . '"';
+                        if (is_string($sizes) && $sizes !== '') {
+                            $attributes .= ' sizes="' . esc_attr($sizes) . '"';
+                        }
+                        $tag = preg_replace('/\s*\/?>$/', $attributes . '$0', $tag, 1) ?? $tag;
+                    }
+                }
+            }
         }
 
         return $tag;
@@ -167,6 +234,15 @@ final class MediaOptimizer implements HtmlProcessor
             }
         }
 
+        if (
+            (!empty($this->settings['media_vimeo_facade']) && stripos($attrs, 'vimeo.com') !== false) ||
+            (!empty($this->settings['media_maps_facade']) && (stripos($attrs, 'google.com/maps') !== false || stripos($attrs, 'maps.google') !== false))
+        ) {
+            if (preg_match('/src=["\']([^"\']+)["\']/i', $attrs, $source) === 1) {
+                return '<button type="button" class="wpsc-embed-facade" data-wpsc-src="' . esc_attr($source[1]) . '"><span>Load embedded content</span></button>';
+            }
+        }
+
         // 2. Lazy Load Generic Iframes
         if (!empty($this->settings["media_lazy_load_iframes"])) {
             if (stripos($attrs, "loading=") === false) {
@@ -175,6 +251,43 @@ final class MediaOptimizer implements HtmlProcessor
         }
 
         return $tag;
+    }
+
+    private function lazyLoadVideos(string $html): string
+    {
+        $changed = false;
+        $html = preg_replace_callback('~<video\b([^>]*)>(.*?)</video>~is', static function (array $match) use (&$changed): string {
+            $changed = true;
+            $attributes = preg_replace('/\bpreload=["\'][^"\']*["\']/i', '', $match[1]) ?? $match[1];
+            $attributes = preg_replace('/\bsrc=(["\'])([^"\']+)\1/i', 'data-wpsc-src=$1$2$1', $attributes) ?? $attributes;
+            $content = preg_replace('/\bsrc=(["\'])([^"\']+)\1/i', 'data-wpsc-src=$1$2$1', $match[2]) ?? $match[2];
+            return '<video preload="none" data-wpsc-lazy-video' . $attributes . '>' . $content . '</video>';
+        }, $html) ?? $html;
+        if ($changed) {
+            $script = '<script id="wpsc-video-lazy">var wpscVideoObserver=new IntersectionObserver((e,o)=>e.forEach(x=>{if(x.isIntersecting){if(x.target.dataset.wpscSrc){x.target.src=x.target.dataset.wpscSrc;x.target.removeAttribute("data-wpsc-src")}x.target.querySelectorAll("[data-wpsc-src]").forEach(s=>{s.src=s.dataset.wpscSrc;s.removeAttribute("data-wpsc-src")});x.target.load();o.unobserve(x.target)}}),{rootMargin:"300px"});document.querySelectorAll("[data-wpsc-lazy-video]").forEach(v=>wpscVideoObserver.observe(v));</script>';
+            $html = str_replace('</body>', $script . '</body>', $html);
+        }
+        return $html;
+    }
+
+    private function lazyLoadBackgrounds(string $html): string
+    {
+        $changed = false;
+        $html = preg_replace_callback('/style=(["\'])([^"\']*background(?:-image)?\s*:\s*url\(([^)]+)\)[^"\']*)\1/i', static function (array $match) use (&$changed): string {
+            $changed = true;
+            $style = preg_replace('/background(?:-image)?\s*:\s*url\([^)]+\)/i', 'background-image:none', $match[2], 1) ?? $match[2];
+            return 'style=' . $match[1] . $style . $match[1] . ' data-wpsc-bg=' . $match[1] . trim($match[3], " \t\n\r\0\x0B\"'") . $match[1];
+        }, $html) ?? $html;
+        if ($changed) {
+            $script = '<script id="wpsc-bg-lazy">document.querySelectorAll("[data-wpsc-bg]").forEach(el=>new IntersectionObserver((e,o)=>e.forEach(x=>{if(x.isIntersecting){x.target.style.backgroundImage="url(\""+x.target.dataset.wpscBg+"\")";x.target.removeAttribute("data-wpsc-bg");o.disconnect()}}),{rootMargin:"300px"}).observe(el));</script>';
+            $html = str_replace('</body>', $script . '</body>', $html);
+        }
+        return $html;
+    }
+
+    private function getGenericFacadeAssets(): string
+    {
+        return '<style>.wpsc-embed-facade{display:grid;place-items:center;width:100%;min-height:240px;border:0;background:#151922;color:#fff;cursor:pointer}.wpsc-embed-facade span{padding:1rem 1.5rem;background:#fff;color:#111;border-radius:999px}</style><script>document.addEventListener("click",function(e){var b=e.target.closest(".wpsc-embed-facade");if(!b)return;var f=document.createElement("iframe");f.src=b.dataset.wpscSrc;f.loading="lazy";f.allowFullscreen=true;f.style.cssText="width:100%;min-height:360px;border:0";b.replaceWith(f)});</script>';
     }
 
     private function addDimensions(string $tag, string $attrs): string
@@ -245,12 +358,12 @@ final class MediaOptimizer implements HtmlProcessor
 
     private function urlToPath(string $url): string
     {
-        $path = str_replace(
-            [$this->siteUrl, "wp-content"],
-            [ABSPATH, "wp-content"],
-            $url,
-        );
-        return strtok($path, "?");
+        $path = rawurldecode((string) (parse_url($url, PHP_URL_PATH) ?: ''));
+        $contentPath = rtrim((string) parse_url(content_url('/'), PHP_URL_PATH), '/');
+        if ($contentPath !== '' && ($path === $contentPath || str_starts_with($path, $contentPath . '/'))) {
+            return rtrim(WP_CONTENT_DIR, '/\\') . DIRECTORY_SEPARATOR . ltrim(substr($path, strlen($contentPath)), '/');
+        }
+        return rtrim(ABSPATH, '/\\') . DIRECTORY_SEPARATOR . ltrim($path, '/');
     }
 
     private function primeDimensionCache(string $html): void

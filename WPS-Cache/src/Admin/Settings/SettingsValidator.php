@@ -42,6 +42,12 @@ final class SettingsValidator
             }
         }
 
+        if ($input !== [] && $clean !== $current) {
+            $history = get_option('wpsc_settings_history', []);
+            $history = is_array($history) ? $history : [];
+            $history[] = ['created_at' => gmdate(DATE_ATOM), 'settings' => $current];
+            update_option('wpsc_settings_history', array_slice($history, -10), false);
+        }
         do_action("wpscac_settings_updated", $clean);
         return $clean;
     }
@@ -82,8 +88,44 @@ final class SettingsValidator
                 $min = 1;
                 $max = 365;
                 break;
+            case "cache_stale_ttl":
+                $max = 86400;
+                break;
+            case "cache_regeneration_lock":
+                $min = 1;
+                $max = 300;
+                break;
+            case "rest_cache_ttl":
+                $min = 10;
+                $max = 86400;
+                break;
+            case "preload_concurrency":
+                $min = 1;
+                $max = 10;
+                break;
+            case "preload_batch_size":
+                $min = 1;
+                $max = 500;
+                break;
+            case "js_delay_timeout":
+                $min = 0;
+                $max = 30000;
+                break;
+            case "image_quality":
+                $min = 1;
+                $max = 100;
+                break;
+            case "image_max_width":
+            case "image_max_height":
+                $min = 0;
+                $max = 12000;
+                break;
+            case "image_watermark_id":
+                $max = PHP_INT_MAX;
+                break;
             case "redis_port":
             case "varnish_port":
+            case "nginx_port":
                 $min = 1;
                 $max = 65535;
                 break;
@@ -107,10 +149,10 @@ final class SettingsValidator
     {
         $val = (string) $value;
 
-        if ($key === "redis_host" || $key === "varnish_host") {
+        if ($key === "redis_host" || $key === "varnish_host" || $key === "nginx_host") {
             return $this->sanitizeHost($val);
         }
-        if ($key === "cdn_url") {
+        if (in_array($key, ["cdn_url", "cdn_css_url", "cdn_js_url", "cdn_media_url"], true)) {
             $url = esc_url_raw($val);
             if ($url && !preg_match("/^(https?:)?\/\//", $url)) {
                 return "";
@@ -148,6 +190,28 @@ final class SettingsValidator
                 ["hourly", "daily", "weekly", "disabled"],
                 "daily",
             );
+        }
+        if ($key === 'nginx_purge_path') {
+            $path = '/' . ltrim(sanitize_text_field($val), '/');
+            return preg_match('~^/[a-zA-Z0-9/_-]*$~', $path) === 1 ? $path : '/purge';
+        }
+        if ($key === "preload_source") {
+            return $this->sanitizeEnum($val, ["sitemap", "wordpress", "both"], "sitemap");
+        }
+        if ($key === "cache_query_mode") {
+            return $this->sanitizeEnum($val, ["ignore", "variants", "allowlist"], "variants");
+        }
+        if ($key === "cache_device_mode") {
+            return $this->sanitizeEnum($val, ["shared", "mobile", "tablet"], "mobile");
+        }
+        if ($key === "uptime_interval") {
+            return $this->sanitizeEnum($val, ["hourly", "daily"], "hourly");
+        }
+        if ($key === "settings_preset") {
+            return $this->sanitizeEnum($val, ["custom", "safe", "balanced", "aggressive"], "custom");
+        }
+        if ($key === "multisite_mode") {
+            return $this->sanitizeEnum($val, ["site", "network"], "site");
         }
         if ($key === "db_schedule") {
             return $this->sanitizeEnum(

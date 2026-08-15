@@ -30,11 +30,18 @@ final class CdnRewriter implements HtmlProcessor
 
     private readonly string $siteUrl;
     private readonly string $cdnUrl;
+    /** @var array<string, string> */
+    private array $origins;
 
     public function __construct(private readonly Settings $settings, ?string $siteUrl = null)
     {
         $this->siteUrl = $siteUrl ?? site_url();
         $this->cdnUrl = rtrim($settings->string('cdn_url'), '/');
+        $this->origins = [
+            'css' => rtrim($settings->string('cdn_css_url') ?: $this->cdnUrl, '/'),
+            'js' => rtrim($settings->string('cdn_js_url') ?: $this->cdnUrl, '/'),
+            'media' => rtrim($settings->string('cdn_media_url') ?: $this->cdnUrl, '/'),
+        ];
     }
 
     public function process(string $html): string
@@ -62,11 +69,14 @@ final class CdnRewriter implements HtmlProcessor
                     return $matches[0];
                 }
 
+                $extension = strtolower((string) ($matches[4] ?? ''));
+                $type = $extension === 'css' ? 'css' : ($extension === 'js' ? 'js' : 'media');
+                $origin = $this->origins[$type] ?: $this->cdnUrl;
                 return sprintf(
                     '%s=%s%s/%s%s%s',
                     $matches[1],
                     $matches[2],
-                    $this->cdnUrl,
+                    $origin,
                     $path,
                     $matches[5] ?? '',
                     $matches[2],

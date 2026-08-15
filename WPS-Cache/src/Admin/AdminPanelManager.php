@@ -9,12 +9,15 @@ use WPSCache\Admin\Settings\SettingsManager;
 use WPSCache\Admin\UI\TabManager;
 use WPSCache\Admin\UI\NoticeManager;
 use WPSCache\Maintenance\DatabaseOptimizer;
+use WPSCache\Admin\Settings\FeatureSettingsManager;
+use WPSCache\Infrastructure\Server\ServerConfigGenerator;
 
 final class AdminPanelManager
 {
     private SettingsManager $settingsManager;
     private TabManager $tabManager;
     private NoticeManager $noticeManager;
+    private FeatureSettingsManager $featureSettings;
 
     public function __construct(
         CacheManager $cacheManager,
@@ -24,6 +27,7 @@ final class AdminPanelManager
         $this->settingsManager = new SettingsManager($cacheManager, $databaseOptimizer);
         $this->tabManager = new TabManager();
         $this->noticeManager = $noticeManager;
+        $this->featureSettings = new FeatureSettingsManager(new ServerConfigGenerator());
         $this->initializeHooks();
     }
 
@@ -100,6 +104,9 @@ final class AdminPanelManager
         wp_localize_script("wpsc-admin-js", "wpsc_admin", [
             "ajax_url" => admin_url("admin-ajax.php"),
             "nonce" => wp_create_nonce("wpsc_ajax_nonce"),
+            "rest_url" => rest_url('wps-cache/v1/lab'),
+            "rest_nonce" => wp_create_nonce('wp_rest'),
+            "preload_concurrency" => max(1, min(10, (int) (((array) get_option('wpsc_settings', []))['preload_concurrency'] ?? 2))),
             "strings" => [
                 "saving" => __("Saving...", "wps-cache"),
                 "purge_confirm" => __("Are you sure?", "wps-cache"),
@@ -111,6 +118,7 @@ final class AdminPanelManager
                 "preload_complete" => __("Preloading Complete!", "wps-cache"),
                 "show_password" => __("Show password", "wps-cache"),
                 "hide_password" => __("Hide password", "wps-cache"),
+                "image_complete" => __("Image optimization complete.", "wps-cache"),
             ],
         ]);
     }
@@ -126,11 +134,16 @@ final class AdminPanelManager
         $titles = [
             "dashboard" => "Dashboard",
             "cache" => "Cache Rules",
+            "delivery" => "Delivery Rules",
             "css_js" => "File Optimization",
+            "experience" => "Web Experience",
             "media" => "Media Optimization",
+            "images" => "Image Engine",
             "cdn" => "CDN & Cloudflare",
             "database" => "Database",
+            "monitoring" => "Monitoring",
             "tweaks" => "Tweaks & Cleanup",
+            "tools" => "Tools & Diagnostics",
         ];
         $pageTitle = $titles[$current_tab] ?? "Settings";
         ?>
@@ -177,6 +190,15 @@ final class AdminPanelManager
                             case "css_js":
                                 $this->settingsManager->renderOptimizationTab();
                                 break;
+                            case "delivery":
+                                $this->featureSettings->renderDeliveryTab();
+                                break;
+                            case "experience":
+                                $this->featureSettings->renderExperienceTab();
+                                break;
+                            case "images":
+                                $this->featureSettings->renderImagesTab();
+                                break;
                             case "media":
                                 $this->settingsManager->renderMediaTab();
                                 break;
@@ -188,6 +210,12 @@ final class AdminPanelManager
                                 break;
                             case "tweaks":
                                 $this->settingsManager->renderTweaksTab();
+                                break;
+                            case "monitoring":
+                                $this->featureSettings->renderMonitoringTab();
+                                break;
+                            case "tools":
+                                $this->featureSettings->renderToolsTab();
                                 break;
                             default:
                                 $this->settingsManager->renderDashboardTab();

@@ -7,6 +7,9 @@ namespace WPSCache\Cache;
 use Throwable;
 use WPSCache\Contracts\Module;
 use WPSCache\Contracts\Purgeable;
+use WPSCache\Cache\Page\PageCache;
+use WPSCache\Cache\ReverseProxy\VarnishCache;
+use WPSCache\Cache\Rest\RestResponseCache;
 
 /** Registry and purge coordinator for cache-owning runtime modules. */
 final class CacheManager
@@ -97,6 +100,47 @@ final class CacheManager
     public function clearVarnishCache(): bool
     {
         return $this->purgeOne('varnish');
+    }
+
+    public function clearUrl(string $url): bool
+    {
+        $pageCache = $this->modules['page'] ?? null;
+        $success = $pageCache instanceof PageCache ? $pageCache->purgeUrl($url) : false;
+        do_action('wpsc_cache_url_cleared', $url, $success);
+        return $success;
+    }
+
+    public function clearPost(int $postId): bool
+    {
+        if ($postId <= 0 || !function_exists('get_permalink')) {
+            return false;
+        }
+        $urls = array_filter([
+            get_permalink($postId),
+            home_url('/'),
+            function_exists('get_post_type_archive_link') ? get_post_type_archive_link((string) get_post_type($postId)) : false,
+        ], 'is_string');
+        foreach (function_exists('get_object_taxonomies') ? get_object_taxonomies((string) get_post_type($postId)) : [] as $taxonomy) {
+            foreach (function_exists('get_the_terms') ? (array) get_the_terms($postId, $taxonomy) : [] as $term) {
+                $link = function_exists('get_term_link') ? get_term_link($term) : false;
+                if (is_string($link)) {
+                    $urls[] = $link;
+                }
+            }
+        }
+        $success = true;
+        foreach (array_unique($urls) as $url) {
+            $success = $this->clearUrl($url) && $success;
+        }
+        $varnish = $this->modules['varnish'] ?? null;
+        if ($varnish instanceof VarnishCache) {
+            $varnish->purgePost($postId);
+        }
+        $rest = $this->modules['rest'] ?? null;
+        if ($rest instanceof RestResponseCache) {
+            $rest->purge();
+        }
+        return $success;
     }
 
     private function purge(bool $includeRuntimeCaches): bool

@@ -8,6 +8,7 @@ use WPSCache\Config\Settings;
 use WPSCache\Contracts\Module;
 use WPSCache\Contracts\Purgeable;
 use WPSCache\Support\AbstractFilesystemModule;
+use WPSCache\Optimization\OptimizationMode;
 
 final class CssMinifier extends AbstractFilesystemModule implements Module, Purgeable
 {
@@ -98,6 +99,7 @@ final class CssMinifier extends AbstractFilesystemModule implements Module, Purg
         if (
             !$this->booted &&
             !is_admin() &&
+            OptimizationMode::allows($this->settings) &&
             ($this->settings["css_minify"] ?? false)
         ) {
             add_action("wp_enqueue_scripts", [$this, "processStyles"], 100);

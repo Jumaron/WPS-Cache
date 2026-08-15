@@ -7,6 +7,8 @@ namespace WPSCache\Optimization\Html;
 use Throwable;
 use WPSCache\Contracts\HtmlProcessor;
 use WPSCache\Contracts\Module;
+use WPSCache\Config\Settings;
+use WPSCache\Optimization\OptimizationMode;
 
 /**
  * Runs frontend HTML transformations independently from page caching.
@@ -18,7 +20,7 @@ use WPSCache\Contracts\Module;
 final class FrontendOptimizer implements Module
 {
     /** @param list<HtmlProcessor> $processors */
-    public function __construct(private readonly array $processors)
+    public function __construct(private readonly array $processors, private readonly Settings|array $settings = [])
     {
     }
 
@@ -36,7 +38,8 @@ final class FrontendOptimizer implements Module
     {
         if (
             is_admin() ||
-            is_user_logged_in() ||
+            !OptimizationMode::allows($this->settings) ||
+            (is_user_logged_in() && empty($_GET['wpsc_preview'])) ||
             ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET'
         ) {
             return;

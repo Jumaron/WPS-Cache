@@ -173,6 +173,23 @@ final class BloatOptimizer implements Module
                     ) {
                         wp_dequeue_style("dashicons");
                     }
+
+                    if (!empty($this->settings['woo_disable_cart_fragments'])) {
+                        wp_dequeue_script('wc-cart-fragments');
+                    }
+
+                    $isCommercePage = (function_exists('is_woocommerce') && is_woocommerce())
+                        || (function_exists('is_cart') && is_cart())
+                        || (function_exists('is_checkout') && is_checkout())
+                        || (function_exists('is_account_page') && is_account_page());
+                    if (!empty($this->settings['woo_unload_assets']) && !$isCommercePage) {
+                        foreach (['woocommerce-general', 'woocommerce-layout', 'woocommerce-smallscreen'] as $handle) {
+                            wp_dequeue_style($handle);
+                        }
+                        foreach (['woocommerce', 'wc-add-to-cart', 'wc-cart-fragments'] as $handle) {
+                            wp_dequeue_script($handle);
+                        }
+                    }
                 },
                 99,
             );

@@ -114,9 +114,22 @@ delete_option('wpsc_version');
 delete_transient("wpsc_stats_cache");
 delete_transient("wpsc_admin_notices");
 delete_option('wpsc_last_preload');
+delete_option('wpsc_preload_queue');
+delete_option('wpsc_rest_cache_keys');
+delete_option('wpsc_settings_history');
+delete_option('wpsc_image_stats');
+delete_option('wpsc_rum_metrics');
+delete_option('wpsc_uptime_history');
+delete_option('wpsc_lcp_images');
+if (is_multisite()) {
+    delete_site_option('wpsc_network_settings_enabled');
+    delete_site_option('wpsc_network_settings');
+}
 wp_clear_scheduled_hook('wpsc_cache_cleanup');
 wp_clear_scheduled_hook('wpsc_scheduled_preload');
 wp_clear_scheduled_hook('wpsc_db_cleanup');
+wp_clear_scheduled_hook('wpsc_preload_batch');
+wp_clear_scheduled_hook('wpsc_uptime_check');
 
 // Clear opcode cache to ensure no old code remains in memory
 if (function_exists("opcache_invalidate")) {

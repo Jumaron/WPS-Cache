@@ -11,6 +11,18 @@ declare(strict_types=1);
 
 defined("ABSPATH") || exit();
 
+$wpscObjectConfig = WP_CONTENT_DIR . '/cache/wps-cache/object-runtime.php';
+$wpscObjectSettings = is_file($wpscObjectConfig) ? @include $wpscObjectConfig : [];
+if (is_array($wpscObjectSettings)) {
+    foreach (['host', 'port', 'database', 'password', 'prefix', 'scheme'] as $wpscObjectKey) {
+        $wpscObjectConstant = 'WP_REDIS_' . strtoupper($wpscObjectKey);
+        if (!defined($wpscObjectConstant) && array_key_exists($wpscObjectKey, $wpscObjectSettings)) {
+            define($wpscObjectConstant, $wpscObjectSettings[$wpscObjectKey]);
+        }
+    }
+}
+unset($wpscObjectConfig, $wpscObjectSettings, $wpscObjectKey, $wpscObjectConstant);
+
 // Only load if Redis not disabled
 if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
     /**
@@ -1491,8 +1503,11 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             if ($config["scheme"] === "unix") {
                 $connected = $this->redis->connect($config["path"]);
             } else {
+                $host = $config['scheme'] === 'tls' && !str_starts_with((string) $config['host'], 'tls://')
+                    ? 'tls://' . $config['host']
+                    : $config['host'];
                 $connected = $this->redis->connect(
-                    $config["host"],
+                    $host,
                     (int) $config["port"],
                     (float) $config["timeout"],
                     null,

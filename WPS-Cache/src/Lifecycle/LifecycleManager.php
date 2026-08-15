@@ -12,6 +12,7 @@ use WPSCache\Infrastructure\Server\ApacheConfigManager;
 use WPSCache\Infrastructure\WordPress\DropInManager;
 use WPSCache\Infrastructure\WordPress\EarlyCacheConfig;
 use WPSCache\Infrastructure\WordPress\WpConfigManager;
+use WPSCache\Infrastructure\WordPress\ObjectCacheConfig;
 use WPSCache\Scheduling\MaintenanceScheduler;
 use WPSCache\Scheduling\PreloadScheduler;
 
@@ -29,6 +30,7 @@ final class LifecycleManager
         private readonly CacheManager $cacheManager,
         private readonly PreloadScheduler $preloadScheduler,
         private readonly MaintenanceScheduler $maintenanceScheduler,
+        private readonly ?ObjectCacheConfig $objectCacheConfig = null,
     ) {
     }
 
@@ -73,6 +75,7 @@ final class LifecycleManager
         }
         $this->cacheManager->clearAllCaches();
         $this->dropIns->removeAllOwned();
+        $this->objectCacheConfig?->remove();
         $this->preloadScheduler->unschedule();
         $this->maintenanceScheduler->unschedule();
         $this->apache->removeConfiguration();
@@ -95,6 +98,20 @@ final class LifecycleManager
         }
         if (!$this->earlyCacheConfig->write($settings)) {
             error_log('[WPS-Cache] Failed to write the early-cache runtime configuration.');
+        }
+        if ($this->objectCacheConfig !== null) {
+            if ($settings->enabled('redis_cache') && !$this->objectCacheConfig->write($settings)) {
+                error_log('[WPS-Cache] Failed to write object-cache runtime configuration.');
+            } elseif (!$settings->enabled('redis_cache')) {
+                $this->objectCacheConfig->remove();
+            }
+        }
+        if ($settings->enabled('redis_cache')) {
+            if (!is_file(WP_CONTENT_DIR . '/object-cache.php') || $this->dropIns->owns('object-cache.php')) {
+                $this->dropIns->installObjectCache();
+            }
+        } elseif ($this->dropIns->owns('object-cache.php')) {
+            $this->dropIns->removeObjectCache();
         }
 
         if ($settings->enabled('html_cache')) {

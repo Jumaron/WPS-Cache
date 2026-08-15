@@ -98,6 +98,9 @@ final class SettingsManager
                                     <?php echo esc_html($html["files"]); ?>
                                 </div>
                                 <div style="color: var(--wpsc-text-muted);">Cached Pages</div>
+                                <?php if (!empty($html['traffic'])): ?>
+                                    <div style="margin-top:8px;color:var(--wpsc-text-muted);font-size:.85rem"><?php echo esc_html((string) $html['traffic']['hit_ratio']); ?>% hit ratio · <?php echo esc_html((string) $html['traffic']['hits']); ?> hits</div>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <div class="wpsc-status-pill warning">Disabled</div>
                             <?php endif; ?>
@@ -293,9 +296,27 @@ final class SettingsManager
                     "wpsc:",
                     $settings,
                 );
+                $this->renderer->renderToggle(
+                    "redis_tls",
+                    "Use Redis TLS",
+                    "Connect with the tls:// transport in both runtime and object-cache drop-in.",
+                    $settings,
+                );
                 echo "</div>";
             },
             "dashicons-database",
+        );
+
+        $this->renderer->renderCard(
+            "Server Integration (Nginx FastCGI)",
+            "Purge a host-managed FastCGI cache. Copy the generated server recipe from Delivery Rules.",
+            function () use ($settings) {
+                $this->renderer->renderToggle("nginx_cache", "Enable Nginx purge", "Sends non-blocking PURGE requests to the configured local endpoint.", $settings);
+                $this->renderer->renderInput("nginx_host", "Nginx host", "127.0.0.1", $settings);
+                $this->renderer->renderInput("nginx_port", "Nginx port", "80", $settings, "number");
+                $this->renderer->renderInput("nginx_purge_path", "Purge endpoint", "/purge", $settings);
+            },
+            "dashicons-admin-site-alt3",
         );
 
         $this->renderer->renderCard(
@@ -371,8 +392,8 @@ final class SettingsManager
 
                 $this->renderer->renderToggle(
                     "remove_unused_css",
-                    "Remove Unused CSS",
-                    "Experimental tree-shaking.",
+                    "Prune Unused Inline CSS",
+                    "Experimental selector pruning for inline <style> blocks only; this is not browser-generated critical CSS.",
                     $settings,
                 );
                 $this->renderer->renderTextarea(
@@ -542,6 +563,9 @@ final class SettingsManager
                     "url",
                     ["placeholder" => "https://cdn.example.com"],
                 );
+                $this->renderer->renderInput("cdn_css_url", "CSS CDN URL", "Optional type-specific origin.", $settings, "url");
+                $this->renderer->renderInput("cdn_js_url", "JavaScript CDN URL", "Optional type-specific origin.", $settings, "url");
+                $this->renderer->renderInput("cdn_media_url", "Media CDN URL", "Optional type-specific origin.", $settings, "url");
             },
             "dashicons-earth",
         );
@@ -568,6 +592,7 @@ final class SettingsManager
                     "ID",
                     $settings,
                 );
+                $this->renderer->renderToggle("cf_edge_cache", "Manage a full-page Cache Rule", "Opt in to synchronize an anonymous HTML cache rule through the Cloudflare API.", $settings);
             },
             "dashicons-cloud-saved",
         );
@@ -654,8 +679,18 @@ final class SettingsManager
                     "",
                     $settings,
                 );
+                $this->renderer->renderToggle("bloat_disable_rss", "Disable RSS feeds", "Remove discovery links and feed endpoints.", $settings);
             },
             "dashicons-shield",
+        );
+        $this->renderer->renderCard(
+            "WooCommerce assets",
+            "Reduce storefront scripts on pages that do not need them.",
+            function () use ($settings) {
+                $this->renderer->renderToggle("woo_disable_cart_fragments", "Disable cart fragments", "Removes the AJAX cart-fragments script.", $settings);
+                $this->renderer->renderToggle("woo_unload_assets", "Unload WooCommerce assets elsewhere", "Dequeues common WooCommerce CSS/JS outside shop, cart, checkout, and account pages.", $settings);
+            },
+            "dashicons-cart",
         );
         $this->renderer->renderCard(
             "Heartbeat",
