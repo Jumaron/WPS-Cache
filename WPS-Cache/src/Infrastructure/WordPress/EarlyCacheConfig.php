@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPSCache\Infrastructure\WordPress;
 
 use WPSCache\Config\Settings;
+use WPSCache\Infrastructure\Filesystem\AtomicFileWriter;
 
 /** Writes the dependency-free configuration consumed by advanced-cache.php. */
 final class EarlyCacheConfig
@@ -60,29 +61,6 @@ final class EarlyCacheConfig
             return true;
         }
 
-        $directory = dirname($this->file);
-        if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
-            return false;
-        }
-
-        $temporary = tempnam($directory, 'wpsc_config_');
-        if ($temporary === false || file_put_contents($temporary, $content, LOCK_EX) === false) {
-            return false;
-        }
-
-        @chmod($temporary, 0644);
-        if (!@rename($temporary, $this->file)) {
-            @unlink($this->file);
-            if (!@rename($temporary, $this->file)) {
-                @unlink($temporary);
-                return false;
-            }
-        }
-
-        if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($this->file, true);
-        }
-
-        return true;
+        return AtomicFileWriter::replace($this->file, $content, 0644);
     }
 }

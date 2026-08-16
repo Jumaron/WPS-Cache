@@ -65,10 +65,8 @@ final class SettingsTransferController
             $this->redirect('Unknown preset.');
         }
         $current = get_option(Settings::OPTION, Settings::defaults());
-        $this->snapshot(is_array($current) ? $current : Settings::defaults());
         $next = array_replace(is_array($current) ? $current : Settings::defaults(), $presets[$name], ['settings_preset' => $name]);
-        update_option(Settings::OPTION, $next);
-        do_action('wpscac_settings_updated', $next);
+        update_option(Settings::OPTION, $this->validator->sanitizeSettings($next));
         $this->redirect(ucfirst($name) . ' preset applied.', false);
     }
 
@@ -83,9 +81,8 @@ final class SettingsTransferController
         if (!is_array($snapshot['settings'] ?? null)) {
             $this->redirect('The latest snapshot is invalid.');
         }
-        update_option(Settings::OPTION, $snapshot['settings']);
         update_option('wpsc_settings_history', $history, false);
-        do_action('wpscac_settings_updated', $snapshot['settings']);
+        update_option(Settings::OPTION, $this->validator->sanitizeSettings($snapshot['settings']));
         $this->redirect('Previous settings restored.', false);
     }
 
@@ -108,15 +105,6 @@ final class SettingsTransferController
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized', 'Unauthorized', ['response' => 403]);
         }
-    }
-
-    /** @param array<string, mixed> $settings */
-    private function snapshot(array $settings): void
-    {
-        $history = get_option('wpsc_settings_history', []);
-        $history = is_array($history) ? $history : [];
-        $history[] = ['created_at' => gmdate(DATE_ATOM), 'settings' => $settings];
-        update_option('wpsc_settings_history', array_slice($history, -10), false);
     }
 
     private function redirect(string $message, bool $error = true): never

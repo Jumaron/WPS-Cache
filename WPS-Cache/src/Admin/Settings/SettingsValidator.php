@@ -5,10 +5,19 @@ declare(strict_types=1);
 namespace WPSCache\Admin\Settings;
 
 use WPSCache\Config\Settings;
+use WPSCache\Infrastructure\WordPress\DropInManager;
+use WPSCache\Infrastructure\WordPress\ObjectCacheCompatibility;
 
 final class SettingsValidator
 {
     private const PROTECTED_KEYS = ["redis_password", "cf_api_token", "pagespeed_api_key", "uptime_heartbeat_url", "media_offload_access_key", "media_offload_secret_key", "openai_api_key"];
+
+    public function __construct(
+        private readonly ?ObjectCacheCompatibility $objectCacheCompatibility = null,
+        private readonly ?DropInManager $dropIns = null,
+        private readonly ?string $wpConfigFile = null,
+    ) {
+    }
 
     public function sanitizeSettings(mixed $input): array
     {
@@ -54,7 +63,7 @@ final class SettingsValidator
         if (!empty($clean['memcached_cache'])) {
             $clean['redis_cache'] = false;
         }
-        do_action("wpscac_settings_updated", $clean);
+        $this->enforceDependencies($clean, $current, $input);
         return $clean;
     }
 
@@ -302,5 +311,196 @@ final class SettingsValidator
         $lines = array_map("trim", $input);
         $lines = array_filter($lines);
         return array_map("sanitize_text_field", $lines);
+    }
+
+    /**
+     * Reject environment-dependent features when their prerequisites are not
+     * present. Existing unchanged remote integrations are not disabled merely
+     * because a service has a temporary outage.
+     *
+     * @param array<string, mixed> $clean
+     * @param array<string, mixed> $current
+     * @param array<string, mixed> $submitted
+     */
+    private function enforceDependencies(array &$clean, array $current, array $submitted): void
+    {
+        if ($this->objectCacheCompatibility !== null && $this->objectCacheChanged($clean, $current)) {
+            $check = $this->objectCacheCompatibility->inspect(new Settings($clean), true);
+            if (!$check->compatible()) {
+                foreach (['redis_cache', 'redis_host', 'redis_port', 'redis_db', 'redis_password', 'redis_prefix', 'redis_tls', 'memcached_cache', 'memcached_host', 'memcached_port', 'memcached_prefix', 'memcached_persistent_id'] as $key) {
+                    $clean[$key] = $current[$key];
+                }
+                $this->settingsError('object_cache', $check->message() . ' The previous object-cache settings were retained.');
+            }
+        }
+
+        if (!empty($clean['html_cache']) && $this->wasEnabled('html_cache', $clean, $current, $submitted)) {
+            $issue = $this->dropIns?->advancedCacheInstallationIssue();
+            if ($issue !== null) {
+                $this->reject($clean, 'html_cache', $issue);
+            } elseif ($this->wpConfigFile !== null && (!is_file($this->wpConfigFile) || !is_writable($this->wpConfigFile) || !is_writable(dirname($this->wpConfigFile)))) {
+                $this->reject($clean, 'html_cache', 'Page caching was not enabled because wp-config.php is not writable.');
+            } elseif (defined('WPSC_CACHE_DIR') && !$this->pathCanBeWritten(WPSC_CACHE_DIR . 'runtime.php')) {
+                $this->reject($clean, 'html_cache', 'Page caching was not enabled because its cache directory cannot be written.');
+            }
+        }
+
+        $cacheDependent = [
+            'css_minify', 'css_combine', 'js_minify', 'js_combine',
+            'css_rendered_profiles', 'css_critical_rendered', 'css_linked_prune',
+            'gravatar_local_cache', 'image_adaptive_delivery',
+        ];
+        if (defined('WPSC_CACHE_DIR') && !$this->pathCanBeWritten(WPSC_CACHE_DIR . 'capability-check.tmp')) {
+            foreach ($cacheDependent as $feature) {
+                if ($this->wasEnabled($feature, $clean, $current, $submitted)) {
+                    $this->reject($clean, $feature, $this->label($feature) . ' requires a writable WPS Cache directory.');
+                }
+            }
+        }
+
+        $hasImagick = extension_loaded('imagick') && class_exists('Imagick');
+        $hasGd = extension_loaded('gd');
+        foreach (['image_optimize_upload', 'image_background_optimization', 'image_adaptive_delivery'] as $feature) {
+            if (!$hasImagick && !$hasGd && $this->wasEnabled($feature, $clean, $current, $submitted)) {
+                $this->reject($clean, $feature, $this->label($feature) . ' requires Imagick or GD.');
+            }
+        }
+        if (!empty($clean['image_generate_webp']) && array_key_exists('image_generate_webp', $submitted)
+            && !$this->imageFormatAvailable('WEBP', 'imagewebp')) {
+            $this->reject($clean, 'image_generate_webp', 'WebP generation requires WebP support in Imagick or GD.');
+        }
+        if (!empty($clean['image_generate_avif']) && array_key_exists('image_generate_avif', $submitted)
+            && !$this->imageFormatAvailable('AVIF', 'imageavif')) {
+            $this->reject($clean, 'image_generate_avif', 'AVIF generation requires AVIF support in Imagick or GD.');
+        }
+
+        if (!empty($clean['css_critical_rendered']) && empty($clean['css_rendered_profiles'])) {
+            $this->reject($clean, 'css_critical_rendered', 'Rendered critical CSS requires rendered CSS profiles.');
+        }
+        if (!empty($clean['css_linked_prune']) && empty($clean['css_rendered_profiles'])) {
+            $this->reject($clean, 'css_linked_prune', 'Linked CSS pruning requires rendered CSS profiles.');
+        }
+        if (!empty($clean['cf_edge_cache']) && empty($clean['cf_enable'])) {
+            $this->reject($clean, 'cf_edge_cache', 'Cloudflare edge-cache management requires the Cloudflare integration.');
+        }
+        if ($this->wasEnabled('cf_enable', $clean, $current, $submitted)
+            && ((string) $clean['cf_api_token'] === '' || (string) $clean['cf_zone_id'] === '')) {
+            $this->reject($clean, 'cf_enable', 'Cloudflare requires both an API token and a valid zone ID.');
+            $clean['cf_edge_cache'] = false;
+        }
+        if ($this->wasEnabled('cdn_enable', $clean, $current, $submitted) && (string) $clean['cdn_url'] === '') {
+            $this->reject($clean, 'cdn_enable', 'CDN rewriting requires a valid CDN URL.');
+        }
+
+        if (!empty($clean['image_ai_alt_openai']) && empty($clean['image_ai_alt_provider'])) {
+            $this->reject($clean, 'image_ai_alt_openai', 'The built-in OpenAI provider requires alt-text generation to be enabled.');
+        }
+        $openAiKey = defined('WPSC_OPENAI_API_KEY') ? (string) WPSC_OPENAI_API_KEY : (string) $clean['openai_api_key'];
+        if ($this->wasEnabled('image_ai_alt_openai', $clean, $current, $submitted) && $openAiKey === '') {
+            $this->reject($clean, 'image_ai_alt_openai', 'The built-in OpenAI alt-text provider requires an API key.');
+        }
+
+        if (!empty($clean['media_offload_delete_local']) && empty($clean['media_offload_provider'])) {
+            $this->reject($clean, 'media_offload_delete_local', 'Deleting local offloaded files requires an enabled offload provider.');
+        }
+        if (!empty($clean['media_offload_s3']) && empty($clean['media_offload_provider'])) {
+            $this->reject($clean, 'media_offload_s3', 'The S3 adapter requires media offload to be enabled.');
+        }
+        if ($this->wasEnabled('media_offload_s3', $clean, $current, $submitted)) {
+            $access = defined('WPSC_S3_ACCESS_KEY') ? (string) WPSC_S3_ACCESS_KEY : (string) $clean['media_offload_access_key'];
+            $secret = defined('WPSC_S3_SECRET_KEY') ? (string) WPSC_S3_SECRET_KEY : (string) $clean['media_offload_secret_key'];
+            if ((string) $clean['media_offload_bucket'] === '' || $access === '' || $secret === '' || !str_starts_with((string) $clean['media_offload_endpoint'], 'https://')) {
+                $this->reject($clean, 'media_offload_s3', 'The S3 adapter requires an HTTPS endpoint, bucket, access key, and secret key.');
+            }
+        }
+
+        if ((!empty($clean['woo_disable_cart_fragments']) || !empty($clean['woo_unload_assets']))
+            && array_key_exists('woo_disable_cart_fragments', $submitted)
+            && !class_exists('WooCommerce')) {
+            $clean['woo_disable_cart_fragments'] = false;
+            $clean['woo_unload_assets'] = false;
+            $this->settingsError('woocommerce', 'WooCommerce-specific optimizations were not enabled because WooCommerce is inactive.');
+        }
+
+        if ($clean['cache_logged_in_roles'] !== [] && !$this->privateCacheDirectoryAvailable()) {
+            $clean['cache_logged_in_roles'] = [];
+            $this->settingsError('private_cache', 'Logged-in page caching requires WPSC_PRIVATE_CACHE_DIR to point to a writable directory outside the public web root.');
+        }
+    }
+
+    /** @param array<string, mixed> $clean @param array<string, mixed> $current */
+    private function objectCacheChanged(array $clean, array $current): bool
+    {
+        $keys = ['redis_cache', 'redis_host', 'redis_port', 'redis_db', 'redis_password', 'redis_prefix', 'redis_tls', 'memcached_cache', 'memcached_host', 'memcached_port', 'memcached_prefix', 'memcached_persistent_id'];
+        foreach ($keys as $key) {
+            if (($clean[$key] ?? null) !== ($current[$key] ?? null)) {
+                return !empty($clean['redis_cache']) || !empty($clean['memcached_cache']);
+            }
+        }
+        return false;
+    }
+
+    /** @param array<string, mixed> $clean @param array<string, mixed> $current @param array<string, mixed> $submitted */
+    private function wasEnabled(string $key, array $clean, array $current, array $submitted): bool
+    {
+        return !empty($clean[$key]) && array_key_exists($key, $submitted) && empty($current[$key]);
+    }
+
+    /** @param array<string, mixed> $clean */
+    private function reject(array &$clean, string $key, string $message): void
+    {
+        $clean[$key] = false;
+        $this->settingsError($key, $message);
+    }
+
+    private function settingsError(string $key, string $message): void
+    {
+        if (function_exists('add_settings_error')) {
+            add_settings_error(Settings::OPTION, 'wpsc_dependency_' . $key, $message, 'error');
+        }
+    }
+
+    private function imageFormatAvailable(string $format, string $gdFunction): bool
+    {
+        if (function_exists($gdFunction)) {
+            return true;
+        }
+        if (!extension_loaded('imagick') || !class_exists('Imagick')) {
+            return false;
+        }
+        try {
+            return in_array($format, array_map('strtoupper', \Imagick::queryFormats($format)), true);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function privateCacheDirectoryAvailable(): bool
+    {
+        if (!defined('WPSC_PRIVATE_CACHE_DIR')) {
+            return false;
+        }
+        $private = realpath((string) WPSC_PRIVATE_CACHE_DIR);
+        $public = defined('ABSPATH') ? realpath(ABSPATH) : false;
+        return is_string($private) && is_dir($private) && is_writable($private)
+            && (!is_string($public) || !str_starts_with($private . DIRECTORY_SEPARATOR, rtrim($public, '/\\') . DIRECTORY_SEPARATOR));
+    }
+
+    private function pathCanBeWritten(string $file): bool
+    {
+        $directory = is_dir($file) ? $file : dirname($file);
+        while (!is_dir($directory)) {
+            $parent = dirname($directory);
+            if ($parent === $directory) {
+                return false;
+            }
+            $directory = $parent;
+        }
+        return is_writable($directory);
+    }
+
+    private function label(string $key): string
+    {
+        return ucwords(str_replace('_', ' ', $key));
     }
 }

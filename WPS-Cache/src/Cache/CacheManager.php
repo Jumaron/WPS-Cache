@@ -156,7 +156,11 @@ final class CacheManager
         }
 
         if ($includeRuntimeCaches) {
-            wp_cache_flush();
+            try {
+                wp_cache_flush();
+            } catch (Throwable $exception) {
+                $this->errors['runtime_object_cache'] = $exception->getMessage();
+            }
             $this->clearDatabaseTransients();
             $this->invalidateDropInOpcache();
         }

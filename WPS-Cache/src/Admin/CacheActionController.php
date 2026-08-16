@@ -6,9 +6,13 @@ namespace WPSCache\Admin;
 
 use WPSCache\Admin\UI\NoticeManager;
 use WPSCache\Cache\CacheManager;
+use WPSCache\Config\SettingsRepository;
 use WPSCache\Infrastructure\Http\SameOriginUrlGuard;
 use WPSCache\Infrastructure\WordPress\DropInManager;
+use WPSCache\Infrastructure\WordPress\ObjectCacheCompatibility;
+use WPSCache\Infrastructure\WordPress\ObjectCacheConfig;
 use WPSCache\Scheduling\PreloadUrlProvider;
+use Throwable;
 
 final class CacheActionController
 {
@@ -18,6 +22,8 @@ final class CacheActionController
         private readonly NoticeManager $notices,
         private readonly SameOriginUrlGuard $urlGuard,
         private readonly ?PreloadUrlProvider $preloadUrls = null,
+        private readonly ?ObjectCacheCompatibility $objectCacheCompatibility = null,
+        private readonly ?ObjectCacheConfig $objectCacheConfig = null,
     ) {
     }
 
@@ -42,17 +48,25 @@ final class CacheActionController
     public function installObjectCache(): void
     {
         $this->authorize('wpsc_install_object_cache');
-        $destination = WP_CONTENT_DIR . '/object-cache.php';
-        if (is_file($destination) && !$this->dropIns->owns('object-cache.php')) {
-            $this->notices->add('Another plugin owns object-cache.php. It was not replaced.', 'error');
+        $settings = (new SettingsRepository())->load();
+        if ($this->objectCacheCompatibility === null || $this->objectCacheConfig === null) {
+            $this->notices->add('Object-cache preflight is unavailable, so no drop-in was installed.', 'error');
+            $this->redirectBack();
+        }
+        $check = $this->objectCacheCompatibility->inspect($settings, true);
+        if (!$check->compatible() || $check->backend === null) {
+            $this->notices->add($check->message(), 'error');
+            $this->redirectBack();
+        }
+        if (!$this->objectCacheConfig->write($settings)) {
+            $this->notices->add('The verified object-cache configuration could not be written. No drop-in was installed.', 'error');
             $this->redirectBack();
         }
 
-        $stored = get_option('wpsc_settings', []);
-        $backend = is_array($stored) && !empty($stored['memcached_cache']) ? 'memcached' : 'redis';
+        $backend = $check->backend;
         $success = $this->dropIns->installObjectCache($backend);
         $this->notices->add(
-            $success ? 'Object-cache drop-in installed or refreshed.' : 'Object-cache drop-in could not be installed.',
+            $success ? ucfirst($backend) . ' object-cache drop-in installed after a successful health check.' : 'Object-cache drop-in could not be installed; the previous file was preserved when possible.',
             $success ? 'success' : 'error',
         );
         $this->redirectBack();
@@ -68,7 +82,12 @@ final class CacheActionController
 
         $success = $this->dropIns->removeObjectCache();
         if ($success) {
-            wp_cache_flush();
+            $this->objectCacheConfig?->remove();
+            try {
+                wp_cache_flush();
+            } catch (Throwable) {
+                $this->notices->add('The drop-in was removed, but the old in-memory cache could not be flushed during this request.', 'warning');
+            }
         }
         $this->notices->add($success ? 'Object-cache drop-in removed.' : 'Object-cache drop-in could not be removed.', $success ? 'success' : 'error');
         $this->redirectBack();

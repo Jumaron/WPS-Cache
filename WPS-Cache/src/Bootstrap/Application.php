@@ -31,6 +31,7 @@ use WPSCache\Infrastructure\WordPress\DropInManager;
 use WPSCache\Infrastructure\WordPress\EarlyCacheConfig;
 use WPSCache\Infrastructure\WordPress\WpConfigManager;
 use WPSCache\Infrastructure\WordPress\ObjectCacheConfig;
+use WPSCache\Infrastructure\WordPress\ObjectCacheCompatibility;
 use WPSCache\Integration\Cloudflare\CloudflarePurger;
 use WPSCache\Integration\WooCommerce\CacheBypass;
 use WPSCache\Integration\Media\AltTextProvider;
@@ -95,6 +96,8 @@ final class Application
         $maintenanceScheduler = new MaintenanceScheduler($cacheManager, $databaseOptimizer);
         $apache = new ApacheConfigManager();
         $dropIns = new DropInManager(WPSC_PLUGIN_DIR . 'includes', WP_CONTENT_DIR);
+        $objectCacheConfig = new ObjectCacheConfig(WPSC_CACHE_DIR . 'object-runtime.php');
+        $objectCacheCompatibility = new ObjectCacheCompatibility($dropIns, WPSC_CACHE_DIR . 'object-runtime.php');
         $earlyCacheConfig = new EarlyCacheConfig(WPSC_CACHE_DIR . 'runtime.php');
         if (!is_file(WPSC_CACHE_DIR . 'runtime.php')) {
             $earlyCacheConfig->write($settings);
@@ -110,7 +113,8 @@ final class Application
             $cacheManager,
             $preloadScheduler,
             $maintenanceScheduler,
-            new ObjectCacheConfig(WPSC_CACHE_DIR . 'object-runtime.php'),
+            $objectCacheConfig,
+            $objectCacheCompatibility,
         );
 
         $application = new self($cacheManager, $lifecycle);
@@ -130,18 +134,21 @@ final class Application
 
         if (is_admin()) {
             $notices = new NoticeManager();
-            new AdminPanelManager($cacheManager, $databaseOptimizer, $notices);
-            (new SettingsController(new SettingsValidator()))->boot();
+            $settingsValidator = new SettingsValidator($objectCacheCompatibility, $dropIns, self::wpConfigPath());
+            new AdminPanelManager($cacheManager, $databaseOptimizer, $notices, $dropIns, $objectCacheCompatibility);
+            (new SettingsController($settingsValidator))->boot();
             (new CacheActionController(
                 $cacheManager,
                 $dropIns,
                 $notices,
                 $urlGuard,
                 new PreloadUrlProvider($settings, $urlGuard),
+                $objectCacheCompatibility,
+                $objectCacheConfig,
             ))->boot();
             (new DatabaseCleanupController($databaseOptimizer))->boot();
             (new ImageActionController($imageOptimizer))->boot();
-            (new SettingsTransferController(new SettingsValidator()))->boot();
+            (new SettingsTransferController($settingsValidator))->boot();
             (new NetworkController())->boot();
         }
 
@@ -237,6 +244,11 @@ final class Application
 
     private function registerCoreHooks(ApacheConfigManager $apache): void
     {
+        add_action('updated_option', static function (string $option, mixed $oldValue, mixed $newValue): void {
+            if ($option === Settings::OPTION && is_array($newValue) && $newValue !== $oldValue) {
+                do_action('wpscac_settings_updated', (new SettingsRepository())->load()->all());
+            }
+        }, 10, 3);
         add_action('plugins_loaded', [$this->lifecycle, 'maybeUpgrade'], 1);
         add_action('plugins_loaded', [$this->cacheManager, 'boot'], 5);
         add_action('send_headers', [$apache, 'sendSecurityHeaders']);

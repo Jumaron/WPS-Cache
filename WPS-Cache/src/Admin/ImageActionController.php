@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WPSCache\Admin;
 
+use Throwable;
 use WPSCache\Optimization\Media\ImageOptimizer;
 
 final class ImageActionController
@@ -49,7 +50,12 @@ final class ImageActionController
         if (!is_string($file)) {
             wp_send_json_error('Attachment file not found.', 404);
         }
-        $result = $this->optimizer->optimizeFile($file, $id);
+        try {
+            $result = $this->optimizer->optimizeFile($file, $id);
+        } catch (Throwable $exception) {
+            error_log('[WPS-Cache] Image optimization action failed: ' . $exception->getMessage());
+            wp_send_json_error('Image optimization failed safely; the request did not alter plugin configuration.', 500);
+        }
         $result['success'] ? wp_send_json_success($result) : wp_send_json_error($result, 422);
     }
 
@@ -58,8 +64,13 @@ final class ImageActionController
         $this->authorize();
         $id = absint($_POST['id'] ?? 0);
         $file = $id > 0 ? get_attached_file($id) : false;
-        if (!is_string($file) || !$this->optimizer->restore($file)) {
-            wp_send_json_error('No WPS Cache backup is available.', 404);
+        try {
+            if (!is_string($file) || !$this->optimizer->restore($file)) {
+                wp_send_json_error('No WPS Cache backup is available.', 404);
+            }
+        } catch (Throwable $exception) {
+            error_log('[WPS-Cache] Image restore action failed: ' . $exception->getMessage());
+            wp_send_json_error('Image restore failed safely.', 500);
         }
         $metadata = wp_get_attachment_metadata($id);
         $dimensions = @getimagesize($file);

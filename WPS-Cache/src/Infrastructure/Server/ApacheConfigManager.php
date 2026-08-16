@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace WPSCache\Infrastructure\Server;
 
+use WPSCache\Infrastructure\Filesystem\AtomicFileWriter;
+
 /**
  * Removes legacy plugin-owned .htaccess rules and sends response headers.
  *
@@ -77,7 +79,7 @@ final class ApacheConfigManager
         );
 
         if (is_string($newContent) && $newContent !== $content) {
-            if (file_put_contents($this->htaccessPath, $newContent, LOCK_EX) === false) {
+            if (!AtomicFileWriter::replace($this->htaccessPath, $newContent)) {
                 error_log('[WPS-Cache] Could not remove legacy .htaccess rules.');
             }
         }

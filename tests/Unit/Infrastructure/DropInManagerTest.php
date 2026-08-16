@@ -33,8 +33,10 @@ final class DropInManagerTest extends TestCase
         $this->assertFileExists($content . '/object-cache.php');
 
         unlink($content . '/object-cache.php');
+        $this->assertFalse($manager->installObjectCache('invalid'));
         $this->assertTrue($manager->installObjectCache('memcached'));
         $this->assertContains('memcached object', (string) file_get_contents($content . '/object-cache.php'));
+        $this->assertSame('memcached', $manager->installedObjectCacheBackend());
 
         $this->assertTrue($manager->removeAdvancedCache());
         $this->assertFalse(is_file($content . '/advanced-cache.php'));

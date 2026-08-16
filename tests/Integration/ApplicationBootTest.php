@@ -15,6 +15,7 @@ final class ApplicationBootTest extends TestCase
 
         $this->assertSame($application, Application::boot());
         $this->assertTrue(isset(\WPTestState::$hooks['plugins_loaded']));
+        $this->assertTrue(isset(\WPTestState::$hooks['updated_option']));
         $this->assertTrue(isset(\WPTestState::$hooks['template_redirect']));
         $this->assertTrue(isset(\WPTestState::$hooks['wpsc_scheduled_preload']));
         $this->assertTrue(isset(\WPTestState::$hooks['wpsc_cache_cleanup']));

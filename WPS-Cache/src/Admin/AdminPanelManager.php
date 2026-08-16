@@ -11,6 +11,8 @@ use WPSCache\Admin\UI\NoticeManager;
 use WPSCache\Maintenance\DatabaseOptimizer;
 use WPSCache\Admin\Settings\FeatureSettingsManager;
 use WPSCache\Infrastructure\Server\ServerConfigGenerator;
+use WPSCache\Infrastructure\WordPress\DropInManager;
+use WPSCache\Infrastructure\WordPress\ObjectCacheCompatibility;
 
 final class AdminPanelManager
 {
@@ -23,8 +25,10 @@ final class AdminPanelManager
         CacheManager $cacheManager,
         DatabaseOptimizer $databaseOptimizer,
         NoticeManager $noticeManager,
+        DropInManager $dropIns,
+        ObjectCacheCompatibility $objectCacheCompatibility,
     ) {
-        $this->settingsManager = new SettingsManager($cacheManager, $databaseOptimizer);
+        $this->settingsManager = new SettingsManager($cacheManager, $databaseOptimizer, $dropIns, $objectCacheCompatibility);
         $this->tabManager = new TabManager();
         $this->noticeManager = $noticeManager;
         $this->featureSettings = new FeatureSettingsManager(new ServerConfigGenerator());

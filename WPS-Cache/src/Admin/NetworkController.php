@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPSCache\Admin;
 
 use WPSCache\Config\Settings;
+use WPSCache\Config\SettingsRepository;
 
 final class NetworkController
 {
@@ -52,6 +53,7 @@ final class NetworkController
             $current = get_option(Settings::OPTION, Settings::defaults());
             update_site_option('wpsc_network_settings', is_array($current) ? $current : Settings::defaults());
         }
+        do_action('wpscac_settings_updated', (new SettingsRepository())->load()->all());
         wp_safe_redirect(network_admin_url('settings.php?page=wps-cache-network&updated=1'));
         exit;
     }

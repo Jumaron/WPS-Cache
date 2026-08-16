@@ -6,8 +6,11 @@ namespace WPSCache\Admin\Settings;
 
 use WPSCache\Cache\CacheManager;
 use WPSCache\Config\Settings;
+use WPSCache\Config\SettingsRepository;
 use WPSCache\Maintenance\DatabaseOptimizer;
 use WPSCache\Admin\Analytics\MetricsCollector;
+use WPSCache\Infrastructure\WordPress\DropInManager;
+use WPSCache\Infrastructure\WordPress\ObjectCacheCompatibility;
 
 final class SettingsManager
 {
@@ -15,7 +18,12 @@ final class SettingsManager
     private SettingsRenderer $renderer;
     private DatabaseOptimizer $databaseOptimizer;
 
-    public function __construct(CacheManager $cacheManager, DatabaseOptimizer $databaseOptimizer)
+    public function __construct(
+        CacheManager $cacheManager,
+        DatabaseOptimizer $databaseOptimizer,
+        private readonly DropInManager $dropIns,
+        private readonly ObjectCacheCompatibility $objectCacheCompatibility,
+    )
     {
         $this->cacheManager = $cacheManager;
         $this->databaseOptimizer = $databaseOptimizer;
@@ -160,25 +168,40 @@ final class SettingsManager
             "dashicons-update",
         );
 
-        $object_cache_installed = file_exists(
-            WP_CONTENT_DIR . "/object-cache.php",
-        );
+        $objectCacheFile = WP_CONTENT_DIR . '/object-cache.php';
+        $objectCacheInstalled = is_file($objectCacheFile);
+        $objectCacheOwned = $objectCacheInstalled && $this->dropIns->owns('object-cache.php');
+        $installedBackend = $this->dropIns->installedObjectCacheBackend();
+        $objectCacheCheck = $this->objectCacheCompatibility->inspect((new SettingsRepository())->load(), true);
+        $configuredBackend = $objectCacheCheck->backend;
+        $backendMatches = $objectCacheOwned && $configuredBackend !== null && $installedBackend === $configuredBackend;
         $this->renderer->renderCard(
             "Object Cache Drop-in",
-            "Required for Redis functionality.",
-            function () use ($object_cache_installed) {
+            "Installed only after the selected persistent backend passes a live environment and connection check.",
+            function () use ($objectCacheInstalled, $objectCacheOwned, $installedBackend, $objectCacheCheck, $configuredBackend, $backendMatches) {
                 ?>
             <div class="wpsc-tool-status-box">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <strong>Status:</strong>
-                    <?php if ($object_cache_installed): ?>
-                        <span class="wpsc-status-pill success"><span class="dashicons dashicons-yes"></span> Installed</span>
-                    <?php else: ?>
-                        <span class="wpsc-status-pill warning"><span class="dashicons dashicons-warning"></span> Not Installed</span>
+                <div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <strong>Status:</strong>
+                        <?php if ($backendMatches): ?>
+                            <span class="wpsc-status-pill success"><span class="dashicons dashicons-yes"></span> <?php echo esc_html(ucfirst((string) $installedBackend)); ?> installed</span>
+                        <?php elseif ($objectCacheInstalled && !$objectCacheOwned): ?>
+                            <span class="wpsc-status-pill warning"><span class="dashicons dashicons-lock"></span> Managed by another plugin</span>
+                        <?php elseif ($objectCacheOwned): ?>
+                            <span class="wpsc-status-pill warning"><span class="dashicons dashicons-update"></span> <?php echo esc_html(ucfirst((string) $installedBackend)); ?> needs reconfiguration</span>
+                        <?php elseif (!$objectCacheCheck->compatible()): ?>
+                            <span class="wpsc-status-pill error"><span class="dashicons dashicons-warning"></span> Unavailable</span>
+                        <?php else: ?>
+                            <span class="wpsc-status-pill warning"><span class="dashicons dashicons-warning"></span> Ready to install <?php echo esc_html(ucfirst((string) $configuredBackend)); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!$objectCacheCheck->compatible()): ?>
+                        <p class="description" style="margin:8px 0 0;max-width:720px;"><?php echo esc_html($objectCacheCheck->message()); ?></p>
                     <?php endif; ?>
                 </div>
                 <div>
-                    <?php if ($object_cache_installed): ?>
+                    <?php if ($objectCacheOwned): ?>
                         <a href="<?php echo esc_url(
                             wp_nonce_url(
                                 admin_url(
@@ -188,7 +211,8 @@ final class SettingsManager
                             ),
                         ); ?>" class="wpsc-btn-ghost-danger wpsc-confirm-trigger"
                             data-confirm="Disable Object Cache?">Uninstall</a>
-                    <?php else: ?>
+                    <?php endif; ?>
+                    <?php if ($objectCacheCheck->compatible() && (!$backendMatches || !$objectCacheInstalled)): ?>
                         <a href="<?php echo esc_url(
                             wp_nonce_url(
                                 admin_url(
@@ -196,7 +220,9 @@ final class SettingsManager
                                 ),
                                 "wpsc_install_object_cache",
                             ),
-                        ); ?>" class="wpsc-btn-primary">Install Drop-in</a>
+                        ); ?>" class="wpsc-btn-primary"><?php echo $objectCacheOwned ? 'Install verified ' . esc_html(ucfirst((string) $configuredBackend)) : 'Install verified drop-in'; ?></a>
+                    <?php elseif (!$objectCacheInstalled): ?>
+                        <button type="button" class="wpsc-btn-primary" disabled aria-disabled="true">Install unavailable</button>
                     <?php endif; ?>
                 </div>
             </div>

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace WPSCache\Infrastructure\WordPress;
 
+use WPSCache\Infrastructure\Filesystem\AtomicFileWriter;
+
 final class DropInManager
 {
     private const SIGNATURES = ['WPS-Cache', 'WPS Cache'];
@@ -19,10 +21,67 @@ final class DropInManager
         return $this->install('advanced-cache-template.php', 'advanced-cache.php', true);
     }
 
+    public function advancedCacheInstallationIssue(): ?string
+    {
+        $source = $this->templatesDirectory . '/advanced-cache-template.php';
+        $target = $this->contentDirectory . '/advanced-cache.php';
+        if (!is_file($source) || !is_readable($source) || (int) @filesize($source) < 16) {
+            return 'The bundled page-cache drop-in is missing or unreadable.';
+        }
+        if (!is_dir($this->contentDirectory) || !is_writable($this->contentDirectory)) {
+            return 'Page caching was not enabled because the WordPress content directory is not writable.';
+        }
+        if (is_file($target) && !$this->owns('advanced-cache.php')) {
+            return 'Page caching was not enabled because another plugin owns advanced-cache.php.';
+        }
+        if (is_file($target) && !is_writable($target)) {
+            return 'Page caching was not enabled because advanced-cache.php is not writable.';
+        }
+        return null;
+    }
+
     public function installObjectCache(string $backend = 'redis'): bool
     {
+        if (!in_array($backend, ['redis', 'memcached'], true)) {
+            return false;
+        }
         $template = $backend === 'memcached' ? 'object-cache-memcached.php' : 'object-cache.php';
         return $this->install($template, 'object-cache.php', true);
+    }
+
+    public function objectCacheInstallationIssue(string $backend): ?string
+    {
+        if (!in_array($backend, ['redis', 'memcached'], true)) {
+            return 'The requested object-cache backend is invalid.';
+        }
+        $template = $backend === 'memcached' ? 'object-cache-memcached.php' : 'object-cache.php';
+        $source = $this->templatesDirectory . '/' . $template;
+        $target = $this->contentDirectory . '/object-cache.php';
+        if (!is_file($source) || !is_readable($source) || (int) @filesize($source) < 16) {
+            return 'The bundled ' . ucfirst($backend) . ' drop-in is missing or unreadable.';
+        }
+        if (!is_dir($this->contentDirectory) || !is_writable($this->contentDirectory)) {
+            return 'The WordPress content directory is not writable.';
+        }
+        if (is_file($target) && !$this->owns('object-cache.php')) {
+            return 'Another plugin owns object-cache.php. It will not be replaced.';
+        }
+        if (is_file($target) && !is_writable($target)) {
+            return 'The existing object-cache.php file is not writable.';
+        }
+        return null;
+    }
+
+    public function installedObjectCacheBackend(): ?string
+    {
+        if (!$this->owns('object-cache.php')) {
+            return null;
+        }
+        $content = file_get_contents($this->contentDirectory . '/object-cache.php');
+        if (!is_string($content)) {
+            return null;
+        }
+        return stripos($content, 'memcached') !== false ? 'memcached' : 'redis';
     }
 
     public function removeAdvancedCache(): bool
@@ -67,7 +126,7 @@ final class DropInManager
         $source = $this->templatesDirectory . '/' . $template;
         $target = $this->contentDirectory . '/' . $destination;
 
-        if (!is_file($source)) {
+        if (!is_file($source) || !is_readable($source) || !is_dir($this->contentDirectory) || !is_writable($this->contentDirectory)) {
             return false;
         }
 
@@ -77,21 +136,11 @@ final class DropInManager
             }
         }
 
-        $temporary = tempnam($this->contentDirectory, 'wpsc_dropin_');
-        if ($temporary === false || !copy($source, $temporary)) {
+        $content = file_get_contents($source);
+        if (!is_string($content) || !str_starts_with(ltrim($content), '<?php')) {
             return false;
         }
-
-        @chmod($temporary, 0644);
-        if (!@rename($temporary, $target)) {
-            @unlink($target);
-            if (!@rename($temporary, $target)) {
-                @unlink($temporary);
-                return false;
-            }
-        }
-
-        return true;
+        return AtomicFileWriter::replace($target, $content, 0644);
     }
 
     private function removeOwned(string $filename): bool

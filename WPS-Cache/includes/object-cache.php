@@ -23,8 +23,6 @@ if (is_array($wpscObjectSettings)) {
 }
 unset($wpscObjectConfig, $wpscObjectSettings, $wpscObjectKey, $wpscObjectConstant);
 
-// Only load if Redis not disabled
-if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
     /**
      * Determines whether the object cache implementation supports a particular feature.
      *
@@ -80,8 +78,9 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         }
 
         if (!($wp_object_cache instanceof WP_Object_Cache)) {
-            $failGracefully = defined("WP_REDIS_GRACEFUL") && WP_REDIS_GRACEFUL;
-            $wp_object_cache = new WP_Object_Cache($failGracefully);
+            // Connection failures must never take WordPress down; the cache
+            // simply behaves as unavailable for the request.
+            $wp_object_cache = new WP_Object_Cache();
         }
     }
 
@@ -334,7 +333,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
          *
          * @var \Redis|\Predis\Client|null
          */
-        private \Redis|\Predis\Client|null $redis;
+        private \Redis|\Predis\Client|null $redis = null;
 
         /**
          * Whether the Redis connection is established
@@ -384,7 +383,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         /**
          * SHA1 hash of the flush script
          */
-        private string $flushScriptSHA1;
+        private ?string $flushScriptSHA1 = null;
 
         /**
          * Default global cache groups
@@ -430,11 +429,6 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         private string $globalKeyPrefix;
 
         /**
-         * Whether to fail gracefully
-         */
-        private bool $failGracefully;
-
-        /**
          * Secret salt for HMAC signing
          */
         private string $salt;
@@ -442,13 +436,10 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         /**
          * Constructor.
          *
-         * @param bool $failGracefully Whether to fail gracefully on Redis connection errors
          */
-        public function __construct(bool $failGracefully = true)
+        public function __construct()
         {
             global $blog_id, $table_prefix;
-
-            $this->failGracefully = $failGracefully;
 
             // Initialize Salt for HMAC
             // Sentinel: Try standard keys in order of preference
@@ -482,10 +473,12 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             $this->initializeRedis();
 
             if ($this->redisConnected) {
-                $this->flushScriptSHA1 = $this->redis->script(
-                    "load",
-                    $this->getSelectiveFlushScript(),
-                );
+                try {
+                    $script = $this->redis->script("load", $this->getSelectiveFlushScript());
+                    $this->flushScriptSHA1 = is_string($script) ? $script : null;
+                } catch (Throwable $e) {
+                    $this->handleException($e, "script preload");
+                }
             }
         }
 
@@ -507,7 +500,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             $derivedKey = $this->buildKey($key, $group);
 
             // Check local cache first
-            if (!$force && isset($this->cache[$derivedKey])) {
+            if (!$force && array_key_exists($derivedKey, $this->cache)) {
                 $found = true;
                 $this->cacheHits++;
                 return is_object($this->cache[$derivedKey])
@@ -538,7 +531,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 $this->cacheHits++;
 
                 return is_object($value) ? clone $value : $value;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -559,11 +552,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             string $group = "default",
             bool $force = false,
         ): array {
-            if (
-                !$this->redisConnected ||
-                $this->isIgnoredGroup($group) ||
-                empty($keys)
-            ) {
+            if (empty($keys)) {
                 return array_fill_keys($keys, false);
             }
 
@@ -602,6 +591,10 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             if (empty($missedKeys)) {
                 return $results;
             }
+            if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
+                $this->cacheMisses += count($missedKeys);
+                return $results;
+            }
 
             try {
                 $startTime = microtime(true);
@@ -636,7 +629,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return $results;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return array_fill_keys($keys, false);
             } finally {
@@ -659,13 +652,14 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             string $group = "default",
             int $expiration = 0,
         ): bool {
+            $derivedKey = $this->buildKey($key, $group);
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
+                return true;
             }
 
             try {
                 $startTime = microtime(true);
-                $derivedKey = $this->buildKey($key, $group);
                 $expiration = $this->validateExpiration($expiration);
                 $serializedValue = $this->maybeSerialize($value);
 
@@ -686,7 +680,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return (bool) $result;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -707,12 +701,15 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             string $group = "default",
             int $expiration = 0,
         ): array {
-            if (
-                !$this->redisConnected ||
-                $this->isIgnoredGroup($group) ||
-                empty($data)
-            ) {
+            if (empty($data)) {
                 return array_fill_keys(array_keys($data), false);
+            }
+            if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
+                foreach ($data as $key => $value) {
+                    $derivedKey = $this->buildKey($key, $group);
+                    $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
+                }
+                return array_fill_keys(array_keys($data), true);
             }
 
             try {
@@ -749,7 +746,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return array_fill_keys(array_keys($data), true);
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return array_fill_keys(array_keys($data), false);
             } finally {
@@ -817,12 +814,13 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
 
             $derivedKey = $this->buildKey($key, $group);
 
-            if (isset($this->cache[$derivedKey])) {
+            if (array_key_exists($derivedKey, $this->cache)) {
                 return false;
             }
 
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
+                return true;
             }
 
             try {
@@ -844,7 +842,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return (bool) $result;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -874,7 +872,8 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             }
 
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                $this->cache[$derivedKey] = is_object($value) ? clone $value : $value;
+                return true;
             }
 
             try {
@@ -896,7 +895,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return (bool) $result;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -917,13 +916,13 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             unset($this->cache[$derivedKey]);
 
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                return true;
             }
 
             try {
                 $startTime = microtime(true);
                 return (bool) $this->redis->del($derivedKey);
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -942,12 +941,14 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             array $keys,
             string $group = "default",
         ): array {
-            if (
-                !$this->redisConnected ||
-                $this->isIgnoredGroup($group) ||
-                empty($keys)
-            ) {
+            if (empty($keys)) {
                 return array_fill_keys($keys, false);
+            }
+            if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
+                foreach ($keys as $key) {
+                    unset($this->cache[$this->buildKey($key, $group)]);
+                }
+                return array_fill_keys($keys, true);
             }
 
             try {
@@ -969,7 +970,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
 
                 $pipe->exec();
                 return array_fill_keys($keys, true);
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return array_fill_keys($keys, false);
             } finally {
@@ -987,7 +988,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             $this->cache = [];
 
             if (!$this->redisConnected) {
-                return false;
+                return true;
             }
 
             try {
@@ -1007,7 +1008,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 }
 
                 return $this->redis->flushdb();
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -1024,7 +1025,12 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         public function flush_group(string $group): bool
         {
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                foreach (self::$keyCache as $source => $derivedKey) {
+                    if (str_starts_with($source, $group . ':')) {
+                        unset($this->cache[$derivedKey]);
+                    }
+                }
+                return true;
             }
 
             if (
@@ -1060,7 +1066,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 );
 
                 return $result;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -1082,7 +1088,13 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             string $group = "default",
         ): int|false {
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                $derivedKey = $this->buildKey($key, $group);
+                if (!isset($this->cache[$derivedKey]) || !is_numeric($this->cache[$derivedKey])) {
+                    return false;
+                }
+                $value = (int) $this->cache[$derivedKey] + $offset;
+                $this->cache[$derivedKey] = $value;
+                return $value;
             }
 
             try {
@@ -1094,7 +1106,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 $this->cache[$derivedKey] = $value;
 
                 return $value;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -1116,7 +1128,13 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             string $group = "default",
         ): int|false {
             if (!$this->redisConnected || $this->isIgnoredGroup($group)) {
-                return false;
+                $derivedKey = $this->buildKey($key, $group);
+                if (!isset($this->cache[$derivedKey]) || !is_numeric($this->cache[$derivedKey])) {
+                    return false;
+                }
+                $value = max(0, (int) $this->cache[$derivedKey] - $offset);
+                $this->cache[$derivedKey] = $value;
+                return $value;
             }
 
             try {
@@ -1128,7 +1146,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 $this->cache[$derivedKey] = $value;
 
                 return $value;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e);
                 return false;
             } finally {
@@ -1239,7 +1257,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                                 $payload === "b:0;"
                                 ? $unserialized
                                 : $value;
-                        } catch (Exception) {
+                        } catch (Throwable) {
                             return $value;
                         }
                     }
@@ -1334,12 +1352,11 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
         /**
          * Handles exceptions during Redis operations.
          *
-         * @param Exception $e The exception to handle.
+         * @param Throwable $e The failure to handle.
          * @param string $context Optional context for the error.
-         * @throws Exception If fail gracefully is disabled.
          */
         private function handleException(
-            Exception $e,
+            Throwable $e,
             string $context = "",
         ): void {
             $this->redisConnected = false;
@@ -1352,11 +1369,9 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 do_action("redis_object_cache_error", $e, $errorMsg);
             }
 
-            if (!$this->failGracefully) {
-                throw $e;
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("WP Redis: {$errorMsg}");
             }
-
-            error_log("WP Redis: {$errorMsg}");
         }
 
         /**
@@ -1430,6 +1445,9 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
          */
         private function initializeRedis(): void
         {
+            if (defined("WP_REDIS_DISABLED") && WP_REDIS_DISABLED) {
+                return;
+            }
             try {
                 $config = $this->buildConfig();
 
@@ -1451,7 +1469,7 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
                 // Get Redis info
                 $info = $this->redis->info();
                 $this->redisVersion = $info["redis_version"] ?? null;
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $this->handleException($e, "connection");
             }
         }
@@ -1580,4 +1598,3 @@ if (!defined("WP_REDIS_DISABLED") || !WP_REDIS_DISABLED):
             return true;
         }
     }
-endif;
